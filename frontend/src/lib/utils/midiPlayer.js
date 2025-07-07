@@ -134,62 +134,31 @@ class MidiPlayer extends EventTarget {
 
   /**
    * Create synthesizer based on instrument type
+   * Uses the same configuration as VirtualKeyboard for consistent sound
    * @private
    * @param {string} instrument - Instrument name
    * @returns {Tone.PolySynth} Synthesizer instance
    */
   createSynthForInstrument(instrument) {
-    switch (instrument) {
-      case 'piano':
-        return new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: 'sine' },
-          envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 1 }
-        });
-        
-      case 'organ':
-        return new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: 'sawtooth' },
-          envelope: { attack: 0.02, decay: 0.1, sustain: 0.8, release: 0.5 }
-        });
-        
-      case 'guitar':
-        return new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: 'triangle' },
-          envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 1.5 }
-        });
-        
-      case 'bass':
-        return new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: 'sine' },
-          envelope: { attack: 0.01, decay: 0.05, sustain: 0.1, release: 0.8 }
-        }).set({ volume: 6 }); // Boost bass volume
-        
-      case 'strings':
-        return new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: 'sawtooth' },
-          envelope: { attack: 0.5, decay: 0.1, sustain: 0.8, release: 2 }
-        });
-        
-      case 'brass':
-        return new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: 'square' },
-          envelope: { attack: 0.1, decay: 0.1, sustain: 0.7, release: 1 }
-        });
-        
-      case 'drums':
-        // For drums, we'll use a basic synth but could be expanded to use Tone.DrumSynth
-        return new Tone.PolySynth(Tone.NoiseSynth, {
-          noise: { type: 'white' },
-          envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.2 }
-        });
-        
-      case 'synth':
-      default:
-        return new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: 'sawtooth' },
-          envelope: { attack: 0.1, decay: 0.1, sustain: 0.5, release: 1 }
-        });
-    }
+    // Use the exact same configuration as VirtualKeyboard for consistent sound across all tracks
+    const synthOptions = {
+      oscillator: { type: 'triangle' },
+      envelope: { 
+        attack: 0.02, 
+        decay: 0.1, 
+        sustain: 0.3, 
+        release: 1 
+      }
+    };
+    
+    console.log(`🎵 MidiPlayer: Creating synth for ${instrument} with VirtualKeyboard settings`);
+    
+    const synth = new Tone.PolySynth(Tone.Synth, synthOptions);
+    
+    // Set consistent volume to match VirtualKeyboard
+    synth.volume.value = -12; // Same as VirtualKeyboard
+    
+    return synth;
   }
 
   /**
@@ -308,15 +277,27 @@ class MidiPlayer extends EventTarget {
       return;
     }
     
-    const events = track.midiEvents.map(event => {
-      return new Tone.ToneEvent((time) => {
-        this.playNoteEvent(track.id, event, time);
-      }, event.time);
+    console.log(`🎵 MidiPlayer: Scheduling track ${track.name} with ${track.midiEvents.length} events:`);
+    track.midiEvents.forEach((event, index) => {
+      console.log(`  Event ${index}: note ${event.note}, time ${event.time.toFixed(3)} beats, duration ${event.duration.toFixed(3)}`);
     });
     
-    // Schedule all events
-    events.forEach(event => {
-      event.start(Tone.Transport.seconds);
+    // Schedule each event at its recorded time using Transport.schedule
+    const events = track.midiEvents.map((event, index) => {
+      console.log(`🎵 MidiPlayer: Scheduling event ${index} at beat ${event.time.toFixed(3)}`);
+      
+      // Convert beats to Tone.js time format (bars:beats:sixteenths)
+      const bars = Math.floor(event.time / 4);
+      const beats = Math.floor(event.time % 4);
+      const sixteenths = Math.floor((event.time % 1) * 4);
+      const timeString = `${bars}:${beats}:${sixteenths}`;
+      
+      console.log(`🎵 MidiPlayer: Converted beat ${event.time.toFixed(3)} to time format: ${timeString}`);
+      
+      return Tone.Transport.schedule((time) => {
+        console.log(`🎵 MidiPlayer: Playing event ${index} at time ${time.toFixed(3)}s (was scheduled for beat ${event.time.toFixed(3)})`);
+        this.playNoteEvent(track.id, event, time);
+      }, timeString);
     });
     
     this.#scheduledEvents.set(track.id, events);
@@ -403,9 +384,9 @@ class MidiPlayer extends EventTarget {
    * @private
    */
   clearScheduledEvents() {
-    for (const [trackId, events] of this.#scheduledEvents.entries()) {
-      events.forEach(event => {
-        event.dispose();
+    for (const [trackId, eventIds] of this.#scheduledEvents.entries()) {
+      eventIds.forEach(eventId => {
+        Tone.Transport.clear(eventId);
       });
     }
     this.#scheduledEvents.clear();

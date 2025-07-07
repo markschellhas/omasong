@@ -1,11 +1,12 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { browser } from '$app/environment';
-  import { Plus, Volume2, Headphones, Mic, Square, Trash2 } from 'lucide-svelte';
+  import { Volume2, Headphones, Mic, Square, Trash2 } from 'lucide-svelte';
   import { tracks, TRACK_COLORS, INSTRUMENTS } from '../../stores/tracks.js';
   import { audioState } from '../../stores/audio.js';
   import { uiState } from '../../stores/ui.js';
   import { getAudioEngine, getMidiRecorder, getMidiPlayer } from '../../utils/index.js';
+  import { getChordPlayer } from '../../utils/chordPlayer.js';
   import Track from './Track.svelte';
   
   /** @type {import('../../utils/audioEngine.js').AudioEngine} */
@@ -16,6 +17,9 @@
   
   /** @type {import('../../utils/midiPlayer.js').MidiPlayer} */
   let midiPlayer;
+  
+  /** @type {import('../../utils/chordPlayer.js').ChordPlayer} */
+  let chordPlayer;
   
   /** @type {import('../../stores/tracks.js').Track[]} */
   let currentTracks = [];
@@ -28,9 +32,6 @@
   
   /** @type {HTMLDivElement} */
   let trackListContainer;
-  
-  /** @type {boolean} */
-  let showAddTrackOptions = false;
   
   // Subscribe to stores
   const unsubscribeTracks = tracks.subscribe(trackList => {
@@ -45,10 +46,9 @@
   const unsubscribeAudio = audioState.subscribe(state => {
     currentAudioState = state;
     
-    // Handle recording state changes
-    if (state.isRecording && !midiRecorder?.getStatus().isRecording) {
-      startRecordingOnArmedTrack();
-    } else if (!state.isRecording && midiRecorder?.getStatus().isRecording) {
+    // Handle recording state changes - only stop recording, start is handled by count-in completion
+    if (!state.isRecording && midiRecorder?.getStatus().isRecording) {
+      console.log('🎵 TrackList: Stopping MIDI recording');
       midiRecorder.stopRecording();
     }
     
@@ -70,6 +70,7 @@
     audioEngine = getAudioEngine();
     midiRecorder = getMidiRecorder(audioEngine);
     midiPlayer = getMidiPlayer(audioEngine);
+    chordPlayer = getChordPlayer(audioEngine);
     
     // Initialize with default tracks if none exist
     if (currentTracks.length === 0) {
@@ -79,6 +80,12 @@
     // Set up event listeners for recording and playback
     setupEventListeners();
     
+    // Listen for MIDI recording start signal from audio engine
+    audioEngine.addEventListener('startMidiRecording', handleStartMidiRecording);
+    
+    // Listen for stop and disarm signal from audio engine
+    audioEngine.addEventListener('stopAndDisarm', handleStopAndDisarm);
+    
     // Add keyboard event listeners
     document.addEventListener('keydown', handleKeydown);
   });
@@ -87,6 +94,12 @@
     unsubscribeTracks();
     unsubscribeAudio();
     unsubscribeUI();
+    
+    // Remove audio engine event listeners
+    if (audioEngine) {
+      audioEngine.removeEventListener('startMidiRecording', handleStartMidiRecording);
+      audioEngine.removeEventListener('stopAndDisarm', handleStopAndDisarm);
+    }
     
     // Remove keyboard event listeners
     if (browser) {
@@ -164,46 +177,28 @@
   }
   
   /**
-   * Add a new track
-   * @param {string} [name] - Optional track name
-   * @param {string} [instrument] - Optional instrument type
+   * Handle MIDI recording start signal from audio engine (after count-in)
    */
-  function addTrack(name = null, instrument = 'synth') {
-    const trackName = name || `Track ${currentTracks.length + 1}`;
-    tracks.add(trackName);
-    
-    // Set instrument for the new track
-    const newTracks = [...currentTracks];
-    const lastTrack = newTracks[newTracks.length - 1];
-    if (lastTrack) {
-      tracks.setInstrument(lastTrack.id, instrument);
-    }
-    
-    showAddTrackOptions = false;
+  function handleStartMidiRecording() {
+    console.log('🎵 TrackList: Starting MIDI recording after count-in');
+    startRecordingOnArmedTrack();
   }
   
   /**
-   * Remove a track
-   * @param {string} trackId - Track ID to remove
+   * Handle stop and disarm signal from audio engine
    */
-  function removeTrack(trackId) {
-    if (currentTracks.length <= 1) {
-      alert('Cannot remove the last track');
-      return;
-    }
+  function handleStopAndDisarm() {
+    console.log('🎵 TrackList: Stopping and disarming all tracks');
     
-    if (confirm('Are you sure you want to remove this track?')) {
-      tracks.remove(trackId);
-    }
+    // Disarm all tracks
+    currentTracks.forEach(track => {
+      if (track.isArmed) {
+        tracks.updateTrackProperty(track.id, 'isArmed', false);
+      }
+    });
   }
   
-  /**
-   * Duplicate a track
-   * @param {string} trackId - Track ID to duplicate
-   */
-  function duplicateTrack(trackId) {
-    tracks.duplicate(trackId);
-  }
+  // Track management functions removed - keeping it simple with just 2 tracks
   
   /**
    * Handle track property updates
@@ -247,15 +242,6 @@
    */
   function setTrackVolume(trackId, volume) {
     tracks.setVolume(trackId, volume);
-  }
-  
-  /**
-   * Set track pan
-   * @param {string} trackId - Track ID
-   * @param {number} pan - Pan position (-1 to 1)
-   */
-  function setTrackPan(trackId, pan) {
-    tracks.setPan(trackId, pan);
   }
   
   /**
@@ -308,22 +294,51 @@
   }
   
   /**
+   * Add a test note to the armed track for testing visualization
+   */
+  function addTestNote() {
+    const armedTrack = currentTracks.find(t => t.isArmed);
+    if (!armedTrack) {
+      alert('Please arm a track first (press 1 or 2)');
+      return;
+    }
+    
+    // Create a test MIDI event
+    const testEvent = {
+      time: Math.random() * 4, // Random time between 0-4 beats
+      note: 60 + Math.floor(Math.random() * 12), // Random note C4-B4
+      velocity: 80 + Math.floor(Math.random() * 40), // Random velocity 80-120
+      duration: 0.5 + Math.random() * 1.5 // Random duration 0.5-2 beats
+    };
+    
+    console.log('🎵 TrackList: Adding test note:', testEvent);
+    tracks.addMidiEvent(armedTrack.id, testEvent);
+  }
+  
+  /**
+   * Set chord volume
+   * @param {number} volume - Volume level (0-1)
+   */
+  function setChordVolume(volume) {
+    if (chordPlayer) {
+      chordPlayer.setVolume(volume);
+    }
+  }
+  
+  /**
    * Handle keyboard shortcuts
    * @param {KeyboardEvent} event
    */
   function handleKeydown(event) {
     if (!browser) return;
     
-    // Cmd/Ctrl + T: Add new track
-    if ((event.metaKey || event.ctrlKey) && event.key === 't') {
+    // Number keys 1-2: Arm corresponding track
+    if (event.key === '1' && currentTracks.length >= 1) {
       event.preventDefault();
-      addTrack();
-    }
-    
-    // Cmd/Ctrl + D: Duplicate active track
-    if ((event.metaKey || event.ctrlKey) && event.key === 'd' && currentUIState?.activeTrack) {
+      armTrack(currentTracks[0].id);
+    } else if (event.key === '2' && currentTracks.length >= 2) {
       event.preventDefault();
-      duplicateTrack(currentUIState.activeTrack);
+      armTrack(currentTracks[1].id);
     }
   }
 </script>
@@ -337,34 +352,56 @@
       {#if currentTracks.some(t => t.isSolo)}
         <span class="px-2 py-1 bg-yellow-600 text-white text-xs rounded">SOLO</span>
       {/if}
+      {#if currentAudioState?.isRecording}
+        <span class="px-2 py-1 bg-red-600 text-white text-xs rounded animate-pulse">
+          RECORDING
+        </span>
+      {/if}
     </div>
     
-    <!-- Add Track Button -->
-    <div class="relative">
+    <!-- Recording Status and Quantization Control -->
+    <div class="flex items-center space-x-3">
+      <div class="text-xs text-gray-400">
+        {#if currentTracks.find(t => t.isArmed)}
+          Armed: {currentTracks.find(t => t.isArmed)?.name}
+        {:else}
+          No track armed
+        {/if}
+      </div>
+      
+      <!-- Quantization Toggle -->
       <button 
-        class="bg-primary-600 hover:bg-primary-700 text-white p-2 rounded transition-colors duration-200"
-        on:click={() => showAddTrackOptions = !showAddTrackOptions}
-        title="Add Track (Cmd+T)"
+        class="text-xs px-2 py-1 rounded {midiRecorder?.getStatus().quantizeEnabled ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300'}"
+        on:click={() => midiRecorder?.setQuantizeEnabled(!midiRecorder?.getStatus().quantizeEnabled)}
+        title="Toggle quantization (snap to beat grid)"
       >
-        <Plus class="w-4 h-4" />
+        QUANT: {midiRecorder?.getStatus().quantizeEnabled ? 'ON' : 'OFF'}
       </button>
       
-      <!-- Add Track Options -->
-      {#if showAddTrackOptions}
-        <div class="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-30 min-w-48">
-          <div class="p-2">
-            <div class="text-xs text-gray-400 mb-2">Add Track:</div>
-            {#each INSTRUMENTS as instrument}
-              <button 
-                class="w-full text-left px-3 py-2 text-sm hover:bg-gray-700 rounded capitalize"
-                on:click={() => addTrack(null, instrument)}
-              >
-                {instrument}
-              </button>
-            {/each}
-          </div>
-        </div>
-      {/if}
+      <!-- Test Note Button -->
+      <button 
+        class="text-xs px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+        on:click={addTestNote}
+        title="Add a test note to armed track"
+      >
+        TEST NOTE
+      </button>
+      
+      <!-- Chord Volume Control -->
+      <div class="flex items-center space-x-2">
+        <span class="text-xs text-gray-400">Chords:</span>
+        <input 
+          type="range" 
+          min="0" 
+          max="1" 
+          step="0.1" 
+          value={chordPlayer?.getVolume() || 0.5}
+          on:input={(e) => setChordVolume(parseFloat(e.target.value))}
+          class="w-16 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+          title="Chord volume"
+        />
+        <span class="text-xs text-gray-400 w-8">{Math.round((chordPlayer?.getVolume() || 0.5) * 100)}%</span>
+      </div>
     </div>
   </div>
   
@@ -386,11 +423,8 @@
         on:mute={() => toggleMute(track.id)}
         on:solo={() => toggleSolo(track.id)}
         on:volumeChange={(e) => setTrackVolume(track.id, e.detail)}
-        on:panChange={(e) => setTrackPan(track.id, e.detail)}
         on:instrumentChange={(e) => setTrackInstrument(track.id, e.detail)}
         on:nameChange={(e) => updateTrackProperty(track.id, 'name', e.detail)}
-        on:remove={() => removeTrack(track.id)}
-        on:duplicate={() => duplicateTrack(track.id)}
         on:clear={() => clearTrackEvents(track.id)}
         on:select={() => uiState.setActiveTrack(track.id)}
       />
@@ -406,22 +440,27 @@
         Muted: {currentTracks.filter(t => t.isMuted).length}
       </div>
       <div>
-        Events: {currentTracks.reduce((sum, t) => sum + getTrackEventCount(t), 0)}
+        Notes: {currentTracks.reduce((sum, t) => sum + getTrackEventCount(t), 0)}
       </div>
     </div>
+    
+    {#if !currentTracks.some(t => t.isArmed)}
+      <div class="text-xs text-yellow-400 mt-1 text-center italic">
+        Press 1 or 2 to arm a track for recording
+      </div>
+    {:else if currentAudioState?.isRecording}
+      <div class="text-xs text-red-400 mt-1 text-center italic animate-pulse">
+        Recording to {currentTracks.find(t => t.isArmed)?.name} - play notes on keyboard
+      </div>
+    {:else}
+      <div class="text-xs text-green-400 mt-1 text-center italic">
+        {currentTracks.find(t => t.isArmed)?.name} armed - click Record then Play to start
+      </div>
+    {/if}
   </div>
 </div>
 
-<!-- Click outside to close add track options -->
-{#if showAddTrackOptions}
-  <div 
-    class="fixed inset-0 z-20" 
-    on:click={() => showAddTrackOptions = false}
-    role="button"
-    tabindex="0"
-    aria-label="Close menu"
-  ></div>
-{/if}
+
 
 <style>
   /* Custom scrollbar for track list */
@@ -456,5 +495,5 @@
   button:focus-visible {
     outline: 2px solid #3b82f6;
     outline-offset: 2px;
-  }
-</style> 
+      }
+  </style> 

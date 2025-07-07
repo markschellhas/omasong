@@ -17,7 +17,6 @@ import { writable } from 'svelte/store';
  * @property {boolean} isSolo - Whether track is soloed
  * @property {boolean} isMuted - Whether track is muted
  * @property {number} volume - Track volume (0-1)
- * @property {number} pan - Track pan (-1 to 1)
  * @property {MidiEvent[]} midiEvents - Array of MIDI events
  * @property {string} instrument - Instrument/sound for the track
  */
@@ -73,7 +72,6 @@ function createTrack(name, index = 0) {
     isSolo: false,
     isMuted: false,
     volume: 0.8,
-    pan: 0,
     midiEvents: [],
     instrument: INSTRUMENTS[0] // default to synth
   };
@@ -96,12 +94,6 @@ function createTracksStore() {
       const newTrack = createTrack(name, tracks.length);
       return [...tracks, newTrack];
     }),
-    
-    /**
-     * Remove a track by ID
-     * @param {string} id - Track ID to remove
-     */
-    remove: (id) => update(tracks => tracks.filter(t => t.id !== id)),
     
     /**
      * Update a track property
@@ -175,20 +167,6 @@ function createTracksStore() {
     },
     
     /**
-     * Set track pan
-     * @param {string} id - Track ID
-     * @param {number} pan - Pan position (-1 to 1)
-     */
-    setPan: (id, pan) => {
-      const clampedPan = Math.max(-1, Math.min(1, pan));
-      update(tracks =>
-        tracks.map(t => 
-          t.id === id ? { ...t, pan: clampedPan } : t
-        )
-      );
-    },
-    
-    /**
      * Set track instrument
      * @param {string} id - Track ID
      * @param {string} instrument - Instrument name
@@ -217,13 +195,18 @@ function createTracksStore() {
      * @param {string} trackId - Track ID
      * @param {MidiEvent[]} events - MIDI events to add
      */
-    addMidiEvents: (trackId, events) => update(tracks =>
-      tracks.map(t => 
-        t.id === trackId 
-          ? { ...t, midiEvents: [...t.midiEvents, ...events] }
-          : t
-      )
-    ),
+    addMidiEvents: (trackId, events) => {
+      console.log(`🎵 TracksStore: Adding ${events.length} events to track ${trackId}:`, events);
+      update(tracks => {
+        const updatedTracks = tracks.map(t => 
+          t.id === trackId 
+            ? { ...t, midiEvents: [...t.midiEvents, ...events] }
+            : t
+        );
+        console.log(`🎵 TracksStore: Updated tracks:`, updatedTracks);
+        return updatedTracks;
+      });
+    },
     
     /**
      * Clear all MIDI events from track
@@ -236,37 +219,6 @@ function createTracksStore() {
           : t
       )
     ),
-    
-    /**
-     * Duplicate a track
-     * @param {string} id - Track ID to duplicate
-     */
-    duplicate: (id) => update(tracks => {
-      const track = tracks.find(t => t.id === id);
-      if (!track) return tracks;
-      
-      const duplicatedTrack = {
-        ...track,
-        id: generateId(),
-        name: `${track.name} Copy`,
-        isArmed: false,
-        isSolo: false
-      };
-      
-      return [...tracks, duplicatedTrack];
-    }),
-    
-    /**
-     * Reorder tracks
-     * @param {number} fromIndex - Source index
-     * @param {number} toIndex - Target index
-     */
-    reorder: (fromIndex, toIndex) => update(tracks => {
-      const result = [...tracks];
-      const [removed] = result.splice(fromIndex, 1);
-      result.splice(toIndex, 0, removed);
-      return result;
-    }),
     
     /**
      * Get armed track
@@ -288,12 +240,11 @@ function createTracksStore() {
     reset: () => set([]),
     
     /**
-     * Initialize with default tracks
+     * Initialize with default tracks (only 2 tracks)
      */
     initializeDefault: () => set([
       createTrack('Piano', 0),
-      createTrack('Bass', 1),
-      createTrack('Drums', 2)
+      createTrack('Bass', 1)
     ])
   };
 }

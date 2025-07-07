@@ -21,9 +21,9 @@ class MidiRecorder extends EventTarget {
   
   /**
    * @private
-   * @type {number}
+   * @type {string}
    */
-  #startTime = 0;
+  #startTime = "0:0:0";
   
   /**
    * @private
@@ -35,7 +35,7 @@ class MidiRecorder extends EventTarget {
    * @private
    * @type {boolean}
    */
-  #quantizeEnabled = true;
+  #quantizeEnabled = false; // Disable quantization to test timing
   
   /**
    * @private
@@ -88,7 +88,10 @@ class MidiRecorder extends EventTarget {
       
       this.#recordingTrack = trackId;
       this.#isRecording = true;
-      this.#startTime = Tone.Transport.seconds;
+      
+      // Store the current transport position as start time 
+      this.#startTime = Tone.Transport.position;
+      
       this.#recordedEvents = [];
       this.#activeNotes.clear();
       
@@ -121,7 +124,11 @@ class MidiRecorder extends EventTarget {
       
       // Save recorded events to track
       if (this.#recordedEvents.length > 0) {
+        console.log(`🎵 MidiRecorder: Saving ${this.#recordedEvents.length} events to track ${this.#recordingTrack}:`, this.#recordedEvents);
         tracks.addMidiEvents(this.#recordingTrack, this.#recordedEvents);
+        console.log(`🎵 MidiRecorder: Events saved to track ${this.#recordingTrack}`);
+      } else {
+        console.log(`🎵 MidiRecorder: No events to save for track ${this.#recordingTrack}`);
       }
       
       const trackId = this.#recordingTrack;
@@ -163,6 +170,8 @@ class MidiRecorder extends EventTarget {
       // Store active note for duration calculation
       this.#activeNotes.set(note, currentTime);
       
+      console.log(`🎵 MidiRecorder: Note ON - note: ${note}, time: ${currentTime.toFixed(3)} beats`);
+      
       this.dispatchEvent(new CustomEvent('noteRecorded', {
         detail: { note, velocity, time: currentTime, type: 'noteOn' }
       }));
@@ -198,13 +207,18 @@ class MidiRecorder extends EventTarget {
       const duration = currentTime - startTime;
       
       // Create MIDI event
+      const originalTime = startTime;
+      const quantizedTime = this.#quantizeEnabled ? this.#quantizeTime(startTime) : startTime;
+      
       /** @type {import('../stores/tracks.js').MidiEvent} */
       const midiEvent = {
-        time: this.#quantizeEnabled ? this.#quantizeTime(startTime) : startTime,
+        time: quantizedTime,
         note,
         velocity: 100, // Default velocity, could be tracked separately
         duration: Math.max(0.1, duration) // Minimum duration
       };
+      
+      console.log(`🎵 MidiRecorder: Note OFF - note: ${note}, startTime: ${originalTime.toFixed(3)}, endTime: ${currentTime.toFixed(3)}, duration: ${duration.toFixed(3)}, quantized: ${quantizedTime.toFixed(3)}`);
       
       // Add to recorded events
       this.#recordedEvents.push(midiEvent);
@@ -274,16 +288,43 @@ class MidiRecorder extends EventTarget {
 
   /**
    * Get current recording time in beats
+   * Simple and reliable timing using Transport position
    * @private
    * @returns {number} Current time in beats
    */
   #getCurrentRecordingTime() {
-    const currentSeconds = Tone.Transport.seconds;
-    const elapsedSeconds = currentSeconds - this.#startTime;
-    const currentTempo = Tone.Transport.bpm.value;
+    // Get current transport position and convert to beats
+    const currentTime = Tone.Time(Tone.Transport.position);
+    const startTime = Tone.Time(this.#startTime);
     
-    // Convert to beats
-    return (elapsedSeconds * currentTempo) / 60;
+    // Calculate the difference in beats
+    const currentBeats = currentTime.toBarsBeatsSixteenths();
+    const startBeats = startTime.toBarsBeatsSixteenths();
+    
+    // Convert to decimal beats for easier calculation
+    const currentDecimalBeats = this.#barsBeatsSixteenthsToDecimalBeats(currentBeats);
+    const startDecimalBeats = this.#barsBeatsSixteenthsToDecimalBeats(startBeats);
+    
+    const recordingTimeInBeats = currentDecimalBeats - startDecimalBeats;
+    
+    console.log(`🎵 MidiRecorder: getCurrentRecordingTime() - current: ${currentBeats}, start: ${startBeats}, recording: ${recordingTimeInBeats.toFixed(3)} beats`);
+    
+    return Math.max(0, recordingTimeInBeats);
+  }
+  
+  /**
+   * Convert bars:beats:sixteenths to decimal beats
+   * @private
+   * @param {string} barsBeatsSixteenths - Format like "0:2:1"
+   * @returns {number} Decimal beats
+   */
+  #barsBeatsSixteenthsToDecimalBeats(barsBeatsSixteenths) {
+    const parts = barsBeatsSixteenths.split(':');
+    const bars = parseInt(parts[0]) || 0;
+    const beats = parseInt(parts[1]) || 0;
+    const sixteenths = parseInt(parts[2]) || 0;
+    
+    return (bars * 4) + beats + (sixteenths / 4);
   }
 
   /**
@@ -306,7 +347,9 @@ class MidiRecorder extends EventTarget {
    */
   #quantizeTime(time) {
     const subdivision = 4 / this.#quantizeSubdivision; // 16th note = 0.25 beats
-    return Math.round(time / subdivision) * subdivision;
+    const quantized = Math.round(time / subdivision) * subdivision;
+    console.log(`🎵 MidiRecorder: Quantizing ${time.toFixed(3)} beats to ${quantized.toFixed(3)} beats (subdivision: ${subdivision})`);
+    return quantized;
   }
 
   /**

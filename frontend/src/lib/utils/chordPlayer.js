@@ -80,13 +80,13 @@ class ChordPlayer extends EventTarget {
         envelope: { attack: 0.1, decay: 0.1, sustain: 0.7, release: 2 }
       });
       
-      // Connect directly to destination (same as keyboard)
-      this.#chordSynth.toDestination();
+      // Create volume control for chords
+      this.#chordVolume = new Tone.Volume(-18); // Much quieter than before (-8 was too loud)
       
-      // Set volume to be slightly quieter
-      this.#chordSynth.volume.value = -8;
+      // Connect synth through volume control to destination
+      this.#chordSynth.chain(this.#chordVolume, Tone.Destination);
       
-      console.log('🎵 ChordPlayer: Chord synth created and connected to destination');
+      console.log('🎵 ChordPlayer: Chord synth created with volume control at -18dB');
       
     } catch (error) {
       console.error('🎵 ChordPlayer: Failed to create chord synth:', error);
@@ -315,8 +315,25 @@ class ChordPlayer extends EventTarget {
    */
   setVolume(volume) {
     if (this.#chordVolume) {
-      this.#chordVolume.volume.value = Tone.gainToDb(volume);
+      // Convert linear volume to dB, with additional -12dB offset to keep chords quieter
+      const dbValue = volume === 0 ? -Infinity : (20 * Math.log10(volume)) - 12;
+      this.#chordVolume.volume.value = dbValue;
+      console.log(`🎵 ChordPlayer: Set volume to ${volume} (${dbValue.toFixed(1)}dB)`);
     }
+  }
+  
+  /**
+   * Get current chord volume
+   * @returns {number} Current volume (0-1)
+   */
+  getVolume() {
+    if (this.#chordVolume) {
+      const dbValue = this.#chordVolume.volume.value;
+      if (dbValue === -Infinity) return 0;
+      // Convert back from dB to linear, accounting for the -12dB offset
+      return Math.pow(10, (dbValue + 12) / 20);
+    }
+    return 0.5; // Default
   }
 
   /**
@@ -361,6 +378,7 @@ export function getChordPlayer(audioEngine = null) {
     if (typeof window !== 'undefined') {
       window.chordPlayer = chordPlayerInstance;
       console.log('🎵 ChordPlayer added to window.chordPlayer for testing');
+      console.log('🎵 Use window.chordPlayer.setVolume(0.3) to adjust chord volume (0-1)');
     }
   }
   return chordPlayerInstance;

@@ -320,11 +320,11 @@
   $: isVisible = currentAudioState?.playheadPosition !== undefined;
 </script>
 
-<!-- Time Indicator Container -->
-<div class="absolute inset-0 pointer-events-none z-20">
-  <!-- Timeline Background (in tracks area) -->
+<!-- Time Indicator Lane - 40px high dedicated space -->
+<div class="w-full h-10 bg-gray-900 border-b border-gray-700 relative overflow-hidden">
+  <!-- Timeline Container -->
   <div 
-    class="absolute left-0 right-0 h-full bg-transparent pointer-events-auto cursor-pointer"
+    class="absolute inset-0 bg-transparent cursor-pointer"
     bind:this={timelineContainer}
     on:click={handleTimelineClick}
     on:touchstart={handleTimelineTouch}
@@ -338,46 +338,65 @@
     <!-- Timeline Markers -->
     {#each timelineMarkers as marker}
       <div 
-        class="absolute top-0 bottom-0 {marker.isMeasureStart ? 'w-0.5 bg-gray-600' : 'w-px bg-gray-700'}"
+        class="absolute top-0 bottom-0 {marker.isMeasureStart ? 'w-0.5 bg-gray-400' : 'w-px bg-gray-600'}"
         style="left: {marker.position}%"
       >
         {#if marker.label}
-          <div class="absolute -top-5 -left-2 text-xs text-gray-400 font-mono">
+          <div class="absolute top-1 -left-2 text-xs text-gray-300 font-mono font-medium">
             {marker.label}
           </div>
         {/if}
       </div>
     {/each}
     
-    <!-- Playhead Line -->
-    {#if isVisible}
-      <div 
-        class="absolute top-0 bottom-0 w-0.5 bg-red-500 transition-all duration-75 pointer-events-auto z-30 {isDragging ? 'bg-red-400' : ''}"
-        style="left: {playheadPosition}px; transform: translateX(-1px)"
-        bind:this={playheadElement}
-      >
-        <!-- Playhead Handle -->
+    <!-- Beat subdivisions (quarter notes) -->
+    {#each timelineMarkers as marker}
+      {#if !marker.isMeasureStart}
         <div 
-          class="absolute -top-1 -left-2 w-4 h-4 cursor-grab hover:cursor-grabbing select-none {isDragging ? 'cursor-grabbing' : ''}"
-          on:mousedown={handlePlayheadMouseDown}
-          on:touchstart={handlePlayheadTouchStart}
-          role="button"
-          tabindex="0"
-          aria-label="Playhead handle"
-        >
-          <!-- Triangle Handle -->
-          <div class="w-0 h-0 border-l-2 border-r-2 border-b-4 border-transparent border-b-red-500 {isDragging ? 'border-b-red-400' : ''}"></div>
-        </div>
-        
-        <!-- Position Label -->
-        {#if isDragging || currentAudioState?.isPlaying}
-          <div 
-            class="absolute -top-8 -left-8 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg border border-gray-600 whitespace-nowrap font-mono"
-          >
-            {getTimeDisplay()}
-          </div>
-        {/if}
+          class="absolute top-6 w-px h-2 bg-gray-700"
+          style="left: {marker.position}%"
+        ></div>
+      {/if}
+    {/each}
+  </div>
+  
+  <!-- Playhead Line and Handle -->
+  {#if isVisible}
+    <div 
+      class="absolute top-0 w-0.5 bg-red-500 transition-all duration-75 z-10 {isDragging ? 'bg-red-400' : ''}"
+      style="left: {playheadPosition}px; transform: translateX(-1px); height: 100vh;"
+      bind:this={playheadElement}
+    >
+      <!-- Playhead Handle -->
+      <div 
+        class="absolute top-0 -left-2 w-4 h-6 cursor-grab hover:cursor-grabbing select-none bg-red-500 {isDragging ? 'cursor-grabbing bg-red-400' : ''} flex items-center justify-center"
+        on:mousedown={handlePlayheadMouseDown}
+        on:touchstart={handlePlayheadTouchStart}
+        role="button"
+        tabindex="0"
+        aria-label="Playhead handle"
+      >
+        <!-- Triangle Handle -->
+        <div class="w-0 h-0 border-l-1 border-r-1 border-b-2 border-transparent border-b-white"></div>
       </div>
+      
+      <!-- Position Label -->
+      {#if isDragging || currentAudioState?.isPlaying}
+        <div 
+          class="absolute top-8 -left-8 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg border border-gray-600 whitespace-nowrap font-mono z-20"
+        >
+          {getTimeDisplay()}
+        </div>
+      {/if}
+    </div>
+  {/if}
+  
+  <!-- Timeline Info -->
+  <div class="absolute top-1 right-2 text-xs text-gray-400 font-mono">
+    {#if currentAudioState?.playheadPosition !== undefined}
+      {getTimeDisplay()}
+    {:else}
+      0:0:0
     {/if}
   </div>
 </div>
@@ -395,16 +414,11 @@
   
   /* Make the timeline markers more subtle */
   .timeline-marker {
-    opacity: 0.6;
+    opacity: 0.8;
   }
   
   .timeline-marker:hover {
     opacity: 1;
-  }
-  
-  /* Ensure proper z-index stacking */
-  .playhead-container {
-    z-index: 100;
   }
   
   /* Touch-friendly handle for mobile */
@@ -412,8 +426,13 @@
     .playhead-handle {
       width: 2rem;
       height: 2rem;
-      top: -0.5rem;
+      top: -0.25rem;
       left: -1rem;
     }
+  }
+  
+  /* Ensure proper cursor states */
+  .cursor-grab:active {
+    cursor: grabbing;
   }
 </style> 

@@ -4,12 +4,16 @@
   import { ChevronUp, ChevronDown } from 'lucide-svelte';
   import { uiState, KEYBOARD_LAYOUTS } from '../../stores/ui.js';
   import { audioState } from '../../stores/audio.js';
-  import { getAudioEngine } from '../../utils/audioEngine.js';
+  import { tracks } from '../../stores/tracks.js';
+  import { getAudioEngine, getMidiRecorder } from '../../utils/index.js';
   import { getMidiPlayer } from '../../utils/midiPlayer.js';
   import * as Tone from 'tone';
   
   /** @type {import('../../utils/audioEngine.js').AudioEngine} */
   let audioEngine;
+  
+  /** @type {import('../../utils/midiRecorder.js').MidiRecorder} */
+  let midiRecorder;
   
   /** @type {Tone.PolySynth} */
   let keyboardSynth;
@@ -26,6 +30,9 @@
   /** @type {import('../../stores/audio.js').AudioState} */
   let currentAudioState;
   
+  /** @type {import('../../stores/tracks.js').Track[]} */
+  let currentTracks = [];
+  
   /** @type {Set<string>} */
   let pressedKeys = new Set();
   
@@ -40,6 +47,9 @@
   
   /** @type {Map<number, number>} */
   let noteVelocities = new Map();
+  
+  /** @type {Map<number, number>} */
+  let noteStartTimes = new Map();
   
   // Piano layout (2 octaves)
   const OCTAVE_KEYS = [
@@ -84,6 +94,10 @@
     currentAudioState = state;
   });
   
+  const unsubscribeTracks = tracks.subscribe(trackList => {
+    currentTracks = trackList;
+  });
+  
   onMount(async () => {
     if (!browser) return;
     
@@ -92,7 +106,8 @@
     
     try {
       audioEngine = getAudioEngine();
-      console.log('🎹 VirtualKeyboard: Audio engine obtained');
+      midiRecorder = getMidiRecorder(audioEngine);
+      console.log('🎹 VirtualKeyboard: Audio engine and MIDI recorder obtained');
       
       // Add click listener to initialize audio on first user interaction
       document.addEventListener('click', initializeAudioOnInteraction, { once: true });
@@ -118,6 +133,7 @@
   onDestroy(() => {
     unsubscribeUI();
     unsubscribeAudio();
+    unsubscribeTracks();
     
     // Clean up synth
     if (keyboardSynth) {
@@ -417,6 +433,20 @@
     activeNotes.add(midiNote);
     noteVelocities.set(midiNote, velocity);
     
+    // Record note start time for duration calculation
+    noteStartTimes.set(midiNote, performance.now());
+    
+    // Record MIDI event if recording is active and a track is armed
+    if (currentAudioState?.isRecording && midiRecorder && audioInitialized) {
+      const armedTrack = currentTracks.find(t => t.isArmed);
+      if (armedTrack && midiRecorder.getStatus().isRecording) {
+        const success = midiRecorder.recordNoteOn(midiNote, velocity);
+        console.log(`🎹 Recording note ON: ${midiNote} to track: ${armedTrack.name}, success: ${success}, recorder status:`, midiRecorder.getStatus());
+      } else {
+        console.log(`🎹 Cannot record note ON: ${midiNote}, armedTrack: ${!!armedTrack}, recorderStatus:`, midiRecorder?.getStatus());
+      }
+    }
+    
     // Trigger audio through keyboard synth
     if (keyboardSynth && audioInitialized) {
       try {
@@ -446,8 +476,18 @@
   function releaseNote(midiNote) {
     console.log(`🎹 Releasing note: ${midiNote}`);
     
+    // Record MIDI note off if recording is active and a track is armed
+    if (currentAudioState?.isRecording && midiRecorder && audioInitialized) {
+      const armedTrack = currentTracks.find(t => t.isArmed);
+      if (armedTrack && midiRecorder.getStatus().isRecording) {
+        const success = midiRecorder.recordNoteOff(midiNote);
+        console.log(`🎹 Recording note OFF: ${midiNote} to track: ${armedTrack.name}, success: ${success}`);
+      }
+    }
+    
     activeNotes.delete(midiNote);
     noteVelocities.delete(midiNote);
+    noteStartTimes.delete(midiNote);
     
     // Release note through keyboard synth
     if (keyboardSynth && audioInitialized) {
@@ -530,12 +570,25 @@
   <div class="flex items-center justify-between mb-4">
     <div class="text-sm font-medium">Virtual Keyboard</div>
     
-    <!-- Audio Status & Test -->
+    <!-- Audio Status & Recording Indicator -->
     <div class="flex items-center space-x-4">
       <div class="text-xs">
         <span class="text-gray-400">Audio:</span>
         <span class="{audioInitialized ? 'text-green-400' : 'text-yellow-400'}">{audioStatus}</span>
       </div>
+      
+      {#if currentAudioState?.isRecording}
+        <div class="text-xs bg-red-600 text-white px-2 py-1 rounded animate-pulse">
+          RECORDING
+          {#if currentTracks.find(t => t.isArmed)}
+            → {currentTracks.find(t => t.isArmed)?.name}
+          {/if}
+        </div>
+      {:else if currentTracks.find(t => t.isArmed)}
+        <div class="text-xs bg-yellow-600 text-white px-2 py-1 rounded">
+          ARMED: {currentTracks.find(t => t.isArmed)?.name}
+        </div>
+      {/if}
       
       {#if audioInitialized}
         <button 

@@ -106,6 +106,8 @@
       if (currentAudioState.playheadPosition === 0 && currentAudioState.isRecording) {
         audioEngine.startCountIn(() => {
           audioEngine.play();
+          // Start MIDI recording after count-in completes
+          audioEngine.dispatchEvent(new CustomEvent('startMidiRecording'));
         });
       } else {
         audioEngine.play();
@@ -117,7 +119,16 @@
    * Handle stop button click
    */
   function handleStop() {
+    // Stop recording if active
+    if (currentAudioState.isRecording) {
+      audioState.stopRecording();
+    }
+    
+    // Stop playback and reset position
     audioEngine.stop();
+    
+    // Disarm all tracks and signal stop
+    audioEngine.dispatchEvent(new CustomEvent('stopAndDisarm'));
   }
   
   /**
@@ -135,6 +146,10 @@
       audioState.stopRecording();
     } else {
       audioState.startRecording();
+      // If we're not at the beginning, start MIDI recording immediately
+      if (currentAudioState.playheadPosition > 0) {
+        audioEngine.dispatchEvent(new CustomEvent('startMidiRecording'));
+      }
     }
   }
   
