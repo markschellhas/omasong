@@ -5,7 +5,6 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "js/Model.js" as Model
-import "js/Chords.js" as Chords
 import "js/Song.js" as Song
 import "js/Keyboard.js" as KeyMap
 
@@ -23,20 +22,23 @@ Item {
   property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.56)
   property color faint: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.12)
 
-  property var song: Song.defaultSong()
+  property var song: seedSong(Song.defaultSong())
   property bool playing: false
-  property int playIndex: -1
+  property var playEvent: null
   property int currentBar: 1
-  property int currentBeat: 1
+  property int currentBeat: 0
+  property int displayBeat: 1
   property int selectedSection: 0
   property int selectedMeasure: 0
   property int selectedSlot: 0
   property var activeNotes: []
+  property var soundingNotes: []
+  property var previewNotes: []
   property bool sustain: false
   property var heldNotes: ({})
-  property var tapTimes: []
   property string statusText: ""
   property bool persistReady: false
+  readonly property var timeline: Song.buildTimeline(song)
 
   readonly property int cardWidth: Math.min(Style.space(1180), panel.width - Style.gapsOut * 2)
   readonly property int cardHeight: Math.min(Style.space(820), panel.height - Style.gapsOut * 2)
@@ -48,7 +50,18 @@ Item {
   readonly property string songPath: Quickshell.env("HOME") + "/.local/state/omarchy/songwriter/song.json"
   readonly property string writeScript: decodeURIComponent(
     Qt.resolvedUrl("write-json.py").toString().replace(/^file:\/\//, ""))
-  readonly property var playSlots: []
+  function seedSong(raw) {
+    var next = Song.normalizeSong(raw)
+    if (raw && raw.loop !== undefined)
+      next.loop = !!raw.loop
+    else
+      next.loop = true
+    if (raw && raw.octave !== undefined)
+      next.octave = raw.octave
+    if (raw && raw.layout !== undefined)
+      next.layout = raw.layout
+    return next
+  }
 
   function open(payloadJson) {
     opened = true
@@ -64,12 +77,6 @@ Item {
     close()
     if (shell && typeof shell.hide === "function")
       shell.hide((manifest && manifest.id) || "io.github.markschellhas.songwriter")
-  }
-
-  function clampBpm(value) {
-    var n = Math.round(Number(value))
-    if (!isFinite(n)) return song.bpm
-    return Math.max(40, Math.min(240, n))
   }
 
   function clampSelection() {
@@ -157,117 +164,158 @@ Item {
     if (seconds)
       cmd.push("--seconds", String(seconds))
     Quickshell.execDetached(cmd)
-    var next = activeNotes.slice()
-    for (var n = 0; n < notes.length; n++) {
-      if (next.indexOf(notes[n]) === -1)
-        next.push(notes[n])
-    }
-    activeNotes = next
+    previewNotes = notes.slice()
+    refreshPiano()
+    noteClear.interval = Math.max(80, Math.round((seconds || 0.7) * 1000))
     noteClear.restart()
-  }
-
-  function previewChord(chord) {
-    if (!chord)
-      return
-    var notes = Model.triadMidi(chord, song.octave)
-    if (!notes || !notes.length)
-      return
-    statusText = Model.chordName(chord.rootPc, chord.quality)
-    playMidiNotes(notes, 0.7)
-  }
-
-  function previewSymbol(symbol) {
-    var parsed = Chords.parseChord(symbol, song.octave)
-    if (!parsed.isValid || !parsed.chord || !parsed.chord.notes.length)
-      return
-    statusText = parsed.chord.symbol
-    playMidiNotes(parsed.chord.notes, 0.7)
   }
 
   function applySongFields(fields) {
     var next = Song.cloneSong(song)
+    if (fields.bpm !== undefined)
+      next = Song.setBpm(next, fields.bpm)
     next.loop = fields.loop !== undefined ? !!fields.loop : !!(song && song.loop)
     next.octave = fields.octave !== undefined ? fields.octave : (song && song.octave)
     next.layout = fields.layout !== undefined ? fields.layout : (song && song.layout)
-    if (fields.bpm !== undefined)
-      next.bpm = clampBpm(fields.bpm)
     if (fields.keyIndex !== undefined)
       next.keyIndex = fields.keyIndex
     updateSong(next)
   }
 
+  function refreshPiano() {
+    var next = []
+    function add(n) {
+      var midi = Number(n)
+      if (!isFinite(midi))
+        return
+      midi = Math.round(midi)
+      if (next.indexOf(midi) === -1)
+        next.push(midi)
+    }
+    var i
+    for (i = 0; i < soundingNotes.length; i++)
+      add(soundingNotes[i])
+    for (i = 0; i < previewNotes.length; i++)
+      add(previewNotes[i])
+    for (var held in heldNotes)
+      add(held)
+    activeNotes = next
+  }
+
+  function measureStartBeat(events, event) {
+    if (!events || !event)
+      return 0
+    for (var i = 0; i < events.length; i++) {
+      var e = events[i]
+      if (e.sectionIndex === event.sectionIndex
+          && e.measureIndex === event.measureIndex
+          && e.repeatPass === event.repeatPass)
+        return e.startBeat
+    }
+    return event.startBeat
+  }
+
+  function samePlayEvent(a, b) {
+    return !!(a && b
+      && a.startBeat === b.startBeat
+      && a.sectionIndex === b.sectionIndex
+      && a.measureIndex === b.measureIndex
+      && a.slotIndex === b.slotIndex
+      && a.repeatPass === b.repeatPass)
+  }
+
+  function applySounding(event) {
+    if (!event || event.rest || !event.chord) {
+      soundingNotes = []
+      refreshPiano()
+      return
+    }
+    soundingNotes = Model.triadMidi(event.chord, song.octave)
+    playMidiNotes(soundingNotes, Song.beatsToSeconds(event.durationBeats, song.bpm))
+  }
+
+  function enterBeat(forceAudio) {
+    var tl = timeline
+    var total = Song.timelineDurationBeats(tl)
+    if (total <= 0) {
+      stopPlayback()
+      return
+    }
+    if (currentBeat >= total) {
+      if (song.loop) {
+        currentBeat = 0
+        currentBar = 1
+        playEvent = null
+      } else {
+        stopPlayback()
+        return
+      }
+    }
+    var event = Song.eventAtBeat(tl, currentBeat)
+    if (!event) {
+      stopPlayback()
+      return
+    }
+    var changed = !samePlayEvent(playEvent, event)
+    if (changed) {
+      if (playEvent
+          && currentBeat !== 0
+          && (playEvent.sectionIndex !== event.sectionIndex
+            || playEvent.measureIndex !== event.measureIndex
+            || playEvent.repeatPass !== event.repeatPass))
+        currentBar += 1
+      if (currentBeat === 0)
+        currentBar = 1
+      playEvent = event
+      var name = (song.sections[event.sectionIndex] || {}).name || ""
+      if (event.rest || !event.chord)
+        statusText = name ? name + " · Rest" : "Rest"
+      else
+        statusText = name + " · " + Model.chordName(event.chord.rootPc, event.chord.quality)
+      if (forceAudio || changed)
+        applySounding(event)
+    }
+    displayBeat = Math.max(1, Math.floor(currentBeat - measureStartBeat(tl, event)) + 1)
+  }
+
   function startPlayback() {
-    var first = Song.nextFilledSlot(playSlots, 0)
-    if (first < 0) {
+    var tl = timeline
+    if (!tl || !tl.length) {
       statusText = "Add chords to play"
       return
     }
     playing = true
-    playIndex = first
+    currentBeat = 0
     currentBar = 1
-    currentBeat = 1
-    playCurrent()
+    playEvent = null
+    enterBeat(true)
     transportTimer.start()
   }
 
   function stopPlayback() {
     playing = false
-    playIndex = -1
-    currentBeat = 1
+    playEvent = null
+    currentBeat = 0
+    displayBeat = 1
+    soundingNotes = []
     transportTimer.stop()
+    refreshPiano()
   }
 
-  function playCurrent() {
-    var slots = playSlots
-    if (playIndex < 0 || playIndex >= slots.length) {
-      if (song.loop) {
-        playIndex = Song.nextFilledSlot(slots, 0)
-        currentBar = 1
-      }
-      if (playIndex < 0 || playIndex >= slots.length) {
-        stopPlayback()
-        return
-      }
-    }
-    var slot = slots[playIndex]
-    if (!slot || !slot.symbol) {
-      advanceSlot()
+  function auditionSlot(sectionIndex, measureIndex, slotIndex) {
+    stopPlayback()
+    var chord = Song.getChord(song, sectionIndex, measureIndex, slotIndex)
+    if (!chord)
       return
-    }
-    selectedSection = slot.sectionIndex
-    selectedSlot = slot.slot
-    currentBar = playIndex + 1
-    previewSymbol(slot.symbol)
-    statusText = slot.sectionName + " · " + slot.symbol
-  }
-
-  function advanceSlot() {
-    var slots = playSlots
-    var next = Song.nextFilledSlot(slots, playIndex + 1)
-    if (next < 0) {
-      if (song.loop) {
-        playIndex = Song.nextFilledSlot(slots, 0)
-        currentBar = 1
-        if (playIndex < 0) {
-          stopPlayback()
-          return
-        }
-        playCurrent()
-      } else {
-        stopPlayback()
-      }
-      return
-    }
-    playIndex = next
-    playCurrent()
+    var section = song.sections[sectionIndex]
+    var slot = section.measures[measureIndex].slots[slotIndex]
+    var beats = Song.slotDurationBeats(slot.span, section.timeSig && section.timeSig.denominator)
+    var seconds = Song.beatsToSeconds(beats, song.bpm)
+    statusText = Model.chordName(chord.rootPc, chord.quality)
+    playMidiNotes(Model.triadMidi(chord, song.octave), seconds)
   }
 
   function handleComputerKey(event) {
-    if (event.key === Qt.Key_Space) {
-      sustain = true
-      event.accepted = true
-      return
-    }
     var midi = KeyMap.midiForKey(event.text, song.octave, song.layout)
     if (midi < 0)
       return
@@ -288,14 +336,6 @@ Item {
 
   function handleComputerKeyUp(event) {
     if (event.key === Qt.Key_Space) {
-      sustain = false
-      var kept = []
-      for (var i = 0; i < activeNotes.length; i++) {
-        var n = activeNotes[i]
-        if (heldNotes[n] || heldNotes[String(n)])
-          kept.push(n)
-      }
-      activeNotes = kept
       event.accepted = true
       return
     }
@@ -308,24 +348,8 @@ Item {
         nextHeld[held] = heldNotes[held]
     }
     heldNotes = nextHeld
-    if (!sustain) {
-      activeNotes = activeNotes.filter(function(n) { return n !== midi })
-    }
+    refreshPiano()
     event.accepted = true
-  }
-
-  function tapTempo() {
-    var now = Date.now()
-    var times = tapTimes.filter(function(t) { return now - t < 3000 })
-    times.push(now)
-    tapTimes = times
-    if (times.length < 2)
-      return
-    var sum = 0
-    for (var i = 1; i < times.length; i++)
-      sum += times[i] - times[i - 1]
-    var bpm = Math.round(60000 / (sum / (times.length - 1)))
-    applySongFields({ bpm: clampBpm(bpm) })
   }
 
   Timer {
@@ -338,26 +362,18 @@ Item {
     id: noteClear
     interval: 700
     onTriggered: {
-      if (root.sustain)
-        return
-      var kept = []
-      for (var i = 0; i < root.activeNotes.length; i++) {
-        var n = root.activeNotes[i]
-        if (root.heldNotes[n] || root.heldNotes[String(n)])
-          kept.push(n)
-      }
-      root.activeNotes = kept
+      root.previewNotes = []
+      root.refreshPiano()
     }
   }
 
   Timer {
     id: transportTimer
-    interval: Math.max(200, Math.round(60000 / Math.max(40, song.bpm)))
+    interval: Math.max(1, Math.round(60000 / Math.max(40, song.bpm || 120)))
     repeat: true
     onTriggered: {
-      currentBeat = currentBeat >= 4 ? 1 : currentBeat + 1
-      if (currentBeat === 1)
-        advanceSlot()
+      currentBeat += 1
+      enterBeat(false)
     }
   }
 
@@ -371,9 +387,9 @@ Item {
       try {
         var raw = text()
         if (raw && String(raw).trim())
-          song = Song.normalizeSong(JSON.parse(raw))
+          song = seedSong(JSON.parse(raw))
       } catch (e) {
-        song = Song.defaultSong()
+        song = seedSong(Song.defaultSong())
       }
       persistReady = true
       persistFallback.stop()
@@ -446,6 +462,14 @@ Item {
           }
           if (event.key === Qt.Key_Right) {
             circle.step(1)
+            event.accepted = true
+            return
+          }
+          if (event.key === Qt.Key_Space) {
+            if (root.playing)
+              root.stopPlayback()
+            else
+              root.startPlayback()
             event.accepted = true
             return
           }
@@ -529,7 +553,7 @@ Item {
           playing: root.playing
           looping: root.song.loop
           currentBar: root.currentBar
-          currentBeat: root.currentBeat
+          currentBeat: root.displayBeat
           statusText: root.statusText
           onPlayRequested: { root.startPlayback(); root.refocusKeys() }
           onStopRequested: { root.stopPlayback(); root.refocusKeys() }
@@ -538,9 +562,8 @@ Item {
             root.refocusKeys()
           }
           onBpmChangedByUser: function(value) {
-            root.applySongFields({ bpm: root.clampBpm(value) })
+            root.applySongFields({ bpm: value })
           }
-          onTapTempo: { root.tapTempo(); root.refocusKeys() }
         }
 
         CircleOfFifths {
@@ -581,14 +604,9 @@ Item {
           selectedSection: root.selectedSection
           selectedMeasure: root.selectedMeasure
           selectedSlot: root.selectedSlot
-          playSection: root.playing && root.playIndex >= 0 && root.playSlots[root.playIndex]
-            ? root.playSlots[root.playIndex].sectionIndex : -1
-          playMeasure: root.playing && root.playIndex >= 0 && root.playSlots[root.playIndex]
-            ? root.playSlots[root.playIndex].measureIndex : -1
-          playSlot: root.playing && root.playIndex >= 0 && root.playSlots[root.playIndex]
-            ? (root.playSlots[root.playIndex].slotIndex !== undefined
-              ? root.playSlots[root.playIndex].slotIndex
-              : root.playSlots[root.playIndex].slot) : -1
+          playSection: root.playing && root.playEvent ? root.playEvent.sectionIndex : -1
+          playMeasure: root.playing && root.playEvent ? root.playEvent.measureIndex : -1
+          playSlot: root.playing && root.playEvent ? root.playEvent.slotIndex : -1
           chordDragPayload: circle.chordDragPayload
           onChordDropped: function(sectionIndex, measureIndex, slotIndex, chord, insertAfter) {
             root.updateSong(Song.placeChord(root.song, sectionIndex, measureIndex, slotIndex, chord, insertAfter))
@@ -600,7 +618,7 @@ Item {
             root.updateSong(Song.setChord(root.song, sectionIndex, measureIndex, slotIndex, null))
           }
           onSlotAuditioned: function(sectionIndex, measureIndex, slotIndex) {
-            root.previewChord(Song.getChord(root.song, sectionIndex, measureIndex, slotIndex))
+            root.auditionSlot(sectionIndex, measureIndex, slotIndex)
           }
           onSectionAdded: function(name) {
             root.updateSong(Song.addSection(root.song, name))
@@ -638,11 +656,10 @@ Item {
           octave: root.song.octave
           layoutName: root.song.layout
           activeNotes: root.activeNotes
-          sustain: root.sustain
           onNoteOn: function(midi) { root.playMidiNotes([midi], 0.45) }
           onNoteOff: function(midi) {
-            if (!root.sustain)
-              root.activeNotes = root.activeNotes.filter(function(n) { return n !== midi })
+            root.previewNotes = root.previewNotes.filter(function(n) { return n !== midi })
+            root.refreshPiano()
           }
           onOctaveChangedByUser: function(value) {
             root.applySongFields({ octave: KeyMap.clampOctave(value) })

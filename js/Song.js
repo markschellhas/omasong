@@ -575,3 +575,34 @@ function buildTimeline(song) {
   }
   return events
 }
+
+function beatsToSeconds(beats, bpm) {
+  var b = Number(beats)
+  var p = Number(bpm)
+  if (!isFinite(b) || b < 0)
+    b = 0
+  if (!isFinite(p) || p < 1)
+    p = 120
+  return b * (60 / p)
+}
+
+function timelineDurationBeats(events) {
+  if (!events || !events.length)
+    return 0
+  var last = events[events.length - 1]
+  return last.startBeat + last.durationBeats
+}
+
+function eventAtBeat(events, beat) {
+  if (!events || !events.length)
+    return null
+  var t = Number(beat)
+  if (!isFinite(t) || t < 0)
+    t = 0
+  for (var i = 0; i < events.length; i++) {
+    var e = events[i]
+    if (t >= e.startBeat && t < e.startBeat + e.durationBeats)
+      return e
+  }
+  return null
+}

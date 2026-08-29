@@ -280,9 +280,32 @@ assertEq(clampMidi(midiForLaptopKey("a", 0)), midiForLaptopKey("a", 0))
 var song = defaultSong()
 var tl = buildTimeline(song)
 assertEq(tl.length, 8)
+assertEq(tl[0].durationBeats, 4)
+assertEq(tl[0].rest, false)
+assertEq(beatsToSeconds(4, 120), 2)
+assertEq(beatsToSeconds(1, 60), 1)
+assertEq(timelineDurationBeats(tl), 32)
+assertEq(eventAtBeat(tl, 0).measureIndex, 0)
+assertEq(eventAtBeat(tl, 4).measureIndex, 1)
+assertEq(eventAtBeat(tl, 31).sectionIndex, 1)
 var beats = 0
 for (var i = 0; i < tl.length; i++) beats += tl[i].durationBeats
 assertEq(beats, 32)
+var restTl = buildTimeline(setChord(cloneSong(song), 0, 0, 0, null))
+assertEq(restTl[0].rest, true)
+assertEq(restTl[0].durationBeats, 4)
+var walked = 0
+var lastStart = -1
+for (var b = 0; b < timelineDurationBeats(tl); b++) {
+  var ev = eventAtBeat(tl, b)
+  assert(ev, "event at beat " + b)
+  if (ev.startBeat !== lastStart) {
+    walked++
+    lastStart = ev.startBeat
+  }
+}
+assertEq(walked, 8)
+assertEq(eventAtBeat(tl, timelineDurationBeats(tl)), null)
 var repeated = setRowRepeat(cloneSong(song), 0, 0, true)
 var tl2 = buildTimeline(repeated)
 assertEq(tl2.length, 12)

@@ -18,7 +18,6 @@ Item {
   signal stopRequested
   signal loopToggled
   signal bpmChangedByUser(int value)
-  signal tapTempo
 
   readonly property int beatPulseMs: Math.max(200, Math.round(60000 / Math.max(40, bpm)))
 
@@ -114,16 +113,6 @@ Item {
       focusable: true
       foreground: root.foreground
       onClicked: root.bpmChangedByUser(root.bpm + 1)
-    }
-
-    Button {
-      anchors.verticalCenter: parent.verticalCenter
-      text: "Tap"
-      bordered: true
-      tooltipText: "Tap tempo"
-      focusable: true
-      foreground: root.foreground
-      onClicked: root.tapTempo()
     }
 
     Item { width: Style.spacing.md; height: 1 }
