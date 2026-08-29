@@ -113,13 +113,14 @@ Item {
     var loop = next && next.loop !== undefined ? next.loop : (song && song.loop)
     var octave = next && next.octave !== undefined ? next.octave : (song && song.octave)
     var layout = next && next.layout !== undefined ? next.layout : (song && song.layout)
-    song = Song.normalizeSong(next)
+    var normalized = Song.normalizeSong(next)
     if (loop !== undefined)
-      song.loop = loop
+      normalized.loop = loop
     if (octave !== undefined)
-      song.octave = octave
+      normalized.octave = octave
     if (layout !== undefined)
-      song.layout = layout
+      normalized.layout = layout
+    song = normalized
     clampSelection()
     persistSoon()
   }

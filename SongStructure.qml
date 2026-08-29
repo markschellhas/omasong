@@ -69,6 +69,8 @@ Item {
   }
 
   function commitRename(sectionIndex, name) {
+    if (renamingSection !== sectionIndex)
+      return
     var value = String(name || "").trim()
     renamingSection = -1
     var current = root.sections[sectionIndex]
