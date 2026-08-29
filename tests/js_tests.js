@@ -315,6 +315,31 @@ assertEq(beats, 48)
 assertEq(tl2[4].repeatPass, 1)
 var six = setTimeSignature(cloneSong(song), 0, { numerator: 6, denominator: 8 })
 assertEq(six.sections[0].rowRepeats.length, 2)
+assertEq(slotDurationBeats(6, 8), 3)
+assertEq(slotDurationBeats(1, 8), 0.5)
+assertEq(six.sections[0].measures[0].slots[0].span, 6)
+assertEq(buildTimeline(six)[0].durationBeats, 3)
+var sixSplit = resizeSlot(cloneSong(six), 0, 0, 0, 1, "right")
+assertEq(sixSplit.sections[0].measures[0].slots[0].span, 1)
+var sixTl = buildTimeline(sixSplit)
+assertEq(sixTl[0].durationBeats, 0.5)
+assertEq(sixTl[1].startBeat, 0.5)
+var walkBeat = 0
+var walkHits = 0
+while (walkBeat < timelineDurationBeats(sixTl)) {
+  var walkEv = eventAtBeat(sixTl, walkBeat)
+  assert(walkEv, "eventAtBeat at " + walkBeat)
+  assertEq(walkEv.startBeat, sixTl[walkHits].startBeat)
+  walkHits++
+  walkBeat = walkEv.startBeat + walkEv.durationBeats
+}
+assertEq(walkHits, sixTl.length)
+for (var ei = 0; ei < sixTl.length; ei++) {
+  var atStart = eventAtBeat(sixTl, sixTl[ei].startBeat)
+  assertEq(atStart.startBeat, sixTl[ei].startBeat)
+  assertEq(atStart.slotIndex, sixTl[ei].slotIndex)
+}
+assertEq(eventAtBeat(sixTl, 0.5).startBeat, 0.5)
 
 // Task 5: Agent JSON (progressions omit empties; song includes every slot).
 var song = defaultSong()

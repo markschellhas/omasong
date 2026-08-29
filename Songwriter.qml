@@ -26,7 +26,7 @@ Item {
   property bool playing: false
   property var playEvent: null
   property int currentBar: 1
-  property int currentBeat: 0
+  property real currentBeat: 0
   property int displayBeat: 1
   property int selectedSection: 0
   property int selectedMeasure: 0
@@ -34,7 +34,6 @@ Item {
   property var activeNotes: []
   property var soundingNotes: []
   property var previewNotes: []
-  property bool sustain: false
   property var heldNotes: ({})
   property string statusText: ""
   property bool persistReady: false
@@ -215,13 +214,10 @@ Item {
     return event.startBeat
   }
 
-  function samePlayEvent(a, b) {
-    return !!(a && b
-      && a.startBeat === b.startBeat
-      && a.sectionIndex === b.sectionIndex
-      && a.measureIndex === b.measureIndex
-      && a.slotIndex === b.slotIndex
-      && a.repeatPass === b.repeatPass)
+  function eventIntervalMs(event) {
+    if (!event)
+      return 1000
+    return Math.max(1, Math.round(Song.beatsToSeconds(event.durationBeats, song.bpm) * 1000))
   }
 
   function applySounding(event) {
@@ -234,7 +230,7 @@ Item {
     playMidiNotes(soundingNotes, Song.beatsToSeconds(event.durationBeats, song.bpm))
   }
 
-  function enterBeat(forceAudio) {
+  function enterCurrentEvent() {
     var tl = timeline
     var total = Song.timelineDurationBeats(tl)
     if (total <= 0) {
@@ -256,26 +252,25 @@ Item {
       stopPlayback()
       return
     }
-    var changed = !samePlayEvent(playEvent, event)
-    if (changed) {
-      if (playEvent
-          && currentBeat !== 0
-          && (playEvent.sectionIndex !== event.sectionIndex
-            || playEvent.measureIndex !== event.measureIndex
-            || playEvent.repeatPass !== event.repeatPass))
-        currentBar += 1
-      if (currentBeat === 0)
-        currentBar = 1
-      playEvent = event
-      var name = (song.sections[event.sectionIndex] || {}).name || ""
-      if (event.rest || !event.chord)
-        statusText = name ? name + " · Rest" : "Rest"
-      else
-        statusText = name + " · " + Model.chordName(event.chord.rootPc, event.chord.quality)
-      if (forceAudio || changed)
-        applySounding(event)
-    }
+    if (playEvent
+        && currentBeat !== 0
+        && (playEvent.sectionIndex !== event.sectionIndex
+          || playEvent.measureIndex !== event.measureIndex
+          || playEvent.repeatPass !== event.repeatPass))
+      currentBar += 1
+    if (currentBeat === 0)
+      currentBar = 1
+    playEvent = event
+    currentBeat = event.startBeat
+    var name = (song.sections[event.sectionIndex] || {}).name || ""
+    if (event.rest || !event.chord)
+      statusText = name ? name + " · Rest" : "Rest"
+    else
+      statusText = name + " · " + Model.chordName(event.chord.rootPc, event.chord.quality)
+    applySounding(event)
     displayBeat = Math.max(1, Math.floor(currentBeat - measureStartBeat(tl, event)) + 1)
+    transportTimer.interval = eventIntervalMs(event)
+    transportTimer.restart()
   }
 
   function startPlayback() {
@@ -288,8 +283,7 @@ Item {
     currentBeat = 0
     currentBar = 1
     playEvent = null
-    enterBeat(true)
-    transportTimer.start()
+    enterCurrentEvent()
   }
 
   function stopPlayback() {
@@ -369,11 +363,15 @@ Item {
 
   Timer {
     id: transportTimer
-    interval: Math.max(1, Math.round(60000 / Math.max(40, song.bpm || 120)))
-    repeat: true
+    interval: 1000
+    repeat: false
     onTriggered: {
-      currentBeat += 1
-      enterBeat(false)
+      if (!playEvent) {
+        stopPlayback()
+        return
+      }
+      currentBeat = playEvent.startBeat + playEvent.durationBeats
+      enterCurrentEvent()
     }
   }
 
