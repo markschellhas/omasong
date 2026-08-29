@@ -53,7 +53,7 @@ function assertEq(a, b, msg) {
         "const Model = {};\nconst Chords = {};\nconst Song = {};\nconst Keyboard = {};\n"
         + "void Model; void Chords; void Song; void Keyboard;\n"
         + libs["Model"].replace("function ", "function ")
-        + "Object.assign(Model, {FIFTHS, wrap, keyAt, label, diatonic, inKeyWedge, wedgeChords, triad, hitTest, PITCH_CLASS, tonicIndexForSymbol});\n"
+        + "Object.assign(Model, {PC_NAMES, station, chordName, qualityInt, encodeChord, decodeChord, diatonicTriads, numeralFor, maxSlots, beatsPerBar, triadMidi, FIFTHS, wrap, keyAt, label, diatonic, inKeyWedge, wedgeChords, triad, hitTest, PITCH_CLASS});\n"
         + libs["Chords"]
         + "Object.assign(Chords, {parseChord, isValidChord, getChordSuggestions, transposeChord, midiToHz, midiToNoteName});\n"
         + libs["Song"]
