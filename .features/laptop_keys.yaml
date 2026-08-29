@@ -22,4 +22,4 @@ related_features:
 core_components:
   - tests/js_tests.js
 
-notes: "Off by default. Space is not sustain. Current Keyboard.js has extra layouts (dvorak/colemak) and always-on mapping — not source LaptopKeys.h."
+notes: "Off by default. Space is not sustain."

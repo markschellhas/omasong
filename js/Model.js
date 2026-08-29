@@ -1,6 +1,19 @@
 .pragma library
 
-// Clockwise from 12 o'clock: C, G, D, A, E, B, F#, Db, Ab, Eb, Bb, F
+// Port of source MusicTheory (circle stations, triads, payloads, meter).
+// Polar helpers: wrap, rotate, visualSector, hitTest (logical = geometric + tonic).
+
+var PC_NAMES = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+
+var QUALITY_NAMES = ["major", "minor", "diminished", "augmented"]
+
+var NUMERALS = ["I", "ii", "iii", "IV", "V", "vi", "vii°"]
+
+var MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11]
+
+var MAJOR_QUALITIES = ["major", "minor", "minor", "major", "major", "minor", "diminished"]
+
+// Clockwise fifths from 12 o'clock: index 0 = C / Am.
 var FIFTHS = [
   { major: "C", minor: "Am", accidentals: "0" },
   { major: "G", minor: "Em", accidentals: "1#" },
@@ -23,9 +36,32 @@ var TOP_DEG = -90
 // Pitch class of each major tonic, matching FIFTHS (C=0 … B=11).
 var PITCH_CLASS = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5]
 
+function wrapPitchClass(pc) {
+  var m = pc % 12
+  return m < 0 ? m + 12 : m
+}
+
 function wrap(index) {
   var n = FIFTHS.length
-  return ((index % n) + n) % n
+  var m = index % n
+  return m < 0 ? m + n : m
+}
+
+function rotate(keyIndex, delta) {
+  return wrap(keyIndex + delta)
+}
+
+function visualSector(logical, tonic) {
+  return wrap(logical - tonic)
+}
+
+function tonicPc(index) {
+  return wrapPitchClass(7 * wrap(index))
+}
+
+function station(index) {
+  var k = FIFTHS[wrap(index)]
+  return { major: k.major, relativeMinor: k.minor, accidentals: k.accidentals }
 }
 
 function keyAt(index) {
@@ -33,20 +69,127 @@ function keyAt(index) {
 }
 
 function label(index) {
-  var k = keyAt(index)
-  return k.major + " / " + k.minor
+  var s = station(index)
+  return s.major + " / " + s.relativeMinor
+}
+
+function qualityInt(quality) {
+  var i = QUALITY_NAMES.indexOf(quality)
+  return i
+}
+
+function qualityName(n) {
+  var i = Number(n)
+  if (i < 0 || i > 3 || !isFinite(i))
+    return null
+  return QUALITY_NAMES[i]
+}
+
+function triadIntervals(quality) {
+  if (quality === "minor")
+    return [3, 7]
+  if (quality === "diminished")
+    return [3, 6]
+  if (quality === "augmented")
+    return [4, 8]
+  return [4, 7]
+}
+
+function chordName(rootPc, quality) {
+  var n = PC_NAMES[wrapPitchClass(rootPc)]
+  if (quality === "minor")
+    return n + "m"
+  if (quality === "diminished")
+    return n + "dim"
+  if (quality === "augmented")
+    return n + "aug"
+  return n
+}
+
+function encodeChord(chord) {
+  var pc = wrapPitchClass(chord.rootPc)
+  return "chord|" + chordName(pc, chord.quality) + "|" + pc + "|" + qualityInt(chord.quality)
+}
+
+function decodeChord(payload) {
+  if (!payload || String(payload).indexOf("chord|") !== 0)
+    return null
+  var parts = String(payload).split("|")
+  if (parts.length < 4)
+    return null
+  var pc = parseInt(parts[2], 10)
+  var q = qualityName(parseInt(parts[3], 10))
+  if (!isFinite(pc) || !q)
+    return null
+  return { rootPc: wrapPitchClass(pc), quality: q }
+}
+
+function diatonicTriads(keyIndex) {
+  var tonic = tonicPc(keyIndex)
+  var out = []
+  for (var i = 0; i < 7; i++) {
+    out.push({
+      rootPc: wrapPitchClass(tonic + MAJOR_SCALE[i]),
+      quality: MAJOR_QUALITIES[i]
+    })
+  }
+  return out
 }
 
 function diatonic(index) {
-  var i = wrap(index)
+  var t = diatonicTriads(index)
   return {
-    I: keyAt(i).major,
-    ii: keyAt(i + 11).minor,
-    iii: keyAt(i + 1).minor,
-    IV: keyAt(i + 11).major,
-    V: keyAt(i + 1).major,
-    vi: keyAt(i).minor
+    I: chordName(t[0].rootPc, t[0].quality),
+    ii: chordName(t[1].rootPc, t[1].quality),
+    iii: chordName(t[2].rootPc, t[2].quality),
+    IV: chordName(t[3].rootPc, t[3].quality),
+    V: chordName(t[4].rootPc, t[4].quality),
+    vi: chordName(t[5].rootPc, t[5].quality),
+    vii: chordName(t[6].rootPc, t[6].quality)
   }
+}
+
+function numeralFor(chord, keyIndex) {
+  var set = diatonicTriads(keyIndex)
+  for (var i = 0; i < set.length; i++) {
+    if (set[i].rootPc === chord.rootPc && set[i].quality === chord.quality)
+      return NUMERALS[i]
+  }
+  return ""
+}
+
+function maxSlots(ts) {
+  var n = ts && ts.numerator
+  return n < 1 ? 1 : n
+}
+
+function beatsPerBar(ts) {
+  if (!ts || ts.denominator <= 0)
+    return 4
+  return 4 * ts.numerator / ts.denominator
+}
+
+function triadMidi(chord, octave) {
+  if (octave === undefined || octave === null)
+    octave = 4
+  var root = (octave + 1) * 12 + wrapPitchClass(chord.rootPc)
+  var iv = triadIntervals(chord.quality)
+  var n1 = root
+  var n2 = root + iv[0]
+  var n3 = root + iv[1]
+  var kLow = 48
+  var kHigh = 72
+  while (n3 > kHigh && n1 - 12 >= kLow) {
+    n1 -= 12
+    n2 -= 12
+    n3 -= 12
+  }
+  while (n1 < kLow) {
+    n1 += 12
+    n2 += 12
+    n3 += 12
+  }
+  return [n1, n2, n3]
 }
 
 function subdominantIndex(tonic) {
@@ -79,7 +222,8 @@ function wedgeChords(tonic) {
 
 function wrapCursor(cursor, length) {
   var n = length > 0 ? length : 1
-  return ((cursor % n) + n) % n
+  var m = cursor % n
+  return m < 0 ? m + n : m
 }
 
 function wedgeChordAt(tonic, cursor) {
@@ -158,31 +302,23 @@ function midiToHz(midi) {
   return 440 * Math.pow(2, (midi - 69) / 12)
 }
 
-function rootMidi(index, minor) {
-  var pc = PITCH_CLASS[wrap(index)]
-  if (!minor)
-    return 60 + pc
-  var mpc = (pc + 9) % 12
-  return (mpc >= 8 ? 48 : 60) + mpc
-}
-
 function triad(index, ring) {
   var minor = ring === "minor"
-  var root = rootMidi(index, minor)
-  var third = root + (minor ? 3 : 4)
-  var fifth = root + 7
-  var key = keyAt(index)
+  var quality = minor ? "minor" : "major"
+  var pc = minor ? wrapPitchClass(tonicPc(index) + 9) : tonicPc(index)
+  var notes = triadMidi({ rootPc: pc, quality: quality })
+  var s = station(index)
   return {
-    root: midiToHz(root),
-    third: midiToHz(third),
-    fifth: midiToHz(fifth),
-    notes: [root, third, fifth],
-    label: minor ? key.minor : key.major,
+    root: midiToHz(notes[0]),
+    third: midiToHz(notes[1]),
+    fifth: midiToHz(notes[2]),
+    notes: notes,
+    label: minor ? s.relativeMinor : s.major,
     minor: minor
   }
 }
 
-function hitTest(x, y, cx, cy, minorInner, minorOuter, majorInner, majorOuter) {
+function hitTest(x, y, cx, cy, minorInner, minorOuter, majorInner, majorOuter, tonic) {
   var dx = x - cx
   var dy = y - cy
   var r = Math.sqrt(dx * dx + dy * dy)
@@ -196,15 +332,7 @@ function hitTest(x, y, cx, cy, minorInner, minorOuter, majorInner, majorOuter) {
 
   var fromTop = Math.atan2(dy, dx) * 180 / Math.PI - TOP_DEG
   fromTop = ((fromTop % 360) + 360) % 360
-  return { index: Math.round(fromTop / SECTOR_DEG) % SECTORS, ring: ring }
-}
-
-function tonicIndexForSymbol(symbol) {
-  if (!symbol) return -1
-  var s = String(symbol).trim()
-  for (var i = 0; i < FIFTHS.length; i++) {
-    if (FIFTHS[i].major === s || FIFTHS[i].minor === s)
-      return i
-  }
-  return -1
+  var geometric = Math.round(fromTop / SECTOR_DEG) % SECTORS
+  var index = (tonic === undefined || tonic === null) ? geometric : wrap(geometric + tonic)
+  return { index: index, ring: ring }
 }

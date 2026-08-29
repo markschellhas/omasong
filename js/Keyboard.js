@@ -1,153 +1,198 @@
 .pragma library
 
-var WHITE_OFFSETS = [0, 2, 4, 5, 7, 9, 11]
-var BLACK_OFFSETS = [1, 3, 6, 8, 10]
+// Port of source LaptopKeys.h (QWERTY A=C …; Z/X octave).
+// Piano.qml uses pianoKeysC3C5 (MIDI 48–72).
 
-var LAYOUTS = {
-  qwerty: {
-    white: ["a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'"],
-    black: ["w", "e", "r", "t", "y", "u", "i", "o", "p", "["]
-  },
-  dvorak: {
-    white: ["a", "o", "e", "u", "i", "d", "h", "t", "n", "s", "-"],
-    black: [",", ".", "p", "y", "f", "g", "c", "r", "l", "/"]
-  },
-  colemak: {
-    white: ["a", "r", "s", "t", "d", "h", "n", "e", "i", "o", "'"],
-    black: ["w", "f", "p", "g", "j", "l", "u", "y", ";", "["]
-  }
+var DEFAULT_OCTAVE = 4
+var MIN_OCTAVE = 0
+var MAX_OCTAVE = 8
+
+// Semitone from C. Z/X are octave keys, not notes.
+var SEMITONE_FOR_KEY = {
+  "a": 0,
+  "w": 1,
+  "s": 2,
+  "e": 3,
+  "d": 4,
+  "f": 5,
+  "t": 6,
+  "g": 7,
+  "y": 8,
+  "h": 9,
+  "u": 10,
+  "j": 11,
+  "k": 12,
+  "o": 13,
+  "l": 14,
+  "p": 15,
+  ";": 16,
+  "'": 17
 }
 
-var NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-
-function layoutNames() {
-  return ["qwerty", "dvorak", "colemak"]
+var KEY_FOR_SEMITONE = {
+  0: "a",
+  1: "w",
+  2: "s",
+  3: "e",
+  4: "d",
+  5: "f",
+  6: "t",
+  7: "g",
+  8: "y",
+  9: "h",
+  10: "u",
+  11: "j",
+  12: "k",
+  13: "o",
+  14: "l",
+  15: "p",
+  16: ";",
+  17: "'"
 }
 
-function getLayout(name) {
-  return LAYOUTS[name] || LAYOUTS.qwerty
+function normalizeLaptopKey(key) {
+  if (key === undefined || key === null)
+    return ""
+  return String(key).toLowerCase()
 }
 
-function midiForPc(octave, pc) {
-  return (octaveBase(octave) + 1) * 12 + pc
-}
-
-function midiForWhite(octave, index) {
-  if (index < 7)
-    return midiForPc(octave, WHITE_OFFSETS[index])
-  return midiForPc(octave + 1, WHITE_OFFSETS[index - 7])
-}
-
-function midiForBlack(octave, index) {
-  if (index < 5)
-    return midiForPc(octave, BLACK_OFFSETS[index])
-  return midiForPc(octave + 1, BLACK_OFFSETS[index - 5])
-}
-
-function keyToMidiMap(octave, layoutName) {
-  var layout = getLayout(layoutName)
-  var map = {}
-  var i
-  for (i = 0; i < layout.white.length; i++)
-    map[layout.white[i]] = midiForWhite(octave, i)
-  for (i = 0; i < layout.black.length; i++)
-    map[layout.black[i]] = midiForBlack(octave, i)
-  return map
-}
-
-function midiForKey(key, octave, layoutName) {
-  if (!key) return -1
-  var map = keyToMidiMap(octave, layoutName)
-  var k = String(key).toLowerCase()
-  if (map[k] !== undefined)
-    return map[k]
-  if (map[key] !== undefined)
-    return map[key]
-  return -1
-}
-
-function noteName(midi) {
-  if (midi < 0) return ""
-  var pc = ((midi % 12) + 12) % 12
-  var oct = Math.floor(midi / 12) - 1
-  return NOTE_NAMES[pc] + oct
-}
-
-function isBlack(midi) {
-  var pc = ((midi % 12) + 12) % 12
-  return pc === 1 || pc === 3 || pc === 6 || pc === 8 || pc === 10
-}
-
-function computerKeyForMidi(midi, octave, layoutName) {
-  var map = keyToMidiMap(octave, layoutName)
-  for (var key in map) {
-    if (map[key] === midi)
-      return key
-  }
-  return ""
-}
-
-function octaveBase(baseOctave) {
-  var n = Number(baseOctave)
-  if (!isFinite(n)) return 4
-  return Math.max(1, Math.min(7, Math.floor(n)))
-}
-
-function twoOctaveKeys(baseOctave) {
-  var start = octaveBase(baseOctave)
-  var keys = []
-  var names = [
-    { note: "C", type: "white", keyIndex: 0 },
-    { note: "C#", type: "black", keyIndex: 0.5 },
-    { note: "D", type: "white", keyIndex: 1 },
-    { note: "D#", type: "black", keyIndex: 1.5 },
-    { note: "E", type: "white", keyIndex: 2 },
-    { note: "F", type: "white", keyIndex: 3 },
-    { note: "F#", type: "black", keyIndex: 3.5 },
-    { note: "G", type: "white", keyIndex: 4 },
-    { note: "G#", type: "black", keyIndex: 4.5 },
-    { note: "A", type: "white", keyIndex: 5 },
-    { note: "A#", type: "black", keyIndex: 5.5 },
-    { note: "B", type: "white", keyIndex: 6 }
-  ]
-  var offsets = { "C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5, "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11 }
-  for (var oct = 0; oct < 2; oct++) {
-    for (var i = 0; i < names.length; i++) {
-      var key = names[i]
-      var midi = midiForPc(start + oct, offsets[key.note])
-      keys.push({
-        note: key.note,
-        type: key.type,
-        keyIndex: key.keyIndex,
-        octave: start + oct,
-        midi: midi,
-        label: key.note + (start + oct)
-      })
-    }
-  }
-  return keys
-}
-
-function pianoKeys(octave) {
-  return twoOctaveKeys(octave)
-}
-
-function blackKeyLeftPercent(keyIndex, octaveOffset) {
-  var positions = {
-    "0.5": 7.14,
-    "1.5": 14.28,
-    "3.5": 35.71,
-    "4.5": 42.85,
-    "5.5": 50.0
-  }
-  var base = positions[String(keyIndex)] || 0
-  return base + octaveOffset * (100 / 14)
+function semitoneForKey(key) {
+  var st = SEMITONE_FOR_KEY[normalizeLaptopKey(key)]
+  return st === undefined ? -1 : st
 }
 
 function clampOctave(octave) {
-  return octaveBase(octave)
+  var n = Number(octave)
+  if (!isFinite(n))
+    return DEFAULT_OCTAVE
+  n = Math.floor(n)
+  if (n < MIN_OCTAVE)
+    return MIN_OCTAVE
+  if (n > MAX_OCTAVE)
+    return MAX_OCTAVE
+  return n
+}
+
+function clampMidi(midi) {
+  var n = Number(midi)
+  if (!isFinite(n))
+    return 0
+  n = Math.floor(n)
+  if (n < 0)
+    return 0
+  if (n > 127)
+    return 127
+  return n
+}
+
+function shiftOctave(octave, delta) {
+  return clampOctave(Number(octave) + Number(delta))
+}
+
+function midiForLaptopKey(key, octave) {
+  var st = semitoneForKey(key)
+  if (st < 0)
+    return -1
+  return clampMidi((clampOctave(octave) + 1) * 12 + st)
+}
+
+function midiForKey(key, octave, layoutName) {
+  return midiForLaptopKey(key, octave)
+}
+
+function computerKeyForMidi(midi, octave, layoutName) {
+  var cMidi = (clampOctave(octave) + 1) * 12
+  var key = KEY_FOR_SEMITONE[midi - cMidi]
+  return key || ""
 }
 
 function midiToHz(midi) {
   return 440 * Math.pow(2, (midi - 69) / 12)
+}
+
+var PIANO_KEY_META = [
+  { note: "C", type: "white", keyIndex: 0 },
+  { note: "C#", type: "black", keyIndex: 0.5 },
+  { note: "D", type: "white", keyIndex: 1 },
+  { note: "D#", type: "black", keyIndex: 1.5 },
+  { note: "E", type: "white", keyIndex: 2 },
+  { note: "F", type: "white", keyIndex: 3 },
+  { note: "F#", type: "black", keyIndex: 3.5 },
+  { note: "G", type: "white", keyIndex: 4 },
+  { note: "G#", type: "black", keyIndex: 4.5 },
+  { note: "A", type: "white", keyIndex: 5 },
+  { note: "A#", type: "black", keyIndex: 5.5 },
+  { note: "B", type: "white", keyIndex: 6 }
+]
+
+var NOTE_OFFSET = { "C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5, "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11 }
+
+function pianoKeyAt(octave, meta) {
+  var midi = (octave + 1) * 12 + NOTE_OFFSET[meta.note]
+  return {
+    note: meta.note,
+    type: meta.type,
+    keyIndex: meta.keyIndex,
+    octave: octave,
+    midi: midi,
+    label: meta.note + octave
+  }
+}
+
+function pianoKeysC3C5() {
+  var keys = []
+  var oct
+  var i
+  for (oct = 3; oct <= 4; oct++) {
+    for (i = 0; i < PIANO_KEY_META.length; i++)
+      keys.push(pianoKeyAt(oct, PIANO_KEY_META[i]))
+  }
+  keys.push(pianoKeyAt(5, PIANO_KEY_META[0]))
+  return keys
+}
+
+var WHITE_KEYS_C3_C5 = 15
+
+function blackKeyLeftPercent(keyIndex, octaveOffset) {
+  var whitesBefore = {
+    "0.5": 1,
+    "1.5": 2,
+    "3.5": 4,
+    "4.5": 5,
+    "5.5": 6
+  }
+  var n = whitesBefore[String(keyIndex)]
+  if (n === undefined)
+    n = 0
+  return (n + octaveOffset) * (100 / WHITE_KEYS_C3_C5)
+}
+
+var INSTRUMENT_NAMES = ["Piano", "Electric Piano", "Organ", "Pad", "Strings"]
+
+function clampInstrument(index) {
+  var n = Number(index)
+  if (!isFinite(n))
+    return 0
+  n = Math.floor(n)
+  if (n < 0)
+    return 0
+  if (n > INSTRUMENT_NAMES.length - 1)
+    return INSTRUMENT_NAMES.length - 1
+  return n
+}
+
+function wrapInstrument(index) {
+  var n = Number(index)
+  if (!isFinite(n))
+    n = 0
+  n = Math.floor(n)
+  var len = INSTRUMENT_NAMES.length
+  n = n % len
+  if (n < 0)
+    n += len
+  return n
+}
+
+function instrumentName(index) {
+  return INSTRUMENT_NAMES[wrapInstrument(index)]
 }

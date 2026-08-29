@@ -2,6 +2,9 @@ feature_name: agent_api
 purpose: "Let any command-running agent read placed chords and the full song from live loopback or last snapshot."
 
 entry_points:
+  - chords-agent
+  - agent-server.py
+  - js/Agent.js
   - Songwriter.qml
   - write-json.py
   - AGENTS.md
@@ -25,5 +28,6 @@ related_features:
 
 core_components:
   - tests/run.py
+  - tests/agent_tests.py
 
-notes: "CLI and :17891 not shipped. Persist today is ~/.local/state/omarchy/songwriter/song.json. Target port 17891, $CHORDS_AGENT_PORT, or agent-api.json; snapshots $CHORDS_AGENT_HOME or ~/.config/chords-and-tabs/."
+notes: "Live overlay/loopback is not in CI. Port 17891, $CHORDS_AGENT_PORT, or agent-api.json; snapshots $CHORDS_AGENT_HOME or ~/.config/chords-and-tabs/."

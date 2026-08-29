@@ -10,14 +10,13 @@ Item {
   property color foreground
   property color dim
   property color faint
-  property int tonicIndex: 0
-  property bool toneMode: false
-  property int toneCursor: 0
+  property int keyIndex: 0
   property int soundingIndex: -1
   property string soundingRing: ""
+  property string chordDragPayload: ""
 
-  readonly property var selected: Model.keyAt(tonicIndex)
-  readonly property var chords: Model.diatonic(tonicIndex)
+  readonly property var selected: Model.keyAt(keyIndex)
+  readonly property var chips: Model.diatonicTriads(keyIndex)
   readonly property color onSelected: Color.menu.background
   readonly property color gridColor: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.35)
   readonly property color hoverFill: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.16)
@@ -28,52 +27,40 @@ Item {
 
   signal tonicPicked(int index, string ring)
   signal chordPreviewed(int index, string ring, var triad)
+  signal chordDragStarted(string payload)
 
   function step(delta) {
-    if (root.toneMode) {
-      root.stepTone(delta)
-      return
-    }
-    root.tonicPicked(Model.wrap(root.tonicIndex + delta), "major")
+    root.tonicPicked(Model.rotate(root.keyIndex, delta), "major")
   }
 
-  function stepTone(delta) {
-    var list = Model.wedgeChords(root.tonicIndex)
-    root.toneCursor = Model.wrapCursor(root.toneCursor + delta, list.length)
-    var chord = list[root.toneCursor]
-    root.preview(chord.index, chord.ring)
-  }
-
-  function playWedgeDegree(degree) {
-    var list = Model.wedgeChords(root.tonicIndex)
-    if (degree < 1 || degree > list.length)
-      return
-    var chord = list[degree - 1]
-    root.toneCursor = degree - 1
-    root.preview(chord.index, chord.ring)
-  }
-
-  function isToneCursor(index, ringName) {
-    if (!root.toneMode)
-      return false
-    var chord = Model.wedgeChordAt(root.tonicIndex, root.toneCursor)
-    return chord && index === chord.index && ringName === chord.ring
+  function stationChord(index, ringName) {
+    var minor = ringName === "minor"
+    var pc = Model.tonicPc(index)
+    if (minor)
+      pc = Model.wrapPitchClass(pc + 9)
+    return { rootPc: pc, quality: minor ? "minor" : "major" }
   }
 
   function cellFill(index, ringName) {
-    if (root.toneMode) {
-      if (root.isToneCursor(index, ringName))
-        return root.foreground
-    } else if (index === root.tonicIndex) {
+    if (index === root.keyIndex)
       return root.foreground
-    }
     if (index === root.soundingIndex && root.soundingRing === ringName)
       return root.soundingFill
     if (index === ring.hoverIndex && ring.hoverRing === ringName)
       return root.hoverFill
-    if (Model.inKeyWedge(index, root.tonicIndex))
+    if (Model.inKeyWedge(index, root.keyIndex))
       return root.wedgeFill
     return "transparent"
+  }
+
+  function triadFromChord(chord) {
+    var notes = Model.triadMidi(chord)
+    return {
+      notes: notes,
+      label: Model.chordName(chord.rootPc, chord.quality),
+      rootPc: chord.rootPc,
+      quality: chord.quality
+    }
   }
 
   function preview(index, ringName) {
@@ -84,15 +71,36 @@ Item {
     root.chordPreviewed(index, ringName, t)
   }
 
-  function onChordClicked(index, ringName) {
-    if (!root.toneMode) {
-      root.tonicPicked(index, ringName)
+  function previewChip(degreeIndex) {
+    var chord = root.chips[degreeIndex]
+    if (!chord)
       return
-    }
-    var cursor = Model.wedgeChordIndex(root.tonicIndex, index, ringName)
-    if (cursor >= 0)
-      root.toneCursor = cursor
-    root.preview(index, ringName)
+    var t = root.triadFromChord(chord)
+    root.soundingIndex = -1
+    root.soundingRing = ""
+    soundingTimer.restart()
+    root.chordPreviewed(-1, "chip", t)
+  }
+
+  function beginChordDrag(chord) {
+    if (!chord)
+      return ""
+    var payload = Model.encodeChord(chord)
+    root.chordDragPayload = payload
+    root.chordDragStarted(payload)
+    return payload
+  }
+
+  function startChordDragOn(item, chord) {
+    var payload = root.beginChordDrag(chord)
+    if (!payload)
+      return ""
+    item.Drag.mimeData = { "text/plain": payload }
+    return payload
+  }
+
+  function onWedgeClicked(index, ringName) {
+    root.tonicPicked(index, ringName)
   }
 
   Timer {
@@ -172,15 +180,14 @@ Item {
     property real labelRadius
     property bool majorRing
     readonly property string ringName: majorRing ? "major" : "minor"
-    readonly property bool active: root.toneMode
-      ? root.isToneCursor(sector, ringName)
-      : sector === root.tonicIndex
-    readonly property bool inWedge: Model.inKeyWedge(sector, root.tonicIndex)
+    readonly property int visual: Model.visualSector(sector, root.keyIndex)
+    readonly property bool active: sector === root.keyIndex
+    readonly property bool inWedge: Model.inKeyWedge(sector, root.keyIndex)
     readonly property bool hovered: sector === ring.hoverIndex && ring.hoverRing === ringName
     readonly property bool sounding: sector === root.soundingIndex && root.soundingRing === ringName
 
-    x: Model.polarX(ring.cx, labelRadius, Model.sectorMidDeg(sector)) - width / 2
-    y: Model.polarY(ring.cy, labelRadius, Model.sectorMidDeg(sector)) - height / 2
+    x: Model.polarX(ring.cx, labelRadius, Model.sectorMidDeg(visual)) - width / 2
+    y: Model.polarY(ring.cy, labelRadius, Model.sectorMidDeg(visual)) - height / 2
     text: majorRing ? Model.keyAt(sector).major : Model.keyAt(sector).minor
     color: active ? root.onSelected : root.foreground
     opacity: active || hovered || sounding || inWedge ? 1 : 0.55
@@ -215,10 +222,14 @@ Item {
     Item {
       id: ring
       width: parent.width
-      height: Math.max(Style.space(180), parent.height - Style.space(118))
+      height: Math.max(Style.space(180), parent.height - Style.space(108))
 
       property int hoverIndex: -1
       property string hoverRing: ""
+      property bool dragging: false
+      property var pressHit: null
+      property real pressX: 0
+      property real pressY: 0
       readonly property real cx: width / 2
       readonly property real cy: height / 2
       readonly property real outerR: Math.min(width, height) / 2 - Style.space(6)
@@ -231,31 +242,33 @@ Item {
       readonly property real minorLabelR: (minorOuterR + minorInnerR) / 2
 
       function pick(px, py) {
-        return Model.hitTest(px, py, cx, cy, minorInnerR, minorOuterR, majorInnerR, majorOuterR)
+        return Model.hitTest(px, py, cx, cy, minorInnerR, minorOuterR, majorInnerR, majorOuterR, root.keyIndex)
       }
 
       function setHover(px, py) {
         var hit = pick(px, py)
-        if (hit) {
-          hoverIndex = hit.index
-          hoverRing = hit.ring
-        } else {
-          hoverIndex = -1
-          hoverRing = ""
-        }
+        var nextIndex = hit ? hit.index : -1
+        var nextRing = hit ? hit.ring : ""
+        if (nextIndex === hoverIndex && nextRing === hoverRing)
+          return
+        hoverIndex = nextIndex
+        hoverRing = nextRing
+        if (hit)
+          root.preview(hit.index, hit.ring)
       }
 
       Repeater {
         model: 12
         delegate: AnnularWedge {
           required property int index
-          readonly property bool inWedge: Model.inKeyWedge(index, root.tonicIndex)
+          readonly property int visual: Model.visualSector(index, root.keyIndex)
+          readonly property bool inWedge: Model.inKeyWedge(index, root.keyIndex)
           anchors.fill: parent
           cx: ring.cx
           cy: ring.cy
           rInner: ring.majorInnerR
           rOuter: ring.majorOuterR
-          startDeg: Model.sectorStartDeg(index)
+          startDeg: Model.sectorStartDeg(visual)
           sweepDeg: Model.sectorSweepDeg()
           fill: root.cellFill(index, "major")
           stroke: inWedge ? root.foreground : "transparent"
@@ -267,13 +280,14 @@ Item {
         model: 12
         delegate: AnnularWedge {
           required property int index
-          readonly property bool inWedge: Model.inKeyWedge(index, root.tonicIndex)
+          readonly property int visual: Model.visualSector(index, root.keyIndex)
+          readonly property bool inWedge: Model.inKeyWedge(index, root.keyIndex)
           anchors.fill: parent
           cx: ring.cx
           cy: ring.cy
           rInner: ring.minorInnerR
           rOuter: ring.minorOuterR
-          startDeg: Model.sectorStartDeg(index)
+          startDeg: Model.sectorStartDeg(visual)
           sweepDeg: Model.sectorSweepDeg()
           fill: root.cellFill(index, "minor")
           stroke: inWedge ? root.foreground : "transparent"
@@ -305,7 +319,7 @@ Item {
         cy: ring.cy
         rInner: ring.minorInnerR
         rOuter: ring.majorOuterR
-        startDeg: Model.wedgeStartDeg(root.tonicIndex)
+        startDeg: Model.wedgeStartDeg(0)
         sweepDeg: Model.wedgeSweepDeg()
         fill: "transparent"
         stroke: root.foreground
@@ -333,54 +347,129 @@ Item {
       }
 
       MouseArea {
+        id: ringMouse
         anchors.fill: parent
         hoverEnabled: true
+        acceptedButtons: Qt.LeftButton
         cursorShape: ring.hoverIndex >= 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
-        onPositionChanged: function(mouse) { ring.setHover(mouse.x, mouse.y) }
+        preventStealing: true
+
+        Drag.active: ring.dragging
+        Drag.dragType: Drag.Automatic
+        Drag.proposedAction: Qt.CopyAction
+        Drag.keys: ["text/plain"]
+
+        onPressed: function(mouse) {
+          ring.pressHit = ring.pick(mouse.x, mouse.y)
+          ring.pressX = mouse.x
+          ring.pressY = mouse.y
+          ring.dragging = false
+          if (ring.pressHit)
+            root.preview(ring.pressHit.index, ring.pressHit.ring)
+        }
+        onPositionChanged: function(mouse) {
+          if (pressed && ring.pressHit && !ring.dragging) {
+            var dx = mouse.x - ring.pressX
+            var dy = mouse.y - ring.pressY
+            if (dx * dx + dy * dy >= 64) {
+              root.startChordDragOn(ringMouse, root.stationChord(ring.pressHit.index, ring.pressHit.ring))
+              ring.dragging = true
+            }
+          }
+          if (!ring.dragging)
+            ring.setHover(mouse.x, mouse.y)
+        }
+        onReleased: function(mouse) {
+          if (!ring.dragging && ring.pressHit)
+            root.onWedgeClicked(ring.pressHit.index, ring.pressHit.ring)
+          ring.dragging = false
+          ring.pressHit = null
+        }
         onExited: {
+          if (ring.dragging)
+            return
           ring.hoverIndex = -1
           ring.hoverRing = ""
         }
-        onClicked: function(mouse) {
-          var hit = ring.pick(mouse.x, mouse.y)
-          if (hit)
-            root.onChordClicked(hit.index, hit.ring)
+      }
+
+      WheelHandler {
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: function(event) {
+          var dy = event.angleDelta.y
+          var dx = event.angleDelta.x
+          if (dy > 0 || dx > 0)
+            root.step(-1)
+          else if (dy < 0 || dx < 0)
+            root.step(1)
         }
       }
-    }
-
-    Text {
-      width: parent.width
-      text: "I " + chords.I + "  IV " + chords.IV + "  V " + chords.V + "  vi " + chords.vi
-      color: root.foreground
-      font.family: Style.font.menuFamily
-      font.pixelSize: Style.font.body
-      horizontalAlignment: Text.AlignHCenter
     }
 
     Row {
       anchors.horizontalCenter: parent.horizontalCenter
-      spacing: Style.space(8)
+      spacing: Style.space(6)
 
-      Button {
-        text: root.toneMode ? "Tone on" : "Tone"
-        selected: root.toneMode
-        bordered: true
-        foreground: root.foreground
-        fontFamily: Style.font.menuFamily
-        fontSize: Style.font.bodySmall
-        tooltipText: root.toneMode
-          ? "Clicks play chords in the key. Click again to pick a key."
-          : "Play clicked triads without changing key"
-        onClicked: root.toneMode = !root.toneMode
-      }
+      Repeater {
+        model: 7
+        delegate: Item {
+          id: chip
+          required property int index
+          readonly property var chipChord: root.chips[index]
+          implicitWidth: chipButton.implicitWidth
+          implicitHeight: chipButton.implicitHeight
+          width: implicitWidth
+          height: implicitHeight
+          property bool dragging: false
+          property real pressX: 0
+          property real pressY: 0
 
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        text: root.toneMode ? "1–6 play degrees  T toggle" : "click a key  T tone"
-        color: root.dim
-        font.family: Style.font.menuFamily
-        font.pixelSize: Style.font.caption
+          Button {
+            id: chipButton
+            anchors.centerIn: parent
+            enabled: false
+            text: Model.NUMERALS[index]
+            bordered: true
+            foreground: root.foreground
+            fontFamily: Style.font.menuFamily
+            fontSize: Style.font.bodySmall
+            tooltipText: chip.chipChord ? Model.chordName(chip.chipChord.rootPc, chip.chipChord.quality) : ""
+          }
+
+          MouseArea {
+            id: chipMouse
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            cursorShape: Qt.PointingHandCursor
+            preventStealing: true
+
+            Drag.active: chip.dragging
+            Drag.dragType: Drag.Automatic
+            Drag.proposedAction: Qt.CopyAction
+            Drag.keys: ["text/plain"]
+
+            onPressed: function(mouse) {
+              chip.pressX = mouse.x
+              chip.pressY = mouse.y
+              chip.dragging = false
+            }
+            onPositionChanged: function(mouse) {
+              if (!pressed || chip.dragging || !chip.chipChord)
+                return
+              var dx = mouse.x - chip.pressX
+              var dy = mouse.y - chip.pressY
+              if (dx * dx + dy * dy >= 64) {
+                root.startChordDragOn(chipMouse, chip.chipChord)
+                chip.dragging = true
+              }
+            }
+            onReleased: function() {
+              if (!chip.dragging)
+                root.previewChip(chip.index)
+              chip.dragging = false
+            }
+          }
+        }
       }
     }
   }

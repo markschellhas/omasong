@@ -1,7 +1,7 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
-import "js/Chords.js" as Chords
+import "js/Model.js" as Model
 
 Item {
   id: root
@@ -11,49 +11,190 @@ Item {
   property color faint
   property var sections: []
   property int selectedSection: 0
+  property int selectedMeasure: 0
   property int selectedSlot: 0
   property int playSection: -1
+  property int playMeasure: -1
   property int playSlot: -1
+  property string chordDragPayload: ""
 
-  signal chordEdited(int sectionIndex, int slot, string symbol)
-  signal chordPreviewed(string symbol)
-  signal sectionAdded
+  readonly property int barsPerRow: 4
+  readonly property int slotHeight: Style.space(40)
+  readonly property int repeatWidth: Style.space(36)
+  readonly property int measureGap: Style.space(6)
+  readonly property bool renaming: renamingSection >= 0
+
+  property int renamingSection: -1
+  property string menuKind: ""
+  property int menuSection: -1
+  property real menuX: 0
+  property real menuY: 0
+
+  signal chordDropped(int sectionIndex, int measureIndex, int slotIndex, var chord, bool insertAfter)
+  signal slotResized(int sectionIndex, int measureIndex, int slotIndex, int newSpan, string edge)
+  signal slotCleared(int sectionIndex, int measureIndex, int slotIndex)
+  signal slotAuditioned(int sectionIndex, int measureIndex, int slotIndex)
+  signal sectionAdded(string name)
   signal sectionRemoved(int sectionIndex)
   signal sectionRenamed(int sectionIndex, string name)
-  signal slotSelected(int sectionIndex, int slot)
+  signal timeSignatureChanged(int sectionIndex, int numerator, int denominator)
+  signal rowRepeatToggled(int sectionIndex, int rowIndex, bool shouldRepeat)
+  signal slotSelected(int sectionIndex, int measureIndex, int slotIndex)
 
-  property int editingSection: -1
-  property int editingSlot: -1
-  property bool renaming: false
+  readonly property var appendChoices: [
+    { label: "Verse", name: "Verse" },
+    { label: "Chorus", name: "Chorus" },
+    { label: "Pre-Chorus", name: "Pre-Chorus" },
+    { label: "Bridge", name: "Bridge" },
+    { label: "Intro", name: "Intro" },
+    { label: "Outro", name: "Outro" },
+    { label: "Solo", name: "Solo" },
+    { label: "Custom", name: "" }
+  ]
 
-  function beginEdit(sectionIndex, slot, current) {
-    editingSection = sectionIndex
-    editingSlot = slot
-    chordField.text = current || ""
-    chordField.forceActiveFocus()
-    chordField.selectAll()
+  readonly property var meterChoices: [
+    { label: "4/4 (4 bars)", numerator: 4, denominator: 4 },
+    { label: "3/4 (3 bars)", numerator: 3, denominator: 4 },
+    { label: "2/4 (2 bars)", numerator: 2, denominator: 4 },
+    { label: "6/8 (6 bars)", numerator: 6, denominator: 8 }
+  ]
+
+  function cancelRename() {
+    renamingSection = -1
   }
 
-  function commitEdit() {
-    if (editingSection < 0)
+  function beginRename(sectionIndex) {
+    closeMenu()
+    renamingSection = sectionIndex
+  }
+
+  function commitRename(sectionIndex, name) {
+    if (renamingSection !== sectionIndex)
       return
-    var value = chordField.text.trim()
-    if (value && !Chords.isValidChord(value)) {
-      chordField.color = "#f87171"
+    var value = String(name || "").trim()
+    renamingSection = -1
+    var current = root.sections[sectionIndex]
+    if (current && value === current.name)
       return
+    root.sectionRenamed(sectionIndex, value)
+  }
+
+  function closeMenu() {
+    menuKind = ""
+    menuSection = -1
+  }
+
+  function openMenu(kind, sectionIndex, anchor) {
+    menuKind = kind
+    menuSection = sectionIndex
+    var p = anchor.mapToItem(root, 0, anchor.height + Style.space(4))
+    menuX = Math.max(0, Math.min(p.x, root.width - Style.space(180)))
+    menuY = Math.max(0, Math.min(p.y, root.height - Style.space(8)))
+  }
+
+  function rowCount(measureCount) {
+    if (measureCount <= 0)
+      return 0
+    return Math.floor((measureCount + root.barsPerRow - 1) / root.barsPerRow)
+  }
+
+  function slotLabel(chord) {
+    if (!chord)
+      return ""
+    return Model.chordName(chord.rootPc, chord.quality)
+  }
+
+  function decodeDrop(drop) {
+    var payload = ""
+    if (drop && typeof drop.text === "string" && drop.text)
+      payload = drop.text
+    if (!payload)
+      payload = root.chordDragPayload
+    return Model.decodeChord(payload)
+  }
+
+  function spanFromResizeX(slots, slotIndex, fromLeft, x, width) {
+    if (!slots || slotIndex < 0 || slotIndex >= slots.length)
+      return 1
+    var start = 0
+    var i
+    for (i = 0; i < slotIndex; i++)
+      start += Math.max(1, Number(slots[i].span) || 1)
+    var span = Math.max(1, Number(slots[slotIndex].span) || 1)
+    var capacity = 0
+    for (i = 0; i < slots.length; i++)
+      capacity += Math.max(1, Number(slots[i].span) || 1)
+    if (capacity < 1)
+      capacity = 1
+    var unit = Math.round(x / Math.max(1, width) * capacity)
+    if (unit < 0)
+      unit = 0
+    if (unit > capacity)
+      unit = capacity
+    var next = fromLeft ? (start + span) - unit : unit - start
+    if (next < 1)
+      next = 1
+    return next
+  }
+
+  function pickMenu(item) {
+    var kind = root.menuKind
+    var sectionIndex = root.menuSection
+    root.closeMenu()
+    if (!item)
+      return
+    if (item.kind === "add")
+      root.sectionAdded(item.name)
+    else if (item.kind === "meter")
+      root.timeSignatureChanged(sectionIndex, item.numerator, item.denominator)
+    else if (item.kind === "rename")
+      root.beginRename(sectionIndex)
+    else if (item.kind === "delete" && root.sections.length > 1)
+      root.sectionRemoved(sectionIndex)
+  }
+
+  function menuItems() {
+    var items = []
+    var i
+    if (root.menuKind === "append") {
+      for (i = 0; i < root.appendChoices.length; i++) {
+        items.push({
+          kind: "add",
+          label: root.appendChoices[i].label,
+          name: root.appendChoices[i].name,
+          selected: false,
+          enabled: true
+        })
+      }
+      return items
     }
-    root.chordEdited(editingSection, editingSlot, value)
-    cancelEdit()
-  }
-
-  function cancelEdit() {
-    editingSection = -1
-    editingSlot = -1
-    chordField.color = root.foreground
-  }
-
-  function suggestions() {
-    return Chords.getChordSuggestions(chordField.text)
+    if (root.menuKind === "edit") {
+      var section = root.sections[root.menuSection]
+      var ts = section && section.timeSig ? section.timeSig : {}
+      for (i = 0; i < root.meterChoices.length; i++) {
+        var meter = root.meterChoices[i]
+        items.push({
+          kind: "meter",
+          label: meter.label,
+          numerator: meter.numerator,
+          denominator: meter.denominator,
+          selected: ts.numerator === meter.numerator && ts.denominator === meter.denominator,
+          enabled: true
+        })
+      }
+      items.push({ kind: "rename", label: "Rename", selected: false, enabled: true })
+      return items
+    }
+    if (root.menuKind === "more") {
+      items.push({ kind: "rename", label: "Rename", selected: false, enabled: true })
+      items.push({
+        kind: "delete",
+        label: "Delete section",
+        selected: false,
+        enabled: root.sections.length > 1
+      })
+    }
+    return items
   }
 
   Flickable {
@@ -76,6 +217,11 @@ Item {
           id: sectionCol
           required property var modelData
           required property int index
+          readonly property var section: modelData
+          readonly property int sectionIndex: index
+          readonly property var measures: section && section.measures ? section.measures : []
+          readonly property var rowRepeats: section && section.rowRepeats ? section.rowRepeats : []
+          readonly property int rows: root.rowCount(measures.length)
           width: list.width
           spacing: Style.space(6)
 
@@ -83,96 +229,332 @@ Item {
             width: parent.width
             spacing: Style.spacing.sm
 
-            TextInput {
-              id: nameInput
-              width: Math.min(Style.space(180), parent.width * 0.35)
-              text: sectionCol.modelData.name
-              color: root.foreground
-              font.family: Style.font.menuFamily
-              font.pixelSize: Style.font.subtitle
-              font.bold: true
-              selectByMouse: true
-              onEditingFinished: {
-                if (text.trim() && text.trim() !== sectionCol.modelData.name)
-                  root.sectionRenamed(sectionCol.index, text.trim())
-              }
-            }
-
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              text: (sectionCol.modelData.chords || []).filter(function(s) { return s && s.trim() }).length + " chords"
-              color: root.dim
-              font.family: Style.font.menuFamily
-              font.pixelSize: Style.font.caption
-            }
-
-            Item { width: Style.spacing.md; height: 1 }
-
             Button {
-              visible: root.sections.length > 1
-              text: "Remove"
+              id: moreButton
+              text: "···"
               bordered: true
               foreground: root.foreground
-              tooltipText: "Remove this section"
-              onClicked: root.sectionRemoved(sectionCol.index)
+              tooltipText: "Section options"
+              onClicked: root.openMenu("more", sectionCol.sectionIndex, moreButton)
             }
-          }
 
-          Flow {
-            width: parent.width
-            spacing: Style.space(6)
+            Item {
+              width: Math.min(Style.space(180), parent.width * 0.4)
+              height: Style.space(28)
 
-            Repeater {
-              model: sectionCol.modelData.chords
-
-              delegate: Rectangle {
-                id: cell
-                required property var modelData
-                required property int index
-                readonly property bool selected: root.selectedSection === sectionCol.index && root.selectedSlot === index
-                readonly property bool playing: root.playSection === sectionCol.index && root.playSlot === index
-                readonly property bool editing: root.editingSection === sectionCol.index && root.editingSlot === index
-                width: Style.space(72)
-                height: Style.space(40)
-                radius: Math.max(2, Style.cornerRadius / 2)
-                color: playing ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.28)
-                     : selected ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
-                     : "transparent"
-                border.width: 1
-                border.color: playing ? Color.accent
-                            : selected ? root.foreground
-                            : root.faint
-
-                Text {
-                  visible: !cell.editing
-                  anchors.centerIn: parent
-                  width: parent.width - 6
-                  text: cell.modelData && String(cell.modelData).trim() ? cell.modelData : "·"
-                  color: cell.modelData && String(cell.modelData).trim() ? root.foreground : root.dim
-                  font.family: Style.font.menuFamily
-                  font.pixelSize: Style.font.body
-                  font.bold: !!cell.modelData
-                  horizontalAlignment: Text.AlignHCenter
-                  elide: Text.ElideRight
-                }
+              Text {
+                visible: root.renamingSection !== sectionCol.sectionIndex
+                anchors.fill: parent
+                text: sectionCol.section && sectionCol.section.name ? sectionCol.section.name : "Section"
+                color: root.foreground
+                font.family: Style.font.menuFamily
+                font.pixelSize: Style.font.subtitle
+                font.bold: true
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
 
                 MouseArea {
                   anchors.fill: parent
-                  acceptedButtons: Qt.LeftButton | Qt.RightButton
-                  onClicked: function(mouse) {
-                    root.slotSelected(sectionCol.index, cell.index)
-                    if (mouse.button === Qt.RightButton && cell.modelData) {
-                      root.chordPreviewed(cell.modelData)
-                      return
-                    }
-                    if (mouse.button === Qt.LeftButton)
-                      root.beginEdit(sectionCol.index, cell.index, cell.modelData)
-                  }
-                  onDoubleClicked: {
-                    if (cell.modelData)
-                      root.chordPreviewed(cell.modelData)
+                  onDoubleClicked: root.beginRename(sectionCol.sectionIndex)
+                }
+              }
+
+              TextInput {
+                id: nameInput
+                visible: root.renamingSection === sectionCol.sectionIndex
+                anchors.fill: parent
+                text: sectionCol.section && sectionCol.section.name ? sectionCol.section.name : ""
+                color: root.foreground
+                font.family: Style.font.menuFamily
+                font.pixelSize: Style.font.subtitle
+                font.bold: true
+                selectByMouse: true
+                onVisibleChanged: {
+                  if (visible) {
+                    text = sectionCol.section && sectionCol.section.name ? sectionCol.section.name : ""
+                    forceActiveFocus()
+                    selectAll()
                   }
                 }
+                onEditingFinished: root.commitRename(sectionCol.sectionIndex, text)
+                Keys.onEscapePressed: root.cancelRename()
+              }
+            }
+
+            Button {
+              id: editButton
+              text: "Edit"
+              bordered: true
+              foreground: root.foreground
+              tooltipText: "Time signature and rename"
+              onClicked: root.openMenu("edit", sectionCol.sectionIndex, editButton)
+            }
+          }
+
+          Repeater {
+            model: sectionCol.rows
+
+            delegate: Item {
+              id: barRow
+              required property int index
+              readonly property int rowIndex: index
+              readonly property int rowStart: rowIndex * root.barsPerRow
+              readonly property int rowEnd: Math.min(rowStart + root.barsPerRow, sectionCol.measures.length)
+              readonly property int boxW: {
+                var usable = width - root.repeatWidth - root.measureGap * root.barsPerRow
+                return Math.max(Style.space(56), Math.floor(usable / root.barsPerRow))
+              }
+              width: list.width
+              height: root.slotHeight
+
+              Repeater {
+                model: barRow.rowEnd - barRow.rowStart
+
+                delegate: Rectangle {
+                  id: measureBox
+                  required property int index
+                  readonly property int measureIndex: barRow.rowStart + index
+                  readonly property var measure: sectionCol.measures[measureIndex]
+                  readonly property var slots: measure && measure.slots ? measure.slots : []
+                  readonly property int capacity: {
+                    var ts = sectionCol.section && sectionCol.section.timeSig
+                    var n = ts ? Number(ts.numerator) : 4
+                    return n < 1 ? 1 : n
+                  }
+                  x: index * (barRow.boxW + root.measureGap)
+                  width: barRow.boxW
+                  height: root.slotHeight
+                  radius: Math.max(2, Style.cornerRadius / 2)
+                  color: "transparent"
+                  border.width: 1
+                  border.color: root.faint
+
+                  function slotX(slotIndex) {
+                    var acc = 0
+                    var i
+                    for (i = 0; i < slotIndex && i < slots.length; i++)
+                      acc += Math.max(1, Number(slots[i].span) || 1)
+                    return Math.floor(acc * width / Math.max(1, capacity))
+                  }
+
+                  function slotW(slotIndex) {
+                    if (slotIndex < 0 || slotIndex >= slots.length)
+                      return Style.space(8)
+                    var start = slotX(slotIndex)
+                    var next = slotIndex === slots.length - 1
+                      ? width
+                      : slotX(slotIndex + 1)
+                    return Math.max(Style.space(8), next - start)
+                  }
+
+                  Repeater {
+                    model: measureBox.slots
+
+                    delegate: Item {
+                      id: slotBox
+                      required property var modelData
+                      required property int index
+                      readonly property var slot: modelData
+                      readonly property int slotIndex: index
+                      readonly property var chord: slot && slot.chord ? slot.chord : null
+                      readonly property int span: Math.max(1, Number(slot && slot.span) || 1)
+                      readonly property bool selected: root.selectedSection === sectionCol.sectionIndex
+                        && root.selectedMeasure === measureBox.measureIndex
+                        && root.selectedSlot === slotIndex
+                      readonly property bool playing: root.playSection === sectionCol.sectionIndex
+                        && root.playMeasure === measureBox.measureIndex
+                        && root.playSlot === slotIndex
+                      x: measureBox.slotX(slotIndex)
+                      y: 0
+                      width: measureBox.slotW(slotIndex)
+                      height: measureBox.height
+
+                      Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 2
+                        radius: Math.max(2, Style.cornerRadius / 2)
+                        color: slotBox.playing
+                          ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.28)
+                          : dropArea.containsDrag
+                            ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16)
+                            : slotBox.selected
+                              ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
+                              : "transparent"
+                        border.width: 1
+                        border.color: slotBox.playing ? Color.accent
+                                    : slotBox.selected || dropArea.containsDrag ? root.foreground
+                                    : root.faint
+
+                        Text {
+                          anchors.centerIn: parent
+                          width: parent.width - Style.space(16)
+                          text: root.slotLabel(slotBox.chord)
+                          color: slotBox.chord ? root.foreground : root.dim
+                          font.family: Style.font.menuFamily
+                          font.pixelSize: Style.font.body
+                          font.bold: !!slotBox.chord
+                          horizontalAlignment: Text.AlignHCenter
+                          elide: Text.ElideRight
+                        }
+
+                        Rectangle {
+                          visible: slotMouse.containsMouse && !!slotBox.chord && !slotMouse.pendingClear
+                          width: 3
+                          height: Math.max(Style.space(8), parent.height - Style.space(16))
+                          radius: 1
+                          x: 0
+                          anchors.verticalCenter: parent.verticalCenter
+                          color: Color.accent
+                          opacity: 0.65
+                        }
+
+                        Rectangle {
+                          visible: slotMouse.containsMouse && !!slotBox.chord && !slotMouse.pendingClear
+                          width: 3
+                          height: Math.max(Style.space(8), parent.height - Style.space(16))
+                          radius: 1
+                          anchors.right: parent.right
+                          anchors.verticalCenter: parent.verticalCenter
+                          color: Color.accent
+                          opacity: 0.65
+                        }
+
+                        Text {
+                          visible: slotMouse.containsMouse && !!slotBox.chord
+                          anchors.top: parent.top
+                          anchors.right: parent.right
+                          anchors.margins: 2
+                          text: "×"
+                          color: root.dim
+                          font.family: Style.font.menuFamily
+                          font.pixelSize: Style.font.caption
+                        }
+                      }
+
+                      DropArea {
+                        id: dropArea
+                        anchors.fill: parent
+                        keys: ["text/plain"]
+                        onDropped: function(drop) {
+                          var chord = root.decodeDrop(drop)
+                          if (!chord)
+                            return
+                          drop.acceptProposedAction()
+                          root.chordDropped(
+                            sectionCol.sectionIndex,
+                            measureBox.measureIndex,
+                            slotBox.slotIndex,
+                            chord,
+                            drop.x >= slotBox.width * 0.5
+                          )
+                        }
+                      }
+
+                      MouseArea {
+                        id: slotMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton
+                        preventStealing: true
+                        cursorShape: {
+                          if (!slotBox.chord)
+                            return Qt.ArrowCursor
+                          if (clearHit(mouseX, mouseY))
+                            return Qt.ArrowCursor
+                          var edge = edgeAt(mouseX)
+                          if (edge)
+                            return Qt.SizeHorCursor
+                          return Qt.PointingHandCursor
+                        }
+
+                        property bool pendingClear: false
+                        property bool resizing: false
+                        property string pressEdge: ""
+                        property real pressX: 0
+                        property real pressY: 0
+
+                        function edgeAt(px) {
+                          if (!slotBox.chord || width < 16)
+                            return ""
+                          var grip = Math.max(12, width * 0.33)
+                          if (px <= grip)
+                            return "left"
+                          if (px >= width - grip)
+                            return "right"
+                          return ""
+                        }
+
+                        function clearHit(px, py) {
+                          return !!slotBox.chord && px >= width - 16 && py <= 16
+                        }
+
+                        onPressed: function(mouse) {
+                          pressX = mouse.x
+                          pressY = mouse.y
+                          pendingClear = clearHit(mouse.x, mouse.y)
+                          pressEdge = pendingClear ? "" : edgeAt(mouse.x)
+                          resizing = false
+                          root.slotSelected(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
+                        }
+
+                        onPositionChanged: function(mouse) {
+                          if (!pressed || resizing || pendingClear || !pressEdge)
+                            return
+                          var dx = mouse.x - pressX
+                          var dy = mouse.y - pressY
+                          if (dx * dx + dy * dy >= 4)
+                            resizing = true
+                        }
+
+                        onReleased: function(mouse) {
+                          if (pendingClear && clearHit(mouse.x, mouse.y)) {
+                            root.slotCleared(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
+                          } else if (resizing && pressEdge) {
+                            var x = mapToItem(measureBox, mouse.x, 0).x
+                            var next = root.spanFromResizeX(
+                              measureBox.slots,
+                              slotBox.slotIndex,
+                              pressEdge === "left",
+                              x,
+                              measureBox.width
+                            )
+                            if (next !== slotBox.span)
+                              root.slotResized(
+                                sectionCol.sectionIndex,
+                                measureBox.measureIndex,
+                                slotBox.slotIndex,
+                                next,
+                                pressEdge
+                              )
+                          } else if (slotBox.chord) {
+                            root.slotSelected(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
+                            root.slotAuditioned(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
+                          }
+                          pendingClear = false
+                          resizing = false
+                          pressEdge = ""
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              Button {
+                id: repeatButton
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: root.repeatWidth
+                text: ":||"
+                bordered: true
+                selected: !!(sectionCol.rowRepeats[barRow.rowIndex])
+                foreground: root.foreground
+                tooltipText: "Repeat this row once"
+                onClicked: root.rowRepeatToggled(
+                  sectionCol.sectionIndex,
+                  barRow.rowIndex,
+                  !sectionCol.rowRepeats[barRow.rowIndex]
+                )
               }
             }
           }
@@ -180,93 +562,55 @@ Item {
       }
 
       Button {
+        id: addButton
         text: "Add section"
         bordered: true
         foreground: root.foreground
-        onClicked: root.sectionAdded()
+        tooltipText: "Append a section"
+        onClicked: root.openMenu("append", -1, addButton)
       }
     }
   }
 
+  MouseArea {
+    visible: root.menuKind !== ""
+    anchors.fill: parent
+    z: 8
+    onClicked: root.closeMenu()
+  }
+
   Rectangle {
-    visible: root.editingSection >= 0
-    anchors.horizontalCenter: parent.horizontalCenter
-    anchors.bottom: parent.bottom
-    width: Math.min(parent.width, Style.space(360))
-    height: editorCol.implicitHeight + Style.spacing.md * 2
+    visible: root.menuKind !== ""
+    x: root.menuX
+    y: root.menuY
+    z: 9
+    width: Style.space(180)
+    height: menuCol.implicitHeight + Style.spacing.sm * 2
     radius: Style.cornerRadius
     color: Color.menu.background
     border.width: 1
     border.color: Color.menu.border
-    z: 4
 
     Column {
-      id: editorCol
+      id: menuCol
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: parent.top
-      anchors.margins: Style.spacing.md
-      spacing: Style.space(8)
+      anchors.margins: Style.spacing.sm
+      spacing: Style.space(4)
 
-      Text {
-        text: "Chord · measure " + (root.editingSlot + 1)
-        color: root.dim
-        font.family: Style.font.menuFamily
-        font.pixelSize: Style.font.caption
-      }
+      Repeater {
+        model: root.menuKind !== "" ? root.menuItems() : []
 
-      TextInput {
-        id: chordField
-        width: parent.width
-        color: root.foreground
-        font.family: Style.font.menuFamily
-        font.pixelSize: Style.font.heading
-        selectByMouse: true
-        Keys.onReturnPressed: root.commitEdit()
-        Keys.onEnterPressed: root.commitEdit()
-        Keys.onEscapePressed: root.cancelEdit()
-      }
-
-      Flow {
-        width: parent.width
-        spacing: Style.space(6)
-        Repeater {
-          model: root.editingSection >= 0 ? Chords.getChordSuggestions(chordField.text) : []
-          delegate: Button {
-            required property var modelData
-            text: modelData
-            bordered: true
-            foreground: root.foreground
-            onClicked: {
-              chordField.text = modelData
-              root.commitEdit()
-            }
-          }
-        }
-      }
-
-      Row {
-        spacing: Style.spacing.sm
-        Button {
-          text: "Save"
-          foreground: root.foreground
-          accent: Color.accent
-          onClicked: root.commitEdit()
-        }
-        Button {
-          text: "Cancel"
+        delegate: Button {
+          required property var modelData
+          width: parent.width
+          text: modelData.label
           bordered: true
+          selected: !!modelData.selected
+          enabled: modelData.enabled !== false
           foreground: root.foreground
-          onClicked: root.cancelEdit()
-        }
-        Button {
-          text: "Clear"
-          bordered: true
-          foreground: root.foreground
-          onClicked: {
-            chordField.text = ""
-            root.commitEdit()
-          }
+          onClicked: root.pickMenu(modelData)
         }
       }
     }
