@@ -47,7 +47,7 @@ Item {
   readonly property string songPath: Quickshell.env("HOME") + "/.local/state/omarchy/songwriter/song.json"
   readonly property string writeScript: decodeURIComponent(
     Qt.resolvedUrl("write-json.py").toString().replace(/^file:\/\//, ""))
-  readonly property var playSlots: Song.flattenSlots(song)
+  readonly property var playSlots: []
 
   function open(payloadJson) {
     opened = true
@@ -157,11 +157,6 @@ Item {
     playMidiNotes(parsed.chord.notes, 0.7)
   }
 
-  function insertSymbol(symbol) {
-    updateSong(Song.setChord(song, selectedSection, selectedSlot, symbol))
-    previewSymbol(symbol)
-  }
-
   function startPlayback() {
     var first = Song.nextFilledSlot(playSlots, 0)
     if (first < 0) {
@@ -233,23 +228,6 @@ Item {
       sustain = true
       event.accepted = true
       return
-    }
-    if (event.key === Qt.Key_T && !(event.modifiers & Qt.ControlModifier)) {
-      circle.toneMode = !circle.toneMode
-      event.accepted = true
-      return
-    }
-    if (circle.toneMode) {
-      var degree = 0
-      if (event.key >= Qt.Key_1 && event.key <= Qt.Key_6)
-        degree = event.key - Qt.Key_1 + 1
-      else if (event.text && event.text >= "1" && event.text <= "6")
-        degree = parseInt(event.text, 10)
-      if (degree > 0) {
-        circle.playWedgeDegree(degree)
-        event.accepted = true
-        return
-      }
     }
     var midi = KeyMap.midiForKey(event.text, song.octave, song.layout)
     if (midi < 0)
@@ -455,32 +433,20 @@ Item {
           anchors.top: parent.top
           height: root.headerHeight
 
-          TextInput {
+          Text {
             id: title
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: closeButton.left
             anchors.rightMargin: Style.spacing.sm
             height: Style.space(30)
+            text: "Chords & Tabs"
             color: root.foreground
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.heading
             font.bold: true
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
-            selectByMouse: true
-            onEditingFinished: {
-              var next = text.trim()
-              if (next && next !== root.song.title)
-                root.updateSong(Song.mergeSong(root.song, { title: next }))
-            }
-          }
-
-          Binding {
-            target: title
-            property: "text"
-            value: root.song.title
-            when: !title.activeFocus
           }
 
           Text {
@@ -547,23 +513,19 @@ Item {
           foreground: root.foreground
           dim: root.dim
           faint: root.faint
-          tonicIndex: root.song.tonicIndex
+          keyIndex: root.song.keyIndex
           onTonicPicked: function(index, ring) {
-            var from = root.song.tonicIndex
-            var triad = Model.triad(index, ring)
-            root.statusText = triad.label
-            root.playMidiNotes(triad.notes, 0.7)
-            if (index !== from) {
-              var semitones = ((Model.PITCH_CLASS[index] - Model.PITCH_CLASS[from]) % 12 + 12) % 12
-              var next = Song.transposeSong(root.song, semitones, Chords.transposeChord)
-              root.updateSong(Song.mergeSong(next, { tonicIndex: index }))
-            }
+            if (index === root.song.keyIndex)
+              return
+            var next = Song.cloneSong(root.song)
+            next.keyIndex = index
+            root.updateSong(Song.normalizeSong(next))
           }
           onChordPreviewed: function(index, ring, triad) {
+            if (!triad)
+              return
             root.statusText = triad.label
             root.playMidiNotes(triad.notes, 0.7)
-            if (root.structure && root.structure.editingSection < 0)
-              root.insertSymbol(triad.label)
           }
         }
 

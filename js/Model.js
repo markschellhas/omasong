@@ -1,7 +1,7 @@
 .pragma library
 
 // Port of source MusicTheory (circle stations, triads, payloads, meter).
-// Polar / wedge helpers stay so CircleOfFifths.qml loads until Task 6.
+// Polar helpers: wrap, rotate, visualSector, hitTest (logical = geometric + tonic).
 
 var PC_NAMES = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
 
@@ -45,6 +45,14 @@ function wrap(index) {
   var n = FIFTHS.length
   var m = index % n
   return m < 0 ? m + n : m
+}
+
+function rotate(keyIndex, delta) {
+  return wrap(keyIndex + delta)
+}
+
+function visualSector(logical, tonic) {
+  return wrap(logical - tonic)
 }
 
 function tonicPc(index) {
@@ -310,7 +318,7 @@ function triad(index, ring) {
   }
 }
 
-function hitTest(x, y, cx, cy, minorInner, minorOuter, majorInner, majorOuter) {
+function hitTest(x, y, cx, cy, minorInner, minorOuter, majorInner, majorOuter, tonic) {
   var dx = x - cx
   var dy = y - cy
   var r = Math.sqrt(dx * dx + dy * dy)
@@ -324,5 +332,7 @@ function hitTest(x, y, cx, cy, minorInner, minorOuter, majorInner, majorOuter) {
 
   var fromTop = Math.atan2(dy, dx) * 180 / Math.PI - TOP_DEG
   fromTop = ((fromTop % 360) + 360) % 360
-  return { index: Math.round(fromTop / SECTOR_DEG) % SECTORS, ring: ring }
+  var geometric = Math.round(fromTop / SECTOR_DEG) % SECTORS
+  var index = (tonic === undefined || tonic === null) ? geometric : wrap(geometric + tonic)
+  return { index: index, ring: ring }
 }
