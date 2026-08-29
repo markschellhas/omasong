@@ -766,7 +766,7 @@ Item {
 
         readonly property int circleHeight: {
           var rest = height - root.headerHeight - root.transportHeight - root.pianoHeight
-          return Math.min(Style.space(340), Math.max(Style.space(230), Math.floor(rest / 3)))
+          return Math.min(Style.space(560), Math.max(Style.space(468), Math.floor(rest / 3) + Style.space(180)))
         }
 
         Item {
