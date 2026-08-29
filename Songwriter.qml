@@ -729,7 +729,6 @@ Item {
             faint: root.faint
             keyIndex: root.song.keyIndex
             onTonicPicked: function(index, ring) {
-              root.focusRegion(0)
               if (index === root.song.keyIndex)
                 return
               var next = Song.cloneSong(root.song)
