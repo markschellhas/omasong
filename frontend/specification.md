@@ -1,7 +1,20 @@
-# MIDI Recording Studio Web App Specification
+# DEPRECATED — not the product PRD
+
+**This file is the leftover Svelte MIDI studio spec. It is not the product brief.**
+
+The Omarchy plugin must match [Chords & Tabs](https://github.com/markschellhas/chords-and-tabs) as documented in that repo’s `.features/*.yaml`.
+
+- Product contract: [PRD.md](../PRD.md) — twelve features only: `circle_of_fifths`, `music_theory`, `song_structure`, `chord_slots`, `row_repeats`, `playback`, `piano_keyboard`, `instruments`, `laptop_keys`, `region_focus`, `agent_api`, `audio_device`
+- Port plan: [MIGRATION_PLAN.md](../MIGRATION_PLAN.md)
+
+Do not implement MIDI recording, tracks, typed chord-symbol grids, AI chat, tap tempo, Space-as-sustain, or key-change transpose from the text below.
+
+---
+
+# MIDI Recording Studio Web App Specification (historical)
 
 ## Overview
-A SvelteJS-based web application for recording, editing, and playing back MIDI tracks with real-time keyboard input, chord progression management, and AI-powered assistance.
+A SvelteJS-based web application for recording, editing, and playing back MIDI tracks with real-time keyboard input, chord progression management, and AI-powered assistance. This document is historical only.
 
 ## Technical Stack
 - **Frontend Framework**: SvelteJS + SvelteKit
