@@ -1,0 +1,29 @@
+feature_name: playback
+purpose: "Play, stop, and loop the song at BPM; audition a slot; drive playhead and sounding-note highlight."
+
+entry_points:
+  - Transport.qml
+  - Songwriter.qml
+  - js/Song.js
+
+apps:
+  - songwriter
+
+user_flow:
+  primary: "User → Play or Space → walk buildTimeline events"
+  loop: "User → Loop toggle → wrap currentBeat"
+  bpm: "User → BPM 40–240 → Song.setBpm"
+  audition: "User → click filled slot → play chord for slotDurationBeats"
+
+related_features:
+  - song_structure (Song as source)
+  - chord_slots (slot duration, audition)
+  - row_repeats (timeline repeatPass)
+  - piano_keyboard (soundingNotes highlight)
+  - instruments (timbre)
+  - audio_device (PipeWire output)
+
+core_components:
+  - play-notes.py
+
+notes: "No tap tempo. Space is play/stop when laptop map is off, not sustain. Current timer walks flattenSlots strings, not timeline spans."

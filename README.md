@@ -6,7 +6,7 @@ Source product (read-only, do not modify): https://github.com/markschellhas/chor
 
 Plugin id: `io.github.markschellhas.songwriter`
 
-Spec (exact feature maps + plugin parity): [PRD.md](PRD.md).
+Spec (exact feature maps + plugin parity): [docs/prds/prd-chords-and-tabs-omarchy-plugin.md](docs/prds/prd-chords-and-tabs-omarchy-plugin.md).
 
 ## Features (from the source maps)
 
@@ -48,7 +48,7 @@ o.bind("SUPER + CTRL + ALT + S", "Songwriter", "omarchy-shell shell toggle io.gi
 
 ## Status
 
-The overlay chrome is in place. Behavior is not yet at full parity — implement [PRD.md](PRD.md) through the build order there.
+The overlay chrome is in place. Behavior is not yet at full parity — implement [docs/prds/prd-chords-and-tabs-omarchy-plugin.md](docs/prds/prd-chords-and-tabs-omarchy-plugin.md) through the build order there.
 
 ## Remove
 

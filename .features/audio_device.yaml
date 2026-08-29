@@ -1,0 +1,21 @@
+feature_name: audio_device
+purpose: "Play through PipeWire on the host; no JUCE Device dialog."
+
+entry_points:
+  - play-notes.py
+  - Songwriter.qml
+
+apps:
+  - songwriter
+
+user_flow:
+  primary: "Play, preview, or live note → play-notes.py → pw-play / paplay / aplay"
+
+related_features:
+  - playback (engine output)
+  - instruments (timbre argument; sine stand-ins OK)
+
+core_components:
+  - tests/run.py
+
+notes: "Sole Omarchy adaptation vs source Device selector. Persist instrument prefs next to song state, not device.xml."

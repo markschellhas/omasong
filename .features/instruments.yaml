@@ -1,0 +1,24 @@
+feature_name: instruments
+purpose: "Cycle synth timbre among Piano, Electric Piano, Organ, Pad, and Strings."
+
+entry_points:
+  - Piano.qml
+  - Songwriter.qml
+  - play-notes.py
+
+apps:
+  - songwriter
+
+user_flow:
+  primary: "User → SoundPicker chevrons or h/l in Keyboard region → cycleInstrument; persist with song prefs"
+
+related_features:
+  - piano_keyboard (SoundPicker UI)
+  - playback (same timbre for play, audition, preview, live)
+  - region_focus (h/l when Keyboard focused)
+  - audio_device (PipeWire, no device.xml)
+
+core_components:
+  - tests/run.py
+
+notes: "Sine stand-ins are fine until a richer synth exists. Five named sounds required."

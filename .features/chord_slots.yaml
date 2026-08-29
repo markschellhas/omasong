@@ -1,0 +1,27 @@
+feature_name: chord_slots
+purpose: "Place, split, shrink, and clear chords in bar slots (4/4 holds at most four)."
+
+entry_points:
+  - SongStructure.qml
+  - js/Song.js
+
+apps:
+  - songwriter
+
+user_flow:
+  primary: "User → drop chord on empty slot → placeChord fills it"
+  split: "User → drop onto filled chord → halve span and insert on drop side"
+  resize: "User → drag left/right edge → resizeSlot opens empty slots in freed units"
+  clear: "User → hover × on filled chip → setChord null"
+
+related_features:
+  - circle_of_fifths (drag source)
+  - song_structure (capacity from time signature)
+  - playback (click auditions slot)
+  - music_theory (encode/decode payload)
+  - agent_api (placed chords vs rests)
+
+core_components:
+  - tests/js_tests.js
+
+notes: "No type-to-enter symbol. At max capacity a further drop replaces."

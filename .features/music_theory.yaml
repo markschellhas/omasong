@@ -1,0 +1,26 @@
+feature_name: music_theory
+purpose: "Name triads, diatonic sets, time signatures, and chord drag payloads for the rest of the plugin."
+
+entry_points:
+  - js/Model.js
+
+apps:
+  - songwriter
+  - chords-agent
+
+user_flow:
+  primary: "Caller → diatonicTriads(index) → seven I–vii° triads sharing the relative-minor set"
+  payload: "GUI → encodeChord / decodeChord → chord|<name>|<rootPc>|<qualityInt>"
+
+related_features:
+  - circle_of_fifths (12 stations, chips)
+  - chord_slots (payload decode onto Song)
+  - song_structure (TimeSignature.maxSlots)
+  - agent_api (numeral when diatonic)
+  - playback (triad MIDI for synth)
+
+core_components:
+  - tests/js_tests.js
+  - tests/run.py
+
+notes: "Parity target is source MusicTheory; current Model.js lacks encodeChord, vii°, quality ints."

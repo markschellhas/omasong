@@ -1,0 +1,29 @@
+feature_name: agent_api
+purpose: "Let any command-running agent read placed chords and the full song from live loopback or last snapshot."
+
+entry_points:
+  - Songwriter.qml
+  - write-json.py
+  - AGENTS.md
+
+apps:
+  - chords-agent
+  - songwriter
+
+user_flow:
+  primary: "Agent → chords-agent progressions → GET /progressions or snapshot progressions.json"
+  song: "Agent → chords-agent song → full document; empty slots null"
+  health: "Agent → chords-agent health → exit 0 if live else 2"
+  error: "chords-agent --live with app down → exit 2"
+
+related_features:
+  - song_structure (sections serialized)
+  - chord_slots (placed chords vs rests)
+  - circle_of_fifths (key in JSON)
+  - row_repeats (rowRepeats array)
+  - music_theory (numerals when diatonic)
+
+core_components:
+  - tests/run.py
+
+notes: "CLI and :17891 not shipped. Persist today is ~/.local/state/omarchy/songwriter/song.json. Target port 17891, $CHORDS_AGENT_PORT, or agent-api.json; snapshots $CHORDS_AGENT_HOME or ~/.config/chords-and-tabs/."

@@ -1,0 +1,22 @@
+feature_name: row_repeats
+purpose: "Toggle a :|| at the end of each 4-bar row so that row plays twice."
+
+entry_points:
+  - SongStructure.qml
+  - js/Song.js
+
+apps:
+  - songwriter
+
+user_flow:
+  primary: "User → click :|| → setRowRepeat; buildTimeline emits the row with repeatPass=1"
+
+related_features:
+  - song_structure (rowRepeats, kBarsPerRow=4)
+  - playback (timeline duplicates the row)
+  - agent_api (rowRepeats in JSON)
+
+core_components:
+  - tests/js_tests.js
+
+notes: "Default Verse+Chorus, no repeats: 8 events / 32 beats. Verse row on: 12 events / 48 beats."

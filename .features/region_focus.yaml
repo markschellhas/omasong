@@ -1,0 +1,26 @@
+feature_name: region_focus
+purpose: "j/k cycle focus among circle, song structure, and keyboard; h/l then rotate key or cycle sound."
+
+entry_points:
+  - Songwriter.qml
+
+apps:
+  - songwriter
+
+user_flow:
+  primary: "User → j/k → cycleNavRegion; focus frame and hint text update"
+  hl: "User → h/l → Circle rotates key; Keyboard cycles instrument; Song ignores"
+
+related_features:
+  - circle_of_fifths (rotate)
+  - instruments (cycle sound)
+  - laptop_keys (steals hjkl when on)
+  - song_structure (Song region)
+  - piano_keyboard (Keyboard region)
+
+core_components:
+  - CircleOfFifths.qml
+  - Piano.qml
+  - SongStructure.qml
+
+notes: "Regions top→bottom: Circle, Song, Keyboard. ←/→ and wheel still rotate the circle in any region. Not implemented yet."

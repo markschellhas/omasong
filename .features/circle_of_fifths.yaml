@@ -1,0 +1,26 @@
+feature_name: circle_of_fifths
+purpose: "Rotate the circle so the active key sits at 12 o'clock and drag diatonic or neighbouring triads into bars."
+
+entry_points:
+  - CircleOfFifths.qml
+  - Songwriter.qml
+
+apps:
+  - songwriter
+
+user_flow:
+  primary: "User → click wedge, wheel, h/l, or ←/→ → rotate; tonic at 12 o'clock"
+  drag: "User → drag outer/inner wedge or I–vii° chip → encodeChord payload onto a bar slot"
+  preview: "User → hover/press wedge → piano lights the triad; chip click does not insert"
+
+related_features:
+  - music_theory (stations, diatonic, encodeChord)
+  - chord_slots (drop target)
+  - region_focus (h/l rotate when Circle focused)
+  - piano_keyboard (preview highlight)
+  - agent_api (key index in JSON)
+
+core_components:
+  - js/Model.js
+
+notes: "Key change must not transpose placed chords. Current QML still uses string symbols via Chords.js."
