@@ -11,8 +11,8 @@ apps:
 
 user_flow:
   primary: "User → + Append Section → Verse/Chorus/…/Custom → addSection with barsForTimeSignature bars"
-  edit: "User → Edit → 4/4, 3/4, 2/4, or 6/8 → setTimeSignature resizes measures"
-  rename: "User → double-click title, More → Rename, or Edit → Rename → setSectionName"
+  edit: "User → More (…) → 4/4, 3/4, 2/4, or 6/8 → setTimeSignature resizes measures"
+  rename: "User → double-click title or More (…) → Rename → setSectionName"
   error: "User → Delete last section → ignored"
 
 related_features:

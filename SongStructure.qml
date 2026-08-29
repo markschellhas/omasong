@@ -191,7 +191,7 @@ Item {
       }
       return items
     }
-    if (root.menuKind === "edit") {
+    if (root.menuKind === "more") {
       var section = root.sections[root.menuSection]
       var ts = section && section.timeSig ? section.timeSig : {}
       for (i = 0; i < root.meterChoices.length; i++) {
@@ -205,10 +205,6 @@ Item {
           enabled: true
         })
       }
-      items.push({ kind: "rename", label: "Rename", selected: false, enabled: true })
-      return items
-    }
-    if (root.menuKind === "more") {
       items.push({ kind: "rename", label: "Rename", selected: false, enabled: true })
       items.push({
         kind: "delete",
@@ -302,15 +298,6 @@ Item {
                 onEditingFinished: root.commitRename(sectionCol.sectionIndex, text)
                 Keys.onEscapePressed: root.cancelRename()
               }
-            }
-
-            Button {
-              id: editButton
-              text: "Edit"
-              bordered: true
-              foreground: root.foreground
-              tooltipText: "Time signature and rename"
-              onClicked: root.openMenu("edit", sectionCol.sectionIndex, editButton)
             }
           }
 
