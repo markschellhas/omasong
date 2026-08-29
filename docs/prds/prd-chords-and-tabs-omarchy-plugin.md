@@ -7,7 +7,7 @@
 
 ## Overview
 
-Port the Chords & Tabs JUCE song-builder into this Omarchy shell plugin (`io.github.markschellhas.songwriter`) as a bar chip plus overlay with full feature parity.
+Port the Chords & Tabs JUCE song-builder into this Omarchy shell plugin (`markschellhas.songwriter`) as a bar chip plus overlay with full feature parity.
 
 **Original C++ implementation (read-only reference):** https://github.com/markschellhas/chords-and-tabs — the JUCE app, its `.features/*.yaml` maps, tests, and source under `src/`. This PRD restates the parity contract for the plugin; when a behavior is ambiguous or underspecified here, resolve it by reading that repo (maps first, then C++ / tests). Do not clone-and-edit, commit to, or open PRs against it.
 
@@ -40,7 +40,7 @@ Partial Omarchy plugin (v0.2.0). Overlay chrome and layout exist; behavior is no
 
 | Path | Role |
 |------|------|
-| `manifest.json` | Plugin id `io.github.markschellhas.songwriter`; kinds `overlay` + `bar-widget` |
+| `manifest.json` | Plugin id `markschellhas.songwriter`; kinds `overlay` + `bar-widget` |
 | `BarWidget.qml` | Bar chip → shell toggle |
 | `Songwriter.qml` | Overlay host: layout, persist hooks, keys, playback state |
 | `Transport.qml` | Play / Stop / Loop / BPM UI |
@@ -137,7 +137,7 @@ Song
 
 ```bash
 python3 tests/run.py
-omarchy plugin validate ~/.config/omarchy/plugins/io.github.markschellhas.songwriter
+omarchy plugin validate ~/.config/omarchy/plugins/markschellhas.songwriter
 ```
 
 ## Effort Estimates

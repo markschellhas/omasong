@@ -786,7 +786,7 @@ python3 tests/run.py
 On a real Omarchy machine (not required for CI green):
 
 ```bash
-omarchy plugin validate ~/.config/omarchy/plugins/io.github.markschellhas.songwriter
+omarchy plugin validate ~/.config/omarchy/plugins/markschellhas.songwriter
 ```
 
 Checklist: bar chip toggle, overlay, Esc, drag chord, play, `chords-agent progressions|song|health`.
@@ -817,7 +817,7 @@ EOF
 python3 tests/run.py
 ./bin/feature-map validate
 ./bin/feature-map check
-omarchy plugin validate ~/.config/omarchy/plugins/io.github.markschellhas.songwriter
+omarchy plugin validate ~/.config/omarchy/plugins/markschellhas.songwriter
 ```
 
 `omarchy plugin validate` needs Omarchy; CI uses the first three.

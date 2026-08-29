@@ -23,4 +23,4 @@ related_features:
 core_components:
   - js/Model.js
 
-notes: "Key change must not transpose placed chords."
+notes: "Key change must not transpose placed chords. Circle is ~1.5× prior diameter; only the north hemisphere is shown, south clipped."

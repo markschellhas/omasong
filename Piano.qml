@@ -40,15 +40,6 @@ Item {
       width: parent.width
       spacing: Style.spacing.sm
 
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        text: "Keyboard"
-        color: root.foreground
-        font.family: Style.font.menuFamily
-        font.pixelSize: Style.font.body
-        font.bold: true
-      }
-
       Button {
         text: "‹"
         bordered: true

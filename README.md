@@ -4,7 +4,7 @@ Omarchy shell plugin that ports **[Chords & Tabs](https://github.com/markschellh
 
 Source product (read-only, do not modify): https://github.com/markschellhas/chords-and-tabs
 
-Plugin id: `io.github.markschellhas.songwriter`
+Plugin id: `markschellhas.songwriter`
 
 Spec (exact feature maps + plugin parity): [docs/prds/prd-chords-and-tabs-omarchy-plugin.md](docs/prds/prd-chords-and-tabs-omarchy-plugin.md).
 
@@ -31,7 +31,7 @@ Changing the circle does **not** transpose placed chords. Chords are triads, not
 
 ```bash
 omarchy plugin add https://github.com/markschellhas/songwriter.git --enable
-omarchy bar move io.github.markschellhas.songwriter --section right
+omarchy bar move markschellhas.songwriter --section right
 ```
 
 Left-click the bar chip to open the overlay. Clicks outside the card pass
@@ -43,7 +43,7 @@ Omarchy does not load Hyprland binds from plugins, so add this to
 `~/.config/hypr/bindings.lua` after install.
 
 ```lua
-o.bind("SUPER + CTRL + ALT + S", "Songwriter", "omarchy-shell shell toggle io.github.markschellhas.songwriter")
+o.bind("SUPER + CTRL + ALT + S", "Songwriter", "omarchy-shell shell toggle markschellhas.songwriter")
 ```
 
 ## Status
@@ -55,13 +55,13 @@ Automated check: `python3 tests/run.py`. Full overlay and `omarchy plugin valida
 ## Remove
 
 ```bash
-omarchy plugin remove io.github.markschellhas.songwriter
+omarchy plugin remove markschellhas.songwriter
 ```
 
 ## Develop locally
 
 ```bash
-omarchy plugin validate ~/.config/omarchy/plugins/io.github.markschellhas.songwriter
+omarchy plugin validate ~/.config/omarchy/plugins/markschellhas.songwriter
 python3 tests/run.py
 omarchy-shell shell rescanPlugins
 ```

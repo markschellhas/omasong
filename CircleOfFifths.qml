@@ -170,7 +170,8 @@ Item {
     color: "transparent"
     border.width: 1
     border.color: root.gridColor
-    anchors.centerIn: parent
+    x: ring.cx - ringRadius
+    y: ring.cy - ringRadius
     antialiasing: true
   }
 
@@ -223,6 +224,7 @@ Item {
       id: ring
       width: parent.width
       height: Math.max(Style.space(360), parent.height - Style.space(108))
+      clip: true
 
       property int hoverIndex: -1
       property string hoverRing: ""
@@ -231,8 +233,8 @@ Item {
       property real pressX: 0
       property real pressY: 0
       readonly property real cx: width / 2
-      readonly property real cy: height / 2
-      readonly property real outerR: Math.min(width, height) / 2 - Style.space(6)
+      readonly property real cy: height
+      readonly property real outerR: (Math.min(width, height) / 2 - Style.space(6)) * 1.5
       readonly property real majorOuterR: outerR
       readonly property real majorInnerR: outerR * 0.64
       readonly property real minorOuterR: outerR * 0.60

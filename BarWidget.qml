@@ -3,7 +3,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "io.github.markschellhas.songwriter"
+  moduleName: "markschellhas.songwriter"
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -17,7 +17,7 @@ BarWidget {
     onPressed: function(mouseButton) {
       if (!root.bar || mouseButton !== Qt.LeftButton)
         return
-      root.bar.run("omarchy-shell shell toggle io.github.markschellhas.songwriter")
+      root.bar.run("omarchy-shell shell toggle markschellhas.songwriter")
     }
   }
 }
