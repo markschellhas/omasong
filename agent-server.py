@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
@@ -210,6 +212,12 @@ def serve(port: int, home: Optional[Path] = None) -> int:
         return 2
     bound = int(httpd.server_address[1])
     write_snapshot("agent-api.json", json.dumps({"port": bound}))
+
+    def stop(_signum=None, _frame=None) -> None:
+        threading.Thread(target=httpd.shutdown, daemon=True).start()
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

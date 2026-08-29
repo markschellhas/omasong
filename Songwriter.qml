@@ -101,18 +101,28 @@ Item {
 
   function open(payloadJson) {
     opened = true
+    startAgentServer()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
   function close() {
     stopPlayback()
     opened = false
+    stopAgentServer()
   }
 
   function dismiss() {
     close()
     if (shell && typeof shell.hide === "function")
       shell.hide((manifest && manifest.id) || "io.github.markschellhas.songwriter")
+  }
+
+  function startAgentServer() {
+    agentServer.running = true
+  }
+
+  function stopAgentServer() {
+    agentServer.running = false
   }
 
   function clampSelection() {
@@ -189,10 +199,6 @@ Item {
     Quickshell.execDetached(["python3", writeScript, agentSongPath, JSON.stringify(Agent.songJson(song))])
     Quickshell.execDetached(["python3", writeScript, agentProgressionsPath, JSON.stringify(Agent.progressionsJson(song))])
     Quickshell.execDetached(["python3", writeScript, agentApiPath, JSON.stringify({ port: agentPort })])
-  }
-
-  function startAgentServer() {
-    Quickshell.execDetached(["python3", agentServerScript, "--home", agentHome, "--port", String(agentPort)])
   }
 
   function currentInstrument() {
@@ -568,11 +574,18 @@ Item {
     }
   }
 
+  Process {
+    id: agentServer
+    running: false
+    command: ["python3", root.agentServerScript, "--home", root.agentHome, "--port", String(root.agentPort)]
+  }
+
   Component.onCompleted: {
-    startAgentServer()
     songFile.reload()
     refreshPiano()
   }
+
+  Component.onDestruction: stopAgentServer()
 
   PanelWindow {
     id: panel

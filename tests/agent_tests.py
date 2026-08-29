@@ -292,38 +292,59 @@ def test_missing_snapshot_does_not_invent_defaults() -> None:
         print("agent missing snapshot ok")
 
 
-def test_live_optional() -> None:
+def start_server(home: Path, port: int) -> subprocess.Popen[str] | None:
     server = ROOT / "agent-server.py"
-    if not CLI.is_file() or not server.is_file():
+    if not server.is_file():
+        return None
+    env = os.environ.copy()
+    env["CHORDS_AGENT_HOME"] = str(home)
+    env["CHORDS_AGENT_PORT"] = str(port)
+    proc = subprocess.Popen(
+        [sys.executable, str(server), "--home", str(home), "--port", str(port)],
+        cwd=ROOT,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    for _ in range(40):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.2) as resp:
+                if resp.status == 200:
+                    return proc
+        except (urllib.error.URLError, TimeoutError, OSError):
+            time.sleep(0.05)
+    proc.terminate()
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    return None
+
+
+def stop_server(proc: subprocess.Popen[str]) -> None:
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=2)
+
+
+def test_live_optional() -> None:
+    if not CLI.is_file():
         print("agent live skip")
         return
     with tempfile.TemporaryDirectory() as tmp:
         home = Path(tmp)
         write_snapshots(home)
         port = unused_port()
-        env = os.environ.copy()
-        env["CHORDS_AGENT_HOME"] = str(home)
-        env["CHORDS_AGENT_PORT"] = str(port)
-        proc = subprocess.Popen(
-            [sys.executable, str(server), "--home", str(home), "--port", str(port)],
-            cwd=ROOT,
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        proc = start_server(home, port)
+        if proc is None:
+            print("agent live skip")
+            return
         try:
-            ready = False
-            for _ in range(40):
-                try:
-                    with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.2) as resp:
-                        if resp.status == 200:
-                            ready = True
-                            break
-                except (urllib.error.URLError, TimeoutError, OSError):
-                    time.sleep(0.05)
-            if not ready:
-                print("agent live skip")
-                return
             live = run_cli(home, "--live", "song", port=port)
             if live.returncode != 0:
                 raise SystemExit("live song failed:\n" + live.stdout + live.stderr)
@@ -335,11 +356,29 @@ def test_live_optional() -> None:
                 raise SystemExit(f"health with live server expected 0, got {health.returncode}")
             print("agent live ok")
         finally:
-            proc.terminate()
-            try:
-                proc.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+            stop_server(proc)
+
+
+def test_health_after_server_stop() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        write_snapshots(home)
+        port = unused_port()
+        proc = start_server(home, port)
+        if proc is None:
+            print("agent health-after-stop skip")
+            return
+        up = run_cli(home, "health", port=port)
+        if up.returncode != 0:
+            stop_server(proc)
+            raise SystemExit(f"health with live server expected 0, got {up.returncode}")
+        stop_server(proc)
+        down = run_cli(home, "health", port=port)
+        if down.returncode != 2:
+            raise SystemExit(
+                f"health after overlay/server stop expected 2, got {down.returncode}"
+            )
+        print("agent health after stop ok")
 
 
 def run() -> int:
@@ -351,6 +390,7 @@ def run() -> int:
     test_live_without_server()
     test_missing_snapshot_does_not_invent_defaults()
     test_live_optional()
+    test_health_after_server_stop()
     print("agent tests ok")
     return 0
 
