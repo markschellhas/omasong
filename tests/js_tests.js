@@ -340,6 +340,24 @@ for (var ei = 0; ei < sixTl.length; ei++) {
   assertEq(atStart.slotIndex, sixTl[ei].slotIndex)
 }
 assertEq(eventAtBeat(sixTl, 0.5).startBeat, 0.5)
+assertEq(beatTickDelta(tl, 0), 1)
+assertEq(beatTickDelta(tl, 3), 1)
+assertEq(beatTickDelta(sixTl, 0), 0.5)
+assertEq(beatTickDelta(sixTl, 0.5), 0.5)
+var clockDisplay = []
+var clockBeat = 0
+while (clockBeat < 4) {
+  clockDisplay.push(Math.floor(clockBeat) + 1)
+  clockBeat += beatTickDelta(tl, clockBeat)
+}
+assertEq(clockDisplay.join(","), "1,2,3,4")
+var clockHits = {}
+clockBeat = 0
+while (clockBeat < timelineDurationBeats(sixTl)) {
+  clockHits[String(eventAtBeat(sixTl, clockBeat).startBeat)] = true
+  clockBeat += beatTickDelta(sixTl, clockBeat)
+}
+assert(clockHits["0.5"], "beat clock hits 0.5")
 
 // Task 5: Agent JSON (progressions omit empties; song includes every slot).
 var song = defaultSong()

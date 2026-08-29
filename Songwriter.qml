@@ -214,10 +214,12 @@ Item {
     return event.startBeat
   }
 
-  function eventIntervalMs(event) {
-    if (!event)
-      return 1000
-    return Math.max(1, Math.round(Song.beatsToSeconds(event.durationBeats, song.bpm) * 1000))
+  function sameEventIdentity(a, b) {
+    return !!(a && b
+      && a.sectionIndex === b.sectionIndex
+      && a.measureIndex === b.measureIndex
+      && a.slotIndex === b.slotIndex
+      && a.repeatPass === b.repeatPass)
   }
 
   function applySounding(event) {
@@ -230,24 +232,7 @@ Item {
     playMidiNotes(soundingNotes, Song.beatsToSeconds(event.durationBeats, song.bpm))
   }
 
-  function enterCurrentEvent() {
-    var tl = timeline
-    var total = Song.timelineDurationBeats(tl)
-    if (total <= 0) {
-      stopPlayback()
-      return
-    }
-    if (currentBeat >= total) {
-      if (song.loop) {
-        currentBeat = 0
-        currentBar = 1
-        playEvent = null
-      } else {
-        stopPlayback()
-        return
-      }
-    }
-    var event = Song.eventAtBeat(tl, currentBeat)
+  function applyPlayhead(event) {
     if (!event) {
       stopPlayback()
       return
@@ -260,16 +245,26 @@ Item {
       currentBar += 1
     if (currentBeat === 0)
       currentBar = 1
+    var changed = !sameEventIdentity(playEvent, event)
     playEvent = event
-    currentBeat = event.startBeat
-    var name = (song.sections[event.sectionIndex] || {}).name || ""
-    if (event.rest || !event.chord)
-      statusText = name ? name + " · Rest" : "Rest"
-    else
-      statusText = name + " · " + Model.chordName(event.chord.rootPc, event.chord.quality)
-    applySounding(event)
-    displayBeat = Math.max(1, Math.floor(currentBeat - measureStartBeat(tl, event)) + 1)
-    transportTimer.interval = eventIntervalMs(event)
+    if (changed) {
+      var name = (song.sections[event.sectionIndex] || {}).name || ""
+      if (event.rest || !event.chord)
+        statusText = name ? name + " · Rest" : "Rest"
+      else
+        statusText = name + " · " + Model.chordName(event.chord.rootPc, event.chord.quality)
+      applySounding(event)
+    }
+    displayBeat = Math.max(1, Math.floor(currentBeat - measureStartBeat(timeline, event)) + 1)
+  }
+
+  function scheduleBeatTick() {
+    var delta = Song.beatTickDelta(timeline, currentBeat)
+    if (!(delta > 0)) {
+      stopPlayback()
+      return
+    }
+    transportTimer.interval = Math.max(1, Math.round(Song.beatsToSeconds(delta, song.bpm) * 1000))
     transportTimer.restart()
   }
 
@@ -283,7 +278,8 @@ Item {
     currentBeat = 0
     currentBar = 1
     playEvent = null
-    enterCurrentEvent()
+    applyPlayhead(Song.eventAtBeat(tl, currentBeat))
+    scheduleBeatTick()
   }
 
   function stopPlayback() {
@@ -366,12 +362,21 @@ Item {
     interval: 1000
     repeat: false
     onTriggered: {
-      if (!playEvent) {
-        stopPlayback()
-        return
+      var delta = Song.beatTickDelta(timeline, currentBeat)
+      currentBeat += delta
+      var total = Song.timelineDurationBeats(timeline)
+      if (currentBeat >= total) {
+        if (song.loop) {
+          currentBeat = 0
+          currentBar = 1
+          playEvent = null
+        } else {
+          stopPlayback()
+          return
+        }
       }
-      currentBeat = playEvent.startBeat + playEvent.durationBeats
-      enterCurrentEvent()
+      applyPlayhead(Song.eventAtBeat(timeline, currentBeat))
+      scheduleBeatTick()
     }
   }
 
@@ -464,6 +469,10 @@ Item {
             return
           }
           if (event.key === Qt.Key_Space) {
+            if (event.isAutoRepeat) {
+              event.accepted = true
+              return
+            }
             if (root.playing)
               root.stopPlayback()
             else

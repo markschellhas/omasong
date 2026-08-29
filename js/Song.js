@@ -606,3 +606,14 @@ function eventAtBeat(events, beat) {
   }
   return null
 }
+
+function beatTickDelta(events, beat) {
+  var event = eventAtBeat(events, beat)
+  if (!event)
+    return 0
+  var remaining = event.startBeat + event.durationBeats - beat
+  var nextStart = event.startBeat + event.durationBeats
+  var toNext = nextStart - beat
+  var delta = Math.min(1, remaining, toNext)
+  return delta > 0 ? delta : 0
+}
