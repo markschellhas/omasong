@@ -24,6 +24,7 @@ Item {
   readonly property color wedgeFill: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.10)
   readonly property int wedgeStroke: Math.max(3, Style.space(3))
   readonly property int cellStroke: Math.max(2, Style.space(2))
+  readonly property int sideWidth: Math.floor(width / 3)
 
   signal tonicPicked(int index, string ring)
   signal chordPreviewed(int index, string ring, var triad)
@@ -197,33 +198,141 @@ Item {
     font.bold: active
   }
 
-  Column {
-    anchors.fill: parent
-    spacing: Style.space(8)
+  component DegreeChip: Item {
+    id: chip
+    property int degreeIndex: 0
+    readonly property var chipChord: root.chips[degreeIndex]
+    implicitWidth: chipButton.implicitWidth
+    implicitHeight: chipButton.implicitHeight
+    width: implicitWidth
+    height: implicitHeight
+    property bool dragging: false
+    property real pressX: 0
+    property real pressY: 0
 
-    Text {
-      width: parent.width
-      text: selected.major + " major · " + selected.minor + " minor"
-      color: root.foreground
-      font.family: Style.font.menuFamily
-      font.pixelSize: Style.font.subtitle
-      font.bold: true
-      horizontalAlignment: Text.AlignHCenter
+    Button {
+      id: chipButton
+      anchors.centerIn: parent
+      enabled: false
+      text: Model.NUMERALS[chip.degreeIndex]
+      bordered: true
+      foreground: root.foreground
+      fontFamily: Style.font.menuFamily
+      fontSize: Style.font.bodySmall
+      tooltipText: chip.chipChord ? Model.chordName(chip.chipChord.rootPc, chip.chipChord.quality) : ""
     }
 
-    Text {
-      width: parent.width
-      text: selected.accidentals === "0" ? "no sharps or flats" : selected.accidentals
-      color: root.dim
-      font.family: Style.font.menuFamily
-      font.pixelSize: Style.font.caption
-      horizontalAlignment: Text.AlignHCenter
+    MouseArea {
+      id: chipMouse
+      anchors.fill: parent
+      acceptedButtons: Qt.LeftButton
+      cursorShape: Qt.PointingHandCursor
+      preventStealing: true
+
+      Drag.active: chip.dragging
+      Drag.dragType: Drag.Automatic
+      Drag.proposedAction: Qt.CopyAction
+      Drag.keys: ["text/plain"]
+
+      onPressed: function(mouse) {
+        chip.pressX = mouse.x
+        chip.pressY = mouse.y
+        chip.dragging = false
+      }
+      onPositionChanged: function(mouse) {
+        if (!pressed || chip.dragging || !chip.chipChord)
+          return
+        var dx = mouse.x - chip.pressX
+        var dy = mouse.y - chip.pressY
+        if (dx * dx + dy * dy >= 64) {
+          root.startChordDragOn(chipMouse, chip.chipChord)
+          chip.dragging = true
+        }
+      }
+      onReleased: function() {
+        if (!chip.dragging)
+          root.previewChip(chip.degreeIndex)
+        chip.dragging = false
+      }
+    }
+  }
+
+  Item {
+    anchors.fill: parent
+
+    Item {
+      anchors.left: parent.left
+      width: root.sideWidth
+      height: parent.height
+
+      Column {
+        id: keyInfo
+        width: parent.width
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(8)
+
+        Text {
+          width: parent.width
+          text: selected.major + " major · " + selected.minor + " minor"
+          color: root.foreground
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.subtitle
+          font.bold: true
+          horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.Wrap
+        }
+
+        Text {
+          width: parent.width
+          text: selected.accidentals === "0" ? "no sharps or flats" : selected.accidentals
+          color: root.dim
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.caption
+          horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.Wrap
+        }
+
+        Column {
+          id: chipRail
+          anchors.horizontalCenter: parent.horizontalCenter
+          spacing: Style.space(4)
+
+          Row {
+            spacing: Style.space(4)
+            Repeater {
+              model: 3
+              DegreeChip {
+                required property int index
+                degreeIndex: index
+              }
+            }
+          }
+          Row {
+            spacing: Style.space(4)
+            Repeater {
+              model: 3
+              DegreeChip {
+                required property int index
+                degreeIndex: index + 3
+              }
+            }
+          }
+          DegreeChip {
+            anchors.horizontalCenter: parent.horizontalCenter
+            degreeIndex: 6
+          }
+        }
+      }
     }
 
     Item {
       id: ring
-      width: parent.width
-      height: Math.max(Style.space(360), parent.height - Style.space(108))
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.top: parent.top
+      anchors.bottom: parent.bottom
+      anchors.leftMargin: root.sideWidth
+      anchors.rightMargin: root.sideWidth
       clip: true
 
       property int hoverIndex: -1
@@ -406,71 +515,10 @@ Item {
       }
     }
 
-    Row {
-      anchors.horizontalCenter: parent.horizontalCenter
-      spacing: Style.space(6)
-
-      Repeater {
-        model: 7
-        delegate: Item {
-          id: chip
-          required property int index
-          readonly property var chipChord: root.chips[index]
-          implicitWidth: chipButton.implicitWidth
-          implicitHeight: chipButton.implicitHeight
-          width: implicitWidth
-          height: implicitHeight
-          property bool dragging: false
-          property real pressX: 0
-          property real pressY: 0
-
-          Button {
-            id: chipButton
-            anchors.centerIn: parent
-            enabled: false
-            text: Model.NUMERALS[index]
-            bordered: true
-            foreground: root.foreground
-            fontFamily: Style.font.menuFamily
-            fontSize: Style.font.bodySmall
-            tooltipText: chip.chipChord ? Model.chordName(chip.chipChord.rootPc, chip.chipChord.quality) : ""
-          }
-
-          MouseArea {
-            id: chipMouse
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton
-            cursorShape: Qt.PointingHandCursor
-            preventStealing: true
-
-            Drag.active: chip.dragging
-            Drag.dragType: Drag.Automatic
-            Drag.proposedAction: Qt.CopyAction
-            Drag.keys: ["text/plain"]
-
-            onPressed: function(mouse) {
-              chip.pressX = mouse.x
-              chip.pressY = mouse.y
-              chip.dragging = false
-            }
-            onPositionChanged: function(mouse) {
-              if (!pressed || chip.dragging || !chip.chipChord)
-                return
-              var dx = mouse.x - chip.pressX
-              var dy = mouse.y - chip.pressY
-              if (dx * dx + dy * dy >= 64) {
-                root.startChordDragOn(chipMouse, chip.chipChord)
-                chip.dragging = true
-              }
-            }
-            onReleased: function() {
-              if (!chip.dragging)
-                root.previewChip(chip.index)
-              chip.dragging = false
-            }
-          }
-        }
-      }
+    Item {
+      anchors.right: parent.right
+      width: root.sideWidth
+      height: parent.height
     }
   }
 }
