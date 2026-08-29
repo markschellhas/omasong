@@ -27,3 +27,21 @@ function regionName(index) {
     return ""
   return REGION_NAMES[n]
 }
+
+function degreeIndexFromKey(key, text) {
+  var t = text === undefined || text === null ? "" : String(text)
+  if (t.length === 1) {
+    var c = t.charCodeAt(0)
+    if (c >= 0x31 && c <= 0x37)
+      return c - 0x31
+  }
+  var k = Number(key)
+  if (!isFinite(k))
+    return -1
+  k = Math.floor(k)
+  if (k >= 0x31 && k <= 0x37)
+    return k - 0x31
+  if (k >= 0x01000031 && k <= 0x01000037)
+    return k - 0x01000031
+  return -1
+}
