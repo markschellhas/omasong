@@ -1,101 +1,67 @@
-# Audio Splitter using Demucs
+# Songwriter for Omarchy
 
-A Python script to split audio tracks into separate stems (vocals, drums, bass, other instruments) using Meta's Demucs AI model.
+Chords & Tabs as an Omarchy overlay: pick a key on the circle of fifths, write
+verse/chorus slots, play them back, and use a two-octave piano.
 
-## Features
+Plugin id: `io.github.markschellhas.songwriter`
 
-- **High-quality separation**: Uses the state-of-the-art Demucs AI model
-- **4-stem separation**: Separates into vocals, drums, bass, and other instruments
-- **Multiple audio formats**: Supports WAV, MP3, FLAC, and more
-- **GPU acceleration**: Automatic GPU usage when available
-- **Easy to use**: Simple command-line interface
+This is a port of the Chords & Tabs songwriter (transport, circle of fifths,
+song structure, and keyboard) into a third-party Omarchy shell plugin.
 
-## Installation
+## Install
 
-1. **Clone or download this repository**
+```bash
+omarchy plugin add https://github.com/markschellhas/songwriter.git --enable
+omarchy bar move io.github.markschellhas.songwriter --section right
+```
 
-2. **Set up Python environment** (Python 3.8+ required):
-   ```bash
-   # Create virtual environment (recommended)
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+Left-click the bar chip to open the overlay. Clicks outside the card pass
+through to the desktop. Esc closes.
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Keyboard shortcut
+
+Omarchy does not load Hyprland binds from plugins, so add this to
+`~/.config/hypr/bindings.lua` after install.
+
+```lua
+o.bind("SUPER + CTRL + ALT + S", "Songwriter", "omarchy-shell shell toggle io.github.markschellhas.songwriter")
+```
 
 ## Usage
 
-### Basic Usage
-```bash
-python audio_splitter.py path/to/your/song.mp3
-```
+- **Transport** — Play walks filled chord slots at the current BPM. Stop ends
+  playback. Loop repeats the song. Tap tempo from a few taps.
+- **Circle of fifths** — Click a major or minor wedge to set the key. Changing
+  key transposes the written chords. Tone mode (`T`, or the Tone button) plays
+  I–vi without changing key; keys `1`–`6` jump to those degrees.
+- **Song structure** — Verse and chorus rows of chord cells. Click a cell to
+  type a symbol (`C`, `Am`, `F#dim7`, `G/B`). Right-click or double-click
+  previews. Add or remove sections as needed.
+- **Keyboard** — Two octaves from the current base. Computer keys match the
+  original app (`a s d f g h j k l ; '` white, `w e r t y u i o p [` black).
+  Space is sustain. Octave buttons shift the range.
 
-### Specify Output Directory
-```bash
-python audio_splitter.py path/to/your/song.mp3 -o separated_tracks
-```
+Sound is a sine-wave placeholder via `play-notes.py` (`pw-play`, `paplay`, or
+`aplay`). The current song is saved to
+`~/.local/state/omarchy/songwriter/song.json`.
 
-### Force CPU Usage (if you have GPU memory issues)
-```bash
-python audio_splitter.py path/to/your/song.mp3 --device cpu
-```
-
-### Use Demucs CLI Method (requires installing demucs package)
-```bash
-# First install demucs: pip install demucs
-python audio_splitter.py path/to/your/song.mp3 --method cli
-```
-
-## Output
-
-The script will create four separate files:
-- `song_vocals.wav` - Isolated vocals
-- `song_drums.wav` - Drum tracks
-- `song_bass.wav` - Bass lines
-- `song_other.wav` - Other instruments (guitars, keyboards, etc.)
-
-## System Requirements
-
-- **Memory**: At least 4GB RAM (8GB+ recommended)
-- **GPU**: Optional but recommended for faster processing
-- **Storage**: Output files will be roughly the same size as input
-
-## Troubleshooting
-
-### CUDA Out of Memory
-If you get GPU memory errors:
-```bash
-python audio_splitter.py your_song.mp3 --device cpu
-```
-
-### Audio Format Issues
-The script supports most common audio formats. If you encounter issues, try converting your file to WAV first.
-
-### Performance Tips
-- GPU processing is much faster than CPU
-- Longer songs require more memory
-- Close other applications to free up RAM/GPU memory
-
-## Examples
+## Remove
 
 ```bash
-# Basic separation
-python audio_splitter.py "my_song.mp3"
-
-# Custom output directory
-python audio_splitter.py "my_song.mp3" -o "stems_output"
-
-# CPU only (slower but uses less memory)
-python audio_splitter.py "my_song.mp3" --device cpu
+omarchy plugin remove io.github.markschellhas.songwriter
 ```
 
-## About Demucs
+## Develop locally
 
-This script uses Meta's Demucs model, which is currently one of the best open-source audio separation systems available. It uses deep learning to intelligently separate audio sources while maintaining high audio quality.
+```bash
+omarchy plugin validate ~/.config/omarchy/plugins/io.github.markschellhas.songwriter
+python3 tests/run.py
+omarchy-shell shell rescanPlugins
+```
+
+The original Svelte MIDI studio remains under `frontend/` as the feature
+reference for this port.
 
 ## License
 
-This project is provided as-is for educational and personal use. 
+MIT
