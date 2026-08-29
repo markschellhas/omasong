@@ -16,6 +16,10 @@ Item {
   property int playSection: -1
   property int playMeasure: -1
   property int playSlot: -1
+  property int fillSection: -1
+  property int fillMeasure: -1
+  property int fillSlot: -1
+  property real slotFillProgress: 0
   property string chordDragPayload: ""
 
   readonly property int barsPerRow: 4
@@ -364,12 +368,16 @@ Item {
                       readonly property bool playing: root.playSection === sectionCol.sectionIndex
                         && root.playMeasure === measureBox.measureIndex
                         && root.playSlot === slotIndex
+                      readonly property bool filling: root.fillSection === sectionCol.sectionIndex
+                        && root.fillMeasure === measureBox.measureIndex
+                        && root.fillSlot === slotIndex
                       x: measureBox.slotX(slotIndex)
                       y: 0
                       width: measureBox.slotW(slotIndex)
                       height: measureBox.height
 
                       Rectangle {
+                        id: slotChip
                         anchors.fill: parent
                         anchors.margins: 2
                         radius: Math.max(2, Style.cornerRadius / 2)
@@ -384,6 +392,19 @@ Item {
                         border.color: slotBox.playing ? Color.accent
                                     : slotBox.selected || dropArea.containsDrag ? root.foreground
                                     : root.faint
+                        clip: true
+
+                        Rectangle {
+                          anchors.left: parent.left
+                          anchors.top: parent.top
+                          anchors.bottom: parent.bottom
+                          width: Math.max(0, parent.width * root.slotFillProgress)
+                          radius: parent.radius
+                          visible: slotBox.filling && root.slotFillProgress > 0
+                          color: slotBox.chord
+                            ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.42)
+                            : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.18)
+                        }
 
                         Text {
                           anchors.centerIn: parent
