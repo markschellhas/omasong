@@ -1,7 +1,7 @@
 .pragma library
 
 // Port of source LaptopKeys.h (QWERTY A=C …; Z/X octave).
-// twoOctaveKeys stays so Piano.qml loads until Task 9 switches to pianoKeysC3C5.
+// Piano.qml uses pianoKeysC3C5 (MIDI 48–72). twoOctaveKeys remains a helper.
 
 var DEFAULT_OCTAVE = 4
 var MIN_OCTAVE = 0
@@ -170,14 +170,48 @@ function getLayout(name) {
   }
 }
 
+var WHITE_KEYS_C3_C5 = 15
+
 function blackKeyLeftPercent(keyIndex, octaveOffset) {
-  var positions = {
-    "0.5": 7.14,
-    "1.5": 14.28,
-    "3.5": 35.71,
-    "4.5": 42.85,
-    "5.5": 50.0
+  var whitesBefore = {
+    "0.5": 1,
+    "1.5": 2,
+    "3.5": 4,
+    "4.5": 5,
+    "5.5": 6
   }
-  var base = positions[String(keyIndex)] || 0
-  return base + octaveOffset * (100 / 14)
+  var n = whitesBefore[String(keyIndex)]
+  if (n === undefined)
+    n = 0
+  return (n + octaveOffset) * (100 / WHITE_KEYS_C3_C5)
+}
+
+var INSTRUMENT_NAMES = ["Piano", "Electric Piano", "Organ", "Pad", "Strings"]
+
+function clampInstrument(index) {
+  var n = Number(index)
+  if (!isFinite(n))
+    return 0
+  n = Math.floor(n)
+  if (n < 0)
+    return 0
+  if (n > INSTRUMENT_NAMES.length - 1)
+    return INSTRUMENT_NAMES.length - 1
+  return n
+}
+
+function wrapInstrument(index) {
+  var n = Number(index)
+  if (!isFinite(n))
+    n = 0
+  n = Math.floor(n)
+  var len = INSTRUMENT_NAMES.length
+  n = n % len
+  if (n < 0)
+    n += len
+  return n
+}
+
+function instrumentName(index) {
+  return INSTRUMENT_NAMES[wrapInstrument(index)]
 }

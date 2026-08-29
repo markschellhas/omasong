@@ -88,7 +88,7 @@ def test_play_notes() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         wav = Path(tmp) / "cmaj.wav"
         proc = subprocess.run(
-            [sys.executable, str(ROOT / "play-notes.py"), "--midi", "60", "64", "67", "--seconds", "0.12", "--write", str(wav)],
+            [sys.executable, str(ROOT / "play-notes.py"), "--write", str(wav), "--midi", "60", "64", "67", "--instrument", "1", "--seconds", "0.12"],
             capture_output=True,
             text=True,
         )

@@ -59,6 +59,10 @@ Item {
       next.octave = raw.octave
     if (raw && raw.layout !== undefined)
       next.layout = raw.layout
+    if (raw && raw.instrument !== undefined)
+      next.instrument = KeyMap.clampInstrument(raw.instrument)
+    else
+      next.instrument = 0
     return next
   }
 
@@ -119,6 +123,7 @@ Item {
     var loop = next && next.loop !== undefined ? next.loop : (song && song.loop)
     var octave = next && next.octave !== undefined ? next.octave : (song && song.octave)
     var layout = next && next.layout !== undefined ? next.layout : (song && song.layout)
+    var instrument = next && next.instrument !== undefined ? next.instrument : (song && song.instrument)
     var normalized = Song.normalizeSong(next)
     if (loop !== undefined)
       normalized.loop = loop
@@ -126,9 +131,12 @@ Item {
       normalized.octave = octave
     if (layout !== undefined)
       normalized.layout = layout
+    if (instrument !== undefined)
+      normalized.instrument = KeyMap.clampInstrument(instrument)
     song = normalized
     clampSelection()
     persistSoon()
+    refreshPiano()
   }
 
   function persistSoon() {
@@ -143,12 +151,17 @@ Item {
     Quickshell.execDetached(["python3", writeScript, songPath, JSON.stringify(song)])
   }
 
+  function currentInstrument() {
+    return KeyMap.clampInstrument(song && song.instrument)
+  }
+
   function playFreqs(freqs, seconds) {
     if (!freqs || !freqs.length)
       return
     var cmd = ["python3", playScript]
     for (var i = 0; i < freqs.length; i++)
       cmd.push(String(freqs[i]))
+    cmd.push("--instrument", String(currentInstrument()))
     if (seconds)
       cmd.push("--seconds", String(seconds))
     Quickshell.execDetached(cmd)
@@ -160,6 +173,7 @@ Item {
     var cmd = ["python3", playScript, "--midi"]
     for (var i = 0; i < notes.length; i++)
       cmd.push(String(notes[i]))
+    cmd.push("--instrument", String(currentInstrument()))
     if (seconds)
       cmd.push("--seconds", String(seconds))
     Quickshell.execDetached(cmd)
@@ -176,9 +190,17 @@ Item {
     next.loop = fields.loop !== undefined ? !!fields.loop : !!(song && song.loop)
     next.octave = fields.octave !== undefined ? fields.octave : (song && song.octave)
     next.layout = fields.layout !== undefined ? fields.layout : (song && song.layout)
+    next.instrument = fields.instrument !== undefined ? fields.instrument : (song && song.instrument)
     if (fields.keyIndex !== undefined)
       next.keyIndex = fields.keyIndex
     updateSong(next)
+  }
+
+  function selectedSlotNotes() {
+    var chord = Song.getChord(song, selectedSection, selectedMeasure, selectedSlot)
+    if (!chord)
+      return []
+    return Model.triadMidi(chord, song.octave)
   }
 
   function refreshPiano() {
@@ -192,13 +214,38 @@ Item {
         next.push(midi)
     }
     var i
+    var selected = selectedSlotNotes()
     for (i = 0; i < soundingNotes.length; i++)
       add(soundingNotes[i])
     for (i = 0; i < previewNotes.length; i++)
       add(previewNotes[i])
+    for (i = 0; i < selected.length; i++)
+      add(selected[i])
     for (var held in heldNotes)
       add(held)
     activeNotes = next
+  }
+
+  function holdLiveNote(midi) {
+    if (heldNotes[midi] || heldNotes[String(midi)])
+      return
+    var nextHeld = {}
+    for (var held in heldNotes)
+      nextHeld[held] = heldNotes[held]
+    nextHeld[midi] = true
+    heldNotes = nextHeld
+    playMidiNotes([midi], 0.45)
+  }
+
+  function releaseLiveNote(midi) {
+    var nextHeld = {}
+    for (var held in heldNotes) {
+      if (String(held) !== String(midi))
+        nextHeld[held] = heldNotes[held]
+    }
+    heldNotes = nextHeld
+    previewNotes = previewNotes.filter(function(n) { return n !== midi })
+    refreshPiano()
   }
 
   function measureStartBeat(events, event) {
@@ -310,18 +357,7 @@ Item {
     var midi = KeyMap.midiForKey(event.text, song.octave, song.layout)
     if (midi < 0)
       return
-    if (heldNotes[midi] || heldNotes[String(midi)])
-      return
-    var nextHeld = {}
-    for (var held in heldNotes)
-      nextHeld[held] = heldNotes[held]
-    nextHeld[midi] = true
-    heldNotes = nextHeld
-    var next = activeNotes.slice()
-    if (next.indexOf(midi) === -1)
-      next.push(midi)
-    activeNotes = next
-    playMidiNotes([midi], 0.45)
+    holdLiveNote(midi)
     event.accepted = true
   }
 
@@ -333,13 +369,7 @@ Item {
     var midi = KeyMap.midiForKey(event.text, song.octave, song.layout)
     if (midi < 0)
       return
-    var nextHeld = {}
-    for (var held in heldNotes) {
-      if (String(held) !== String(midi))
-        nextHeld[held] = heldNotes[held]
-    }
-    heldNotes = nextHeld
-    refreshPiano()
+    releaseLiveNote(midi)
     event.accepted = true
   }
 
@@ -397,6 +427,7 @@ Item {
       }
       persistReady = true
       persistFallback.stop()
+      refreshPiano()
     }
     onLoadFailed: {
       persistReady = true
@@ -414,7 +445,10 @@ Item {
     }
   }
 
-  Component.onCompleted: songFile.reload()
+  Component.onCompleted: {
+    songFile.reload()
+    refreshPiano()
+  }
 
   PanelWindow {
     id: panel
@@ -650,6 +684,7 @@ Item {
             root.selectedSection = sectionIndex
             root.selectedMeasure = measureIndex
             root.selectedSlot = slotIndex
+            root.refreshPiano()
           }
         }
 
@@ -662,15 +697,13 @@ Item {
           foreground: root.foreground
           dim: root.dim
           octave: root.song.octave
+          instrument: root.song.instrument !== undefined ? root.song.instrument : 0
           layoutName: root.song.layout
           activeNotes: root.activeNotes
-          onNoteOn: function(midi) { root.playMidiNotes([midi], 0.45) }
-          onNoteOff: function(midi) {
-            root.previewNotes = root.previewNotes.filter(function(n) { return n !== midi })
-            root.refreshPiano()
-          }
-          onOctaveChangedByUser: function(value) {
-            root.applySongFields({ octave: KeyMap.clampOctave(value) })
+          onNoteOn: function(midi) { root.holdLiveNote(midi) }
+          onNoteOff: function(midi) { root.releaseLiveNote(midi) }
+          onInstrumentChangedByUser: function(value) {
+            root.applySongFields({ instrument: KeyMap.wrapInstrument(value) })
             root.refocusKeys()
           }
         }

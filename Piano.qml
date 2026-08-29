@@ -9,17 +9,18 @@ Item {
   property color foreground
   property color dim
   property int octave: 4
+  property int instrument: 0
   property string layoutName: "qwerty"
   property var activeNotes: []
-  property bool sustain: false
 
   signal noteOn(int midi)
   signal noteOff(int midi)
-  signal octaveChangedByUser(int value)
+  signal instrumentChangedByUser(int value)
 
-  readonly property var keys: Keys.twoOctaveKeys(octave)
+  readonly property var keys: Keys.pianoKeysC3C5()
   readonly property var whiteKeys: keys.filter(function(k) { return k.type === "white" })
   readonly property var blackKeys: keys.filter(function(k) { return k.type === "black" })
+  readonly property string instrumentLabel: Keys.instrumentName(root.instrument)
 
   function isActive(midi) {
     return root.activeNotes && root.activeNotes.indexOf(midi) !== -1
@@ -47,41 +48,40 @@ Item {
       }
 
       Button {
-        text: "Oct −"
+        text: "‹"
         bordered: true
+        tooltipText: "Previous sound"
         foreground: root.foreground
-        onClicked: root.octaveChangedByUser(root.octave - 1)
+        onClicked: root.instrumentChangedByUser(Keys.wrapInstrument(root.instrument - 1))
       }
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        text: "C" + root.octave
+        width: Style.space(110)
+        horizontalAlignment: Text.AlignHCenter
+        elide: Text.ElideRight
+        text: root.instrumentLabel
         color: root.foreground
         font.family: Style.font.menuFamily
         font.pixelSize: Style.font.body
       }
 
       Button {
-        text: "Oct +"
+        text: "›"
         bordered: true
+        tooltipText: "Next sound"
         foreground: root.foreground
-        onClicked: root.octaveChangedByUser(root.octave + 1)
+        onClicked: root.instrumentChangedByUser(Keys.wrapInstrument(root.instrument + 1))
       }
 
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        text: root.sustain ? "Sustain" : "Space sustain"
-        color: root.sustain ? Color.accent : root.dim
-        font.family: Style.font.menuFamily
-        font.pixelSize: Style.font.caption
-      }
+      Item { width: Style.spacing.md; height: 1 }
 
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        text: "white " + Keys.getLayout(root.layoutName).white.slice(0, 8).join(" ")
-        color: root.dim
-        font.family: Style.font.menuFamily
-        font.pixelSize: Style.font.caption
+      Button {
+        iconText: "\uf11c"
+        tooltipText: "Laptop keys"
+        bordered: true
+        foreground: root.dim
+        onClicked: { }
       }
     }
 
@@ -145,8 +145,8 @@ Item {
         delegate: Rectangle {
           required property var modelData
           required property int index
-          readonly property int octaveOffset: modelData.octave > root.octave ? 7 : 0
-          width: Math.max(18, board.width / 22)
+          readonly property int octaveOffset: (modelData.octave - 3) * 7
+          width: Math.max(18, board.width / 24)
           height: board.height * 0.62
           x: (Keys.blackKeyLeftPercent(modelData.keyIndex, octaveOffset) / 100) * board.width - width / 2
           y: 0

@@ -4,7 +4,7 @@
 Usage:
   play-notes.py hz1 [hz2 ...] [seconds]
   play-notes.py --midi n1 [n2 ...] [seconds]
-  play-notes.py --write out.wav --midi 60 64 67 0.4
+  play-notes.py --write out.wav --midi 60 64 67 --instrument 1 --seconds 0.4
 """
 
 from __future__ import annotations
@@ -22,9 +22,53 @@ import wave
 RATE = 44100
 DEFAULT_SECONDS = 0.9
 AMPLITUDE = 0.18
-ATTACK = 0.08
-RELEASE = 0.28
 PAD = 0.02
+
+# Slight harmonic / envelope differences; still additive sines.
+INSTRUMENTS = (
+    {  # 0 Piano
+        "harmonics": ((1.0, 1.0), (2.0, 0.18), (3.0, 0.07)),
+        "attack": 0.012,
+        "release": 0.32,
+        "amplitude": 0.20,
+    },
+    {  # 1 Electric Piano
+        "harmonics": ((1.0, 1.0), (2.0, 0.35), (4.0, 0.12), (7.0, 0.06)),
+        "attack": 0.008,
+        "release": 0.22,
+        "amplitude": 0.18,
+    },
+    {  # 2 Organ
+        "harmonics": ((1.0, 0.85), (2.0, 0.45), (3.0, 0.35), (4.0, 0.2), (6.0, 0.12)),
+        "attack": 0.02,
+        "release": 0.08,
+        "amplitude": 0.14,
+    },
+    {  # 3 Pad
+        "harmonics": ((1.0, 1.0), (2.0, 0.22), (3.0, 0.12), (5.0, 0.08)),
+        "attack": 0.18,
+        "release": 0.40,
+        "amplitude": 0.16,
+    },
+    {  # 4 Strings
+        "harmonics": ((1.0, 1.0), (2.0, 0.4), (3.0, 0.25), (4.0, 0.15), (5.0, 0.1)),
+        "attack": 0.14,
+        "release": 0.36,
+        "amplitude": 0.15,
+    },
+)
+
+
+def clamp_instrument(value: int) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return 0
+    if n < 0:
+        return 0
+    if n > 4:
+        return 4
+    return n
 
 
 def midi_to_hz(midi: float) -> float:
@@ -45,10 +89,13 @@ def envelope(i: int, n: int, attack: int, release: int) -> float:
     return 1.0
 
 
-def synth(freqs: list[float], seconds: float, amplitude: float = AMPLITUDE) -> list[int]:
+def synth(freqs: list[float], seconds: float, instrument: int = 0, amplitude: float | None = None) -> list[int]:
+    spec = INSTRUMENTS[clamp_instrument(instrument)]
+    if amplitude is None:
+        amplitude = spec["amplitude"]
     n = max(1, int(RATE * seconds))
-    attack = max(1, int(RATE * ATTACK))
-    release = max(1, int(RATE * RELEASE))
+    attack = max(1, int(RATE * spec["attack"]))
+    release = max(1, int(RATE * spec["release"]))
     pad = max(0, int(RATE * PAD))
     if attack + release >= n:
         attack = max(1, n // 5)
@@ -57,14 +104,17 @@ def synth(freqs: list[float], seconds: float, amplitude: float = AMPLITUDE) -> l
     voices = [hz for hz in freqs if hz > 0]
     if not voices:
         voices = [0.0]
+    harm_sum = sum(gain for _, gain in spec["harmonics"]) or 1.0
     for i in range(n):
         env = envelope(i, n, attack, release)
         sample = 0.0
         t = i / RATE
         for hz in voices:
-            if hz > 0:
-                sample += math.sin(2.0 * math.pi * hz * t)
-        val = max(-1.0, min(1.0, sample * amplitude * env))
+            if hz <= 0:
+                continue
+            for mult, gain in spec["harmonics"]:
+                sample += math.sin(2.0 * math.pi * hz * mult * t) * gain
+        val = max(-1.0, min(1.0, sample / harm_sum * amplitude * env))
         frames.append(int(val * 32767))
     frames.extend([0] * pad)
     frames[0] = 0
@@ -112,6 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--midi", action="store_true", help="treat values as MIDI note numbers")
     parser.add_argument("--write", metavar="PATH", help="write WAV instead of playing")
     parser.add_argument("--seconds", type=float, help="override duration in seconds")
+    parser.add_argument("--instrument", type=int, default=0, help="timbre 0–4")
     parser.add_argument("values", nargs="+", help="Hz values, or MIDI notes with --midi")
     return parser
 
@@ -126,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.seconds is not None:
         seconds = max(0.05, float(args.seconds))
     freqs = [midi_to_hz(n) for n in nums] if args.midi else nums
-    frames = synth(freqs, seconds)
+    frames = synth(freqs, seconds, instrument=args.instrument)
     if args.write:
         write_wav(args.write, frames)
         return 0
