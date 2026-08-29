@@ -41,6 +41,7 @@ def test_js() -> None:
         "Song": load_pragma_js(ROOT / "js" / "Song.js"),
         "Agent": load_pragma_js(ROOT / "js" / "Agent.js"),
         "Keyboard": load_pragma_js(ROOT / "js" / "Keyboard.js"),
+        "Focus": load_pragma_js(ROOT / "js" / "Focus.js"),
     }
     harness = r"""
 function assert(cond, msg) {
@@ -75,10 +76,10 @@ function assertEq(a, b, msg) {
         "const vm = require('vm');\n"
         "const sandbox = { console, Math, Date, JSON, Object, Array, String, Number, isFinite };\n"
         "vm.createContext(sandbox);\n"
-        + json.dumps(harness + libs["Model"] + libs["Chords"] + libs["Song"] + libs["Agent"] + libs["Keyboard"] + body + "\nconsole.log('js tests ok');\n")
+        + json.dumps(harness + libs["Model"] + libs["Chords"] + libs["Song"] + libs["Agent"] + libs["Keyboard"] + libs["Focus"] + body + "\nconsole.log('js tests ok');\n")
         + ".split('').length;\n"
         "vm.runInContext("
-        + json.dumps(harness + libs["Model"] + libs["Chords"] + libs["Song"] + libs["Agent"] + libs["Keyboard"] + body + "\nconsole.log('js tests ok');\n")
+        + json.dumps(harness + libs["Model"] + libs["Chords"] + libs["Song"] + libs["Agent"] + libs["Keyboard"] + libs["Focus"] + body + "\nconsole.log('js tests ok');\n")
         + ", sandbox);\n"
     )
     run_node(wrapped)

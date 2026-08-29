@@ -454,3 +454,11 @@ var savedNumeralFor = numeralFor
 numeralFor = function () { return "" }
 assertEq(progressionsJson(defaultSong()).sections[0].chords[0].numeral, "I")
 numeralFor = savedNumeralFor
+
+// Task 10: region focus cycle (j down, k up, wrap).
+assertEq(cycleNavRegion(0, 1), 1)
+assertEq(cycleNavRegion(2, 1), 0)
+assertEq(cycleNavRegion(0, -1), 2)
+assertEq(regionName(0), "Circle of fifths")
+assertEq(regionName(1), "Song structure")
+assertEq(regionName(2), "Keyboard")

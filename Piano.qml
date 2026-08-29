@@ -11,11 +11,13 @@ Item {
   property int octave: 4
   property int instrument: 0
   property string layoutName: "qwerty"
+  property bool laptopKeys: false
   property var activeNotes: []
 
   signal noteOn(int midi)
   signal noteOff(int midi)
   signal instrumentChangedByUser(int value)
+  signal laptopToggled
 
   readonly property var keys: Keys.pianoKeysC3C5()
   readonly property var whiteKeys: keys.filter(function(k) { return k.type === "white" })
@@ -78,10 +80,11 @@ Item {
 
       Button {
         iconText: "\uf11c"
-        tooltipText: "Laptop keys"
+        tooltipText: root.laptopKeys ? "Laptop keys on" : "Laptop keys"
         bordered: true
-        foreground: root.dim
-        onClicked: { }
+        selected: root.laptopKeys
+        foreground: root.laptopKeys ? root.foreground : root.dim
+        onClicked: root.laptopToggled()
       }
     }
 
@@ -122,7 +125,7 @@ Item {
 
               Text {
                 anchors.horizontalCenter: parent.horizontalCenter
-                visible: root.computerKey(modelData.midi) !== ""
+                visible: root.laptopKeys && root.computerKey(modelData.midi) !== ""
                 text: root.computerKey(modelData.midi).toUpperCase()
                 color: "#5c564c"
                 font.family: Style.font.menuFamily
@@ -160,7 +163,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 6
-            visible: root.computerKey(modelData.midi) !== ""
+            visible: root.laptopKeys && root.computerKey(modelData.midi) !== ""
             text: root.computerKey(modelData.midi).toUpperCase()
             color: "#f4f1ea"
             font.family: Style.font.menuFamily

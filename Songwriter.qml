@@ -7,6 +7,7 @@ import qs.Ui
 import "js/Model.js" as Model
 import "js/Song.js" as Song
 import "js/Keyboard.js" as KeyMap
+import "js/Focus.js" as Focus
 
 Item {
   id: root
@@ -37,7 +38,15 @@ Item {
   property var heldNotes: ({})
   property string statusText: ""
   property bool persistReady: false
+  property int navRegion: 0
   readonly property var timeline: Song.buildTimeline(song)
+  readonly property bool laptopKeys: !!(song && song.laptopKeys)
+  readonly property string headerHint: {
+    var name = Focus.regionName(navRegion)
+    if (root.laptopKeys)
+      return name + " · Laptop keys on"
+    return name
+  }
 
   readonly property int cardWidth: Math.min(Style.space(1180), panel.width - Style.gapsOut * 2)
   readonly property int cardHeight: Math.min(Style.space(820), panel.height - Style.gapsOut * 2)
@@ -63,6 +72,7 @@ Item {
       next.instrument = KeyMap.clampInstrument(raw.instrument)
     else
       next.instrument = 0
+    next.laptopKeys = !!(raw && raw.laptopKeys)
     return next
   }
 
@@ -124,6 +134,7 @@ Item {
     var octave = next && next.octave !== undefined ? next.octave : (song && song.octave)
     var layout = next && next.layout !== undefined ? next.layout : (song && song.layout)
     var instrument = next && next.instrument !== undefined ? next.instrument : (song && song.instrument)
+    var laptopKeys = next && next.laptopKeys !== undefined ? next.laptopKeys : (song && song.laptopKeys)
     var normalized = Song.normalizeSong(next)
     if (loop !== undefined)
       normalized.loop = loop
@@ -133,6 +144,7 @@ Item {
       normalized.layout = layout
     if (instrument !== undefined)
       normalized.instrument = KeyMap.clampInstrument(instrument)
+    normalized.laptopKeys = !!laptopKeys
     song = normalized
     clampSelection()
     persistSoon()
@@ -191,6 +203,7 @@ Item {
     next.octave = fields.octave !== undefined ? fields.octave : (song && song.octave)
     next.layout = fields.layout !== undefined ? fields.layout : (song && song.layout)
     next.instrument = fields.instrument !== undefined ? fields.instrument : (song && song.instrument)
+    next.laptopKeys = fields.laptopKeys !== undefined ? !!fields.laptopKeys : !!(song && song.laptopKeys)
     if (fields.keyIndex !== undefined)
       next.keyIndex = fields.keyIndex
     updateSong(next)
@@ -353,8 +366,33 @@ Item {
     playMidiNotes(Model.triadMidi(chord, song.octave), seconds)
   }
 
+  function laptopKeyText(event) {
+    if (event.key === Qt.Key_Z)
+      return "z"
+    if (event.key === Qt.Key_X)
+      return "x"
+    if (!event.text)
+      return ""
+    return String(event.text).toLowerCase()
+  }
+
   function handleComputerKey(event) {
-    var midi = KeyMap.midiForKey(event.text, song.octave, song.layout)
+    if (!root.laptopKeys)
+      return
+    var key = laptopKeyText(event)
+    if (key === "z") {
+      if (!event.isAutoRepeat)
+        applySongFields({ octave: KeyMap.shiftOctave(KeyMap.clampOctave(song.octave), -1) })
+      event.accepted = true
+      return
+    }
+    if (key === "x") {
+      if (!event.isAutoRepeat)
+        applySongFields({ octave: KeyMap.shiftOctave(KeyMap.clampOctave(song.octave), 1) })
+      event.accepted = true
+      return
+    }
+    var midi = KeyMap.midiForLaptopKey(key, song.octave)
     if (midi < 0)
       return
     holdLiveNote(midi)
@@ -366,11 +404,50 @@ Item {
       event.accepted = true
       return
     }
-    var midi = KeyMap.midiForKey(event.text, song.octave, song.layout)
+    if (!root.laptopKeys)
+      return
+    var midi = KeyMap.midiForLaptopKey(laptopKeyText(event), song.octave)
     if (midi < 0)
       return
     releaseLiveNote(midi)
     event.accepted = true
+  }
+
+  function applyHorizontalNav(delta) {
+    if (navRegion === 0) {
+      circle.step(delta)
+      return
+    }
+    if (navRegion === 2)
+      applySongFields({ instrument: KeyMap.wrapInstrument(currentInstrument() + delta) })
+  }
+
+  function handleNavKey(event) {
+    if (root.laptopKeys)
+      return
+    var down = event.key === Qt.Key_J || event.text === "j" || event.text === "J"
+    var up = event.key === Qt.Key_K || event.text === "k" || event.text === "K"
+    var left = event.key === Qt.Key_H || event.text === "h" || event.text === "H"
+    var right = event.key === Qt.Key_L || event.text === "l" || event.text === "L"
+    if (down) {
+      navRegion = Focus.cycleNavRegion(navRegion, 1)
+      event.accepted = true
+      return
+    }
+    if (up) {
+      navRegion = Focus.cycleNavRegion(navRegion, -1)
+      event.accepted = true
+      return
+    }
+    if (left) {
+      applyHorizontalNav(-1)
+      event.accepted = true
+      return
+    }
+    if (right) {
+      applyHorizontalNav(1)
+      event.accepted = true
+    }
   }
 
   Timer {
@@ -515,7 +592,10 @@ Item {
             event.accepted = true
             return
           }
-          root.handleComputerKey(event)
+          if (root.laptopKeys)
+            root.handleComputerKey(event)
+          else
+            root.handleNavKey(event)
         }
         Keys.onReleased: function(event) {
           root.handleComputerKeyUp(event)
@@ -560,7 +640,7 @@ Item {
             anchors.right: closeButton.left
             anchors.rightMargin: Style.spacing.sm
             anchors.bottom: parent.bottom
-            text: "Circle of fifths, song structure, and keyboard"
+            text: root.headerHint
             textFormat: Text.PlainText
             color: root.dim
             font.family: Style.font.menuFamily
@@ -608,103 +688,153 @@ Item {
           }
         }
 
-        CircleOfFifths {
-          id: circle
+        Item {
+          id: circleHost
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: transport.bottom
           height: content.circleHeight
-          foreground: root.foreground
-          dim: root.dim
-          faint: root.faint
-          keyIndex: root.song.keyIndex
-          onTonicPicked: function(index, ring) {
-            if (index === root.song.keyIndex)
-              return
-            var next = Song.cloneSong(root.song)
-            next.keyIndex = index
-            root.updateSong(Song.normalizeSong(next))
+
+          Rectangle {
+            anchors.fill: parent
+            visible: root.navRegion === 0
+            color: "transparent"
+            border.width: Math.max(1, Style.normalBorderWidth)
+            border.color: root.foreground
+            radius: Math.max(2, Style.cornerRadius / 2)
           }
-          onChordPreviewed: function(index, ring, triad) {
-            if (!triad)
-              return
-            root.statusText = triad.label
-            root.playMidiNotes(triad.notes, 0.7)
+
+          CircleOfFifths {
+            id: circle
+            anchors.fill: parent
+            anchors.margins: Style.space(2)
+            foreground: root.foreground
+            dim: root.dim
+            faint: root.faint
+            keyIndex: root.song.keyIndex
+            onTonicPicked: function(index, ring) {
+              if (index === root.song.keyIndex)
+                return
+              var next = Song.cloneSong(root.song)
+              next.keyIndex = index
+              root.updateSong(Song.normalizeSong(next))
+            }
+            onChordPreviewed: function(index, ring, triad) {
+              if (!triad)
+                return
+              root.statusText = triad.label
+              root.playMidiNotes(triad.notes, 0.7)
+            }
           }
         }
 
-        SongStructure {
-          id: structure
+        Item {
+          id: structureHost
           anchors.left: parent.left
           anchors.right: parent.right
-          anchors.top: circle.bottom
-          anchors.bottom: piano.top
-          foreground: root.foreground
-          dim: root.dim
-          faint: root.faint
-          sections: root.song.sections
-          selectedSection: root.selectedSection
-          selectedMeasure: root.selectedMeasure
-          selectedSlot: root.selectedSlot
-          playSection: root.playing && root.playEvent ? root.playEvent.sectionIndex : -1
-          playMeasure: root.playing && root.playEvent ? root.playEvent.measureIndex : -1
-          playSlot: root.playing && root.playEvent ? root.playEvent.slotIndex : -1
-          chordDragPayload: circle.chordDragPayload
-          onChordDropped: function(sectionIndex, measureIndex, slotIndex, chord, insertAfter) {
-            root.updateSong(Song.placeChord(root.song, sectionIndex, measureIndex, slotIndex, chord, insertAfter))
+          anchors.top: circleHost.bottom
+          anchors.bottom: pianoHost.top
+
+          Rectangle {
+            anchors.fill: parent
+            visible: root.navRegion === 1
+            color: "transparent"
+            border.width: Math.max(1, Style.normalBorderWidth)
+            border.color: root.foreground
+            radius: Math.max(2, Style.cornerRadius / 2)
           }
-          onSlotResized: function(sectionIndex, measureIndex, slotIndex, newSpan, edge) {
-            root.updateSong(Song.resizeSlot(root.song, sectionIndex, measureIndex, slotIndex, newSpan, edge))
-          }
-          onSlotCleared: function(sectionIndex, measureIndex, slotIndex) {
-            root.updateSong(Song.setChord(root.song, sectionIndex, measureIndex, slotIndex, null))
-          }
-          onSlotAuditioned: function(sectionIndex, measureIndex, slotIndex) {
-            root.auditionSlot(sectionIndex, measureIndex, slotIndex)
-          }
-          onSectionAdded: function(name) {
-            root.updateSong(Song.addSection(root.song, name))
-          }
-          onSectionRemoved: function(sectionIndex) {
-            root.updateSong(Song.removeSection(root.song, sectionIndex))
-          }
-          onSectionRenamed: function(sectionIndex, name) {
-            root.updateSong(Song.renameSection(root.song, sectionIndex, name))
-          }
-          onTimeSignatureChanged: function(sectionIndex, numerator, denominator) {
-            root.updateSong(Song.setTimeSignature(root.song, sectionIndex, {
-              numerator: numerator,
-              denominator: denominator
-            }))
-          }
-          onRowRepeatToggled: function(sectionIndex, rowIndex, shouldRepeat) {
-            root.updateSong(Song.setRowRepeat(root.song, sectionIndex, rowIndex, shouldRepeat))
-          }
-          onSlotSelected: function(sectionIndex, measureIndex, slotIndex) {
-            root.selectedSection = sectionIndex
-            root.selectedMeasure = measureIndex
-            root.selectedSlot = slotIndex
-            root.refreshPiano()
+
+          SongStructure {
+            id: structure
+            anchors.fill: parent
+            anchors.margins: Style.space(2)
+            foreground: root.foreground
+            dim: root.dim
+            faint: root.faint
+            sections: root.song.sections
+            selectedSection: root.selectedSection
+            selectedMeasure: root.selectedMeasure
+            selectedSlot: root.selectedSlot
+            playSection: root.playing && root.playEvent ? root.playEvent.sectionIndex : -1
+            playMeasure: root.playing && root.playEvent ? root.playEvent.measureIndex : -1
+            playSlot: root.playing && root.playEvent ? root.playEvent.slotIndex : -1
+            chordDragPayload: circle.chordDragPayload
+            onChordDropped: function(sectionIndex, measureIndex, slotIndex, chord, insertAfter) {
+              root.updateSong(Song.placeChord(root.song, sectionIndex, measureIndex, slotIndex, chord, insertAfter))
+            }
+            onSlotResized: function(sectionIndex, measureIndex, slotIndex, newSpan, edge) {
+              root.updateSong(Song.resizeSlot(root.song, sectionIndex, measureIndex, slotIndex, newSpan, edge))
+            }
+            onSlotCleared: function(sectionIndex, measureIndex, slotIndex) {
+              root.updateSong(Song.setChord(root.song, sectionIndex, measureIndex, slotIndex, null))
+            }
+            onSlotAuditioned: function(sectionIndex, measureIndex, slotIndex) {
+              root.auditionSlot(sectionIndex, measureIndex, slotIndex)
+            }
+            onSectionAdded: function(name) {
+              root.updateSong(Song.addSection(root.song, name))
+            }
+            onSectionRemoved: function(sectionIndex) {
+              root.updateSong(Song.removeSection(root.song, sectionIndex))
+            }
+            onSectionRenamed: function(sectionIndex, name) {
+              root.updateSong(Song.renameSection(root.song, sectionIndex, name))
+            }
+            onTimeSignatureChanged: function(sectionIndex, numerator, denominator) {
+              root.updateSong(Song.setTimeSignature(root.song, sectionIndex, {
+                numerator: numerator,
+                denominator: denominator
+              }))
+            }
+            onRowRepeatToggled: function(sectionIndex, rowIndex, shouldRepeat) {
+              root.updateSong(Song.setRowRepeat(root.song, sectionIndex, rowIndex, shouldRepeat))
+            }
+            onSlotSelected: function(sectionIndex, measureIndex, slotIndex) {
+              root.selectedSection = sectionIndex
+              root.selectedMeasure = measureIndex
+              root.selectedSlot = slotIndex
+              root.refreshPiano()
+            }
           }
         }
 
-        Piano {
-          id: piano
+        Item {
+          id: pianoHost
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.bottom: parent.bottom
           height: root.pianoHeight
-          foreground: root.foreground
-          dim: root.dim
-          octave: root.song.octave
-          instrument: root.song.instrument !== undefined ? root.song.instrument : 0
-          layoutName: root.song.layout
-          activeNotes: root.activeNotes
-          onNoteOn: function(midi) { root.holdLiveNote(midi) }
-          onNoteOff: function(midi) { root.releaseLiveNote(midi) }
-          onInstrumentChangedByUser: function(value) {
-            root.applySongFields({ instrument: KeyMap.wrapInstrument(value) })
-            root.refocusKeys()
+
+          Rectangle {
+            anchors.fill: parent
+            visible: root.navRegion === 2
+            color: "transparent"
+            border.width: Math.max(1, Style.normalBorderWidth)
+            border.color: root.foreground
+            radius: Math.max(2, Style.cornerRadius / 2)
+          }
+
+          Piano {
+            id: piano
+            anchors.fill: parent
+            anchors.margins: Style.space(2)
+            foreground: root.foreground
+            dim: root.dim
+            octave: root.song.octave
+            instrument: root.song.instrument !== undefined ? root.song.instrument : 0
+            layoutName: root.song.layout
+            laptopKeys: root.laptopKeys
+            activeNotes: root.activeNotes
+            onNoteOn: function(midi) { root.holdLiveNote(midi) }
+            onNoteOff: function(midi) { root.releaseLiveNote(midi) }
+            onInstrumentChangedByUser: function(value) {
+              root.applySongFields({ instrument: KeyMap.wrapInstrument(value) })
+              root.refocusKeys()
+            }
+            onLaptopToggled: {
+              root.applySongFields({ laptopKeys: !root.laptopKeys })
+              root.refocusKeys()
+            }
           }
         }
       }
