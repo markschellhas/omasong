@@ -29,6 +29,7 @@ Item {
   property int currentBar: 1
   property int currentBeat: 1
   property int selectedSection: 0
+  property int selectedMeasure: 0
   property int selectedSlot: 0
   property var activeNotes: []
   property bool sustain: false
@@ -75,6 +76,7 @@ Item {
     var sections = (song && song.sections) ? song.sections : []
     if (!sections.length) {
       selectedSection = 0
+      selectedMeasure = 0
       selectedSlot = 0
       return
     }
@@ -82,9 +84,14 @@ Item {
       selectedSection = sections.length - 1
     if (selectedSection < 0)
       selectedSection = 0
-    var chords = sections[selectedSection].chords || []
-    if (selectedSlot >= chords.length)
-      selectedSlot = Math.max(0, chords.length - 1)
+    var measures = sections[selectedSection].measures || []
+    if (selectedMeasure >= measures.length)
+      selectedMeasure = Math.max(0, measures.length - 1)
+    if (selectedMeasure < 0)
+      selectedMeasure = 0
+    var slots = (measures[selectedMeasure] && measures[selectedMeasure].slots) || []
+    if (selectedSlot >= slots.length)
+      selectedSlot = Math.max(0, slots.length - 1)
     if (selectedSlot < 0)
       selectedSlot = 0
   }
@@ -92,8 +99,8 @@ Item {
   function textFieldHasFocus() {
     var item = keyCatcher.activeFocusItem
     if (!item)
-      return structure.editingSection >= 0
-    return (item instanceof TextInput) || structure.editingSection >= 0
+      return structure.renaming
+    return (item instanceof TextInput) || structure.renaming
   }
 
   function refocusKeys() {
@@ -103,7 +110,16 @@ Item {
   }
 
   function updateSong(next) {
+    var loop = next && next.loop !== undefined ? next.loop : (song && song.loop)
+    var octave = next && next.octave !== undefined ? next.octave : (song && song.octave)
+    var layout = next && next.layout !== undefined ? next.layout : (song && song.layout)
     song = Song.normalizeSong(next)
+    if (loop !== undefined)
+      song.loop = loop
+    if (octave !== undefined)
+      song.octave = octave
+    if (layout !== undefined)
+      song.layout = layout
     clampSelection()
     persistSoon()
   }
@@ -149,12 +165,34 @@ Item {
     noteClear.restart()
   }
 
+  function previewChord(chord) {
+    if (!chord)
+      return
+    var notes = Model.triadMidi(chord, song.octave)
+    if (!notes || !notes.length)
+      return
+    statusText = Model.chordName(chord.rootPc, chord.quality)
+    playMidiNotes(notes, 0.7)
+  }
+
   function previewSymbol(symbol) {
     var parsed = Chords.parseChord(symbol, song.octave)
     if (!parsed.isValid || !parsed.chord || !parsed.chord.notes.length)
       return
     statusText = parsed.chord.symbol
     playMidiNotes(parsed.chord.notes, 0.7)
+  }
+
+  function applySongFields(fields) {
+    var next = Song.cloneSong(song)
+    next.loop = fields.loop !== undefined ? !!fields.loop : !!(song && song.loop)
+    next.octave = fields.octave !== undefined ? fields.octave : (song && song.octave)
+    next.layout = fields.layout !== undefined ? fields.layout : (song && song.layout)
+    if (fields.bpm !== undefined)
+      next.bpm = clampBpm(fields.bpm)
+    if (fields.keyIndex !== undefined)
+      next.keyIndex = fields.keyIndex
+    updateSong(next)
   }
 
   function startPlayback() {
@@ -286,7 +324,7 @@ Item {
     for (var i = 1; i < times.length; i++)
       sum += times[i] - times[i - 1]
     var bpm = Math.round(60000 / (sum / (times.length - 1)))
-    updateSong(Song.mergeSong(song, { bpm: clampBpm(bpm) }))
+    applySongFields({ bpm: clampBpm(bpm) })
   }
 
   Timer {
@@ -391,8 +429,8 @@ Item {
         Keys.priority: Keys.AfterItem
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
-            if (structure.editingSection >= 0) {
-              structure.cancelEdit()
+            if (structure.renaming) {
+              structure.cancelRename()
               event.accepted = true
               return
             }
@@ -495,11 +533,11 @@ Item {
           onPlayRequested: { root.startPlayback(); root.refocusKeys() }
           onStopRequested: { root.stopPlayback(); root.refocusKeys() }
           onLoopToggled: {
-            root.updateSong(Song.mergeSong(root.song, { loop: !root.song.loop }))
+            root.applySongFields({ loop: !root.song.loop })
             root.refocusKeys()
           }
           onBpmChangedByUser: function(value) {
-            root.updateSong(Song.mergeSong(root.song, { bpm: root.clampBpm(value) }))
+            root.applySongFields({ bpm: root.clampBpm(value) })
           }
           onTapTempo: { root.tapTempo(); root.refocusKeys() }
         }
@@ -540,27 +578,51 @@ Item {
           faint: root.faint
           sections: root.song.sections
           selectedSection: root.selectedSection
+          selectedMeasure: root.selectedMeasure
           selectedSlot: root.selectedSlot
           playSection: root.playing && root.playIndex >= 0 && root.playSlots[root.playIndex]
             ? root.playSlots[root.playIndex].sectionIndex : -1
+          playMeasure: root.playing && root.playIndex >= 0 && root.playSlots[root.playIndex]
+            ? root.playSlots[root.playIndex].measureIndex : -1
           playSlot: root.playing && root.playIndex >= 0 && root.playSlots[root.playIndex]
-            ? root.playSlots[root.playIndex].slot : -1
-          onChordEdited: function(sectionIndex, slot, symbol) {
-            root.updateSong(Song.setChord(root.song, sectionIndex, slot, symbol))
-            if (symbol)
-              root.previewSymbol(symbol)
+            ? (root.playSlots[root.playIndex].slotIndex !== undefined
+              ? root.playSlots[root.playIndex].slotIndex
+              : root.playSlots[root.playIndex].slot) : -1
+          chordDragPayload: circle.chordDragPayload
+          onChordDropped: function(sectionIndex, measureIndex, slotIndex, chord, insertAfter) {
+            root.updateSong(Song.placeChord(root.song, sectionIndex, measureIndex, slotIndex, chord, insertAfter))
           }
-          onChordPreviewed: function(symbol) { root.previewSymbol(symbol) }
-          onSectionAdded: root.updateSong(Song.addSection(root.song, "Verse"))
+          onSlotResized: function(sectionIndex, measureIndex, slotIndex, newSpan, edge) {
+            root.updateSong(Song.resizeSlot(root.song, sectionIndex, measureIndex, slotIndex, newSpan, edge))
+          }
+          onSlotCleared: function(sectionIndex, measureIndex, slotIndex) {
+            root.updateSong(Song.setChord(root.song, sectionIndex, measureIndex, slotIndex, null))
+          }
+          onSlotAuditioned: function(sectionIndex, measureIndex, slotIndex) {
+            root.previewChord(Song.getChord(root.song, sectionIndex, measureIndex, slotIndex))
+          }
+          onSectionAdded: function(name) {
+            root.updateSong(Song.addSection(root.song, name))
+          }
           onSectionRemoved: function(sectionIndex) {
             root.updateSong(Song.removeSection(root.song, sectionIndex))
           }
           onSectionRenamed: function(sectionIndex, name) {
             root.updateSong(Song.renameSection(root.song, sectionIndex, name))
           }
-          onSlotSelected: function(sectionIndex, slot) {
+          onTimeSignatureChanged: function(sectionIndex, numerator, denominator) {
+            root.updateSong(Song.setTimeSignature(root.song, sectionIndex, {
+              numerator: numerator,
+              denominator: denominator
+            }))
+          }
+          onRowRepeatToggled: function(sectionIndex, rowIndex, shouldRepeat) {
+            root.updateSong(Song.setRowRepeat(root.song, sectionIndex, rowIndex, shouldRepeat))
+          }
+          onSlotSelected: function(sectionIndex, measureIndex, slotIndex) {
             root.selectedSection = sectionIndex
-            root.selectedSlot = slot
+            root.selectedMeasure = measureIndex
+            root.selectedSlot = slotIndex
           }
         }
 
@@ -582,7 +644,7 @@ Item {
               root.activeNotes = root.activeNotes.filter(function(n) { return n !== midi })
           }
           onOctaveChangedByUser: function(value) {
-            root.updateSong(Song.mergeSong(root.song, { octave: KeyMap.clampOctave(value) }))
+            root.applySongFields({ octave: KeyMap.clampOctave(value) })
             root.refocusKeys()
           }
         }
