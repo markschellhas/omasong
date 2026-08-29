@@ -450,6 +450,49 @@ function slotSpanSum(measure) {
   return sum
 }
 
+function extractSlotChord(slots, slotIndex, capacity) {
+  var slot = slots[slotIndex]
+  if (!slot || !slot.chord)
+    return null
+  var chord = cloneChord(slot.chord)
+  var freed = spanOf(slot)
+  slots.splice(slotIndex, 1)
+  if (!slots.length) {
+    slots.push(emptySlot(capacity))
+    return chord
+  }
+  if (slotIndex < slots.length)
+    slots[slotIndex].span = spanOf(slots[slotIndex]) + freed
+  else
+    slots[slotIndex - 1].span = spanOf(slots[slotIndex - 1]) + freed
+  return chord
+}
+
+function moveChord(song, fromSection, fromMeasure, fromSlot, toSection, toMeasure, toSlot, insertAfter) {
+  var next = cloneSong(song)
+  if (!validSlot(next, fromSection, fromMeasure, fromSlot))
+    return next
+  if (!validSlot(next, toSection, toMeasure, toSlot))
+    return next
+  if (fromSection === toSection && fromMeasure === toMeasure && fromSlot === toSlot)
+    return next
+
+  var fromSlots = next.sections[fromSection].measures[fromMeasure].slots
+  var cap = barCapacity(next.sections[fromSection].timeSig)
+  var chord = extractSlotChord(fromSlots, fromSlot, cap)
+  if (!chord)
+    return next
+
+  var targetSlot = toSlot
+  if (fromSection === toSection && fromMeasure === toMeasure && fromSlot < toSlot)
+    targetSlot--
+
+  if (!validSlot(next, toSection, toMeasure, targetSlot))
+    return next
+  next = placeChord(next, toSection, toMeasure, targetSlot, chord, insertAfter)
+  return next
+}
+
 function placeChord(song, sectionIndex, measureIndex, slotIndex, chord, insertAfter) {
   var next = cloneSong(song)
   if (!validSlot(next, sectionIndex, measureIndex, slotIndex))

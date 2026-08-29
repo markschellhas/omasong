@@ -11,6 +11,7 @@ apps:
 user_flow:
   primary: "User → drop chord on empty slot → placeChord fills it"
   split: "User → drop onto filled chord → halve span and insert on drop side"
+  move: "User → drag filled chip → drop left/right of another chord → moveChord reorders"
   resize: "User → drag left/right edge → resizeSlot opens empty slots in freed units"
   clear: "User → hover × on filled chip or Delete/Backspace on selected slot → setChord null"
 

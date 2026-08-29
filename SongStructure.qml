@@ -21,6 +21,7 @@ Item {
   property int fillSlot: -1
   property real slotFillProgress: 0
   property string chordDragPayload: ""
+  property var internalDragSource: null
 
   readonly property int barsPerRow: 4
   readonly property int slotHeight: Style.space(40)
@@ -35,6 +36,7 @@ Item {
   property real menuY: 0
 
   signal chordDropped(int sectionIndex, int measureIndex, int slotIndex, var chord, bool insertAfter)
+  signal chordMoved(int fromSection, int fromMeasure, int fromSlot, int toSection, int toMeasure, int toSlot, bool insertAfter)
   signal slotResized(int sectionIndex, int measureIndex, int slotIndex, int newSpan, string edge)
   signal slotCleared(int sectionIndex, int measureIndex, int slotIndex)
   signal slotAuditioned(int sectionIndex, int measureIndex, int slotIndex)
@@ -115,6 +117,23 @@ Item {
     if (!payload)
       payload = root.chordDragPayload
     return Model.decodeChord(payload)
+  }
+
+  function beginSlotChordDrag(sectionIndex, measureIndex, slotIndex, chord) {
+    if (!chord)
+      return ""
+    var payload = Model.encodeChord(chord)
+    root.chordDragPayload = payload
+    root.internalDragSource = {
+      section: sectionIndex,
+      measure: measureIndex,
+      slot: slotIndex
+    }
+    return payload
+  }
+
+  function clearSlotChordDrag() {
+    root.internalDragSource = null
   }
 
   function spanFromResizeX(slots, slotIndex, fromLeft, x, width) {
@@ -375,6 +394,7 @@ Item {
                       y: 0
                       width: measureBox.slotW(slotIndex)
                       height: measureBox.height
+                      opacity: slotMouse.dragging ? 0.45 : 1
 
                       Rectangle {
                         id: slotChip
@@ -456,17 +476,36 @@ Item {
                         id: dropArea
                         anchors.fill: parent
                         keys: ["text/plain"]
+                        onEntered: function(drag) {
+                          if (drag.hasText)
+                            drag.acceptProposedAction()
+                        }
                         onDropped: function(drop) {
                           var chord = root.decodeDrop(drop)
                           if (!chord)
                             return
                           drop.acceptProposedAction()
+                          var insertAfter = drop.x >= slotBox.width * 0.5
+                          var source = root.internalDragSource
+                          if (source) {
+                            root.chordMoved(
+                              source.section,
+                              source.measure,
+                              source.slot,
+                              sectionCol.sectionIndex,
+                              measureBox.measureIndex,
+                              slotBox.slotIndex,
+                              insertAfter
+                            )
+                            root.clearSlotChordDrag()
+                            return
+                          }
                           root.chordDropped(
                             sectionCol.sectionIndex,
                             measureBox.measureIndex,
                             slotBox.slotIndex,
                             chord,
-                            drop.x >= slotBox.width * 0.5
+                            insertAfter
                           )
                         }
                       }
@@ -477,6 +516,10 @@ Item {
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton
                         preventStealing: true
+                        Drag.active: dragging
+                        Drag.dragType: Drag.Automatic
+                        Drag.proposedAction: Qt.MoveAction
+                        Drag.keys: ["text/plain"]
                         cursorShape: {
                           if (!slotBox.chord)
                             return Qt.ArrowCursor
@@ -485,11 +528,12 @@ Item {
                           var edge = edgeAt(mouseX)
                           if (edge)
                             return Qt.SizeHorCursor
-                          return Qt.PointingHandCursor
+                          return Qt.DragMoveCursor
                         }
 
                         property bool pendingClear: false
                         property bool resizing: false
+                        property bool dragging: false
                         property string pressEdge: ""
                         property real pressX: 0
                         property real pressY: 0
@@ -519,6 +563,22 @@ Item {
                         }
 
                         onPositionChanged: function(mouse) {
+                          if (pressed && slotBox.chord && !resizing && !pendingClear && !pressEdge && !dragging) {
+                            var ddx = mouse.x - pressX
+                            var ddy = mouse.y - pressY
+                            if (ddx * ddx + ddy * ddy >= 64) {
+                              var payload = root.beginSlotChordDrag(
+                                sectionCol.sectionIndex,
+                                measureBox.measureIndex,
+                                slotBox.slotIndex,
+                                slotBox.chord
+                              )
+                              if (payload) {
+                                slotMouse.Drag.mimeData = { "text/plain": payload }
+                                dragging = true
+                              }
+                            }
+                          }
                           if (!pressed || resizing || pendingClear || !pressEdge)
                             return
                           var dx = mouse.x - pressX
@@ -528,6 +588,15 @@ Item {
                         }
 
                         onReleased: function(mouse) {
+                          if (dragging) {
+                            if (root.internalDragSource
+                                && root.internalDragSource.section === sectionCol.sectionIndex
+                                && root.internalDragSource.measure === measureBox.measureIndex
+                                && root.internalDragSource.slot === slotBox.slotIndex)
+                              root.clearSlotChordDrag()
+                            dragging = false
+                            return
+                          }
                           if (pendingClear && clearHit(mouse.x, mouse.y)) {
                             root.slotCleared(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
                           } else if (resizing && pressEdge) {

@@ -156,6 +156,22 @@ var filledEmpty = placeChord(emptyBar, 0, 0, 0, { rootPc: 0, quality: "major" },
 assertEq(filledEmpty.sections[0].measures[0].slots.length, 1)
 assertEq(filledEmpty.sections[0].measures[0].slots[0].chord.rootPc, 0)
 
+// moveChord: drag a placed chord to either side of another.
+var splitBar = placeChord(cloneSong(song), 0, 0, 0, { rootPc: 5, quality: "major" }, true)
+assertEq(chordName(splitBar.sections[0].measures[0].slots[0].chord.rootPc, splitBar.sections[0].measures[0].slots[0].chord.quality), "C")
+assertEq(chordName(splitBar.sections[0].measures[0].slots[1].chord.rootPc, splitBar.sections[0].measures[0].slots[1].chord.quality), "F")
+var movedBefore = moveChord(splitBar, 0, 0, 1, 0, 0, 0, false)
+assertEq(chordName(movedBefore.sections[0].measures[0].slots[0].chord.rootPc, movedBefore.sections[0].measures[0].slots[0].chord.quality), "F")
+assertEq(chordName(movedBefore.sections[0].measures[0].slots[1].chord.rootPc, movedBefore.sections[0].measures[0].slots[1].chord.quality), "C")
+var movedAfter = moveChord(splitBar, 0, 0, 0, 0, 0, 1, true)
+assertEq(chordName(movedAfter.sections[0].measures[0].slots[0].chord.rootPc, movedAfter.sections[0].measures[0].slots[0].chord.quality), "F")
+assertEq(chordName(movedAfter.sections[0].measures[0].slots[1].chord.rootPc, movedAfter.sections[0].measures[0].slots[1].chord.quality), "C")
+var crossBar = moveChord(cloneSong(song), 0, 0, 0, 0, 1, 0, false)
+assertEq(crossBar.sections[0].measures[0].slots[0].chord, null)
+assertEq(chordName(crossBar.sections[0].measures[1].slots[0].chord.rootPc, crossBar.sections[0].measures[1].slots[0].chord.quality), "C")
+assertEq(chordName(crossBar.sections[0].measures[1].slots[1].chord.rootPc, crossBar.sections[0].measures[1].slots[1].chord.quality), "G")
+assertEq(moveChord(song, 0, 0, 0, 0, 0, 0, true).sections[0].measures[0].slots[0].chord.rootPc, 0)
+
 // C++ resizeSlot: shrink opens unit empties; grow absorbs them.
 var sResize = resizeSlot(cloneSong(song), 0, 0, 0, 2, "right")
 assertEq(sResize.sections[0].measures[0].slots.length, 3)

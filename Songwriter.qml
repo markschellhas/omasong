@@ -935,6 +935,18 @@ Item {
             onChordDropped: function(sectionIndex, measureIndex, slotIndex, chord, insertAfter) {
               root.updateSong(Song.placeChord(root.song, sectionIndex, measureIndex, slotIndex, chord, insertAfter))
             }
+            onChordMoved: function(fromSection, fromMeasure, fromSlot, toSection, toMeasure, toSlot, insertAfter) {
+              root.updateSong(Song.moveChord(
+                root.song,
+                fromSection,
+                fromMeasure,
+                fromSlot,
+                toSection,
+                toMeasure,
+                toSlot,
+                insertAfter
+              ))
+            }
             onSlotResized: function(sectionIndex, measureIndex, slotIndex, newSpan, edge) {
               root.updateSong(Song.resizeSlot(root.song, sectionIndex, measureIndex, slotIndex, newSpan, edge))
             }
