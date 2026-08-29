@@ -466,7 +466,10 @@ Item {
                         }
 
                         property bool pendingClear: false
-                        property string resizeEdge: ""
+                        property bool resizing: false
+                        property string pressEdge: ""
+                        property real pressX: 0
+                        property real pressY: 0
 
                         function edgeAt(px) {
                           if (!slotBox.chord || width < 16)
@@ -484,22 +487,32 @@ Item {
                         }
 
                         onPressed: function(mouse) {
-                          root.slotSelected(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
+                          pressX = mouse.x
+                          pressY = mouse.y
                           pendingClear = clearHit(mouse.x, mouse.y)
-                          resizeEdge = pendingClear ? "" : edgeAt(mouse.x)
-                          if (!pendingClear && slotBox.chord)
-                            root.slotAuditioned(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
+                          pressEdge = pendingClear ? "" : edgeAt(mouse.x)
+                          resizing = false
+                          root.slotSelected(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
+                        }
+
+                        onPositionChanged: function(mouse) {
+                          if (!pressed || resizing || pendingClear || !pressEdge)
+                            return
+                          var dx = mouse.x - pressX
+                          var dy = mouse.y - pressY
+                          if (dx * dx + dy * dy >= 4)
+                            resizing = true
                         }
 
                         onReleased: function(mouse) {
                           if (pendingClear && clearHit(mouse.x, mouse.y)) {
                             root.slotCleared(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
-                          } else if (resizeEdge) {
+                          } else if (resizing && pressEdge) {
                             var x = mapToItem(measureBox, mouse.x, 0).x
                             var next = root.spanFromResizeX(
                               measureBox.slots,
                               slotBox.slotIndex,
-                              resizeEdge === "left",
+                              pressEdge === "left",
                               x,
                               measureBox.width
                             )
@@ -509,11 +522,15 @@ Item {
                                 measureBox.measureIndex,
                                 slotBox.slotIndex,
                                 next,
-                                resizeEdge
+                                pressEdge
                               )
+                          } else if (slotBox.chord) {
+                            root.slotSelected(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
+                            root.slotAuditioned(sectionCol.sectionIndex, measureBox.measureIndex, slotBox.slotIndex)
                           }
                           pendingClear = false
-                          resizeEdge = ""
+                          resizing = false
+                          pressEdge = ""
                         }
                       }
                     }
