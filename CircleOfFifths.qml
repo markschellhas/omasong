@@ -253,8 +253,6 @@ Item {
           return
         hoverIndex = nextIndex
         hoverRing = nextRing
-        if (hit)
-          root.preview(hit.index, hit.ring)
       }
 
       Repeater {

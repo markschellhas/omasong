@@ -526,6 +526,17 @@ Item {
       applySongFields({ instrument: KeyMap.wrapInstrument(currentInstrument() + delta) })
   }
 
+  function previewCircleDegree(event) {
+    if (navRegion !== 0 || root.laptopKeys)
+      return false
+    var degree = Focus.degreeIndexFromKey(event.key, event.text)
+    if (degree < 0)
+      return false
+    focusRegion(0)
+    circle.previewChip(degree)
+    return true
+  }
+
   function handleNavKey(event) {
     if (root.laptopKeys)
       return
@@ -721,6 +732,8 @@ Item {
             event.accepted = true
             return
           }
+          if (root.previewCircleDegree(event))
+            return
           if (root.laptopKeys)
             root.handleComputerKey(event)
           else
