@@ -12,7 +12,7 @@ user_flow:
   primary: "User → drop chord on empty slot → placeChord fills it"
   split: "User → drop onto filled chord → halve span and insert on drop side"
   resize: "User → drag left/right edge → resizeSlot opens empty slots in freed units"
-  clear: "User → hover × on filled chip → setChord null"
+  clear: "User → hover × on filled chip or Delete/Backspace on selected slot → setChord null"
 
 related_features:
   - circle_of_fifths (drag source)
