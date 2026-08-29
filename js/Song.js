@@ -509,3 +509,69 @@ function resizeSlot(song, sectionIndex, measureIndex, slotIndex, newSpan, edge) 
     applyGrow(slots, slotIndex, span - oldSpan, fromLeft)
   return next
 }
+
+function setRowRepeat(song, sectionIndex, rowIndex, shouldRepeat) {
+  var next = cloneSong(song)
+  if (!validSection(next, sectionIndex))
+    return next
+  var section = next.sections[sectionIndex]
+  syncRowRepeats(section)
+  if (rowIndex < 0 || rowIndex >= section.rowRepeats.length)
+    return next
+  section.rowRepeats[rowIndex] = !!shouldRepeat
+  return next
+}
+
+function slotDurationBeats(span, denominator) {
+  var d = Number(denominator)
+  if (!isFinite(d) || d < 1)
+    d = 4
+  return spanOf({ span: span }) * (4 / d)
+}
+
+function appendMeasure(events, beat, section, si, mi, repeatPass) {
+  var measure = section.measures[mi]
+  var slots = measure && measure.slots ? measure.slots : []
+  var denom = section.timeSig && section.timeSig.denominator
+  for (var sl = 0; sl < slots.length; sl++) {
+    var slot = slots[sl]
+    var dur = slotDurationBeats(spanOf(slot), denom)
+    var chord = cloneChord(slot.chord)
+    events.push({
+      startBeat: beat,
+      durationBeats: dur,
+      chord: chord,
+      rest: !chord,
+      sectionIndex: si,
+      measureIndex: mi,
+      slotIndex: sl,
+      repeatPass: repeatPass
+    })
+    beat += dur
+  }
+  return beat
+}
+
+function buildTimeline(song) {
+  var events = []
+  var beat = 0
+  if (!song || !song.sections)
+    return events
+  for (var si = 0; si < song.sections.length; si++) {
+    var section = song.sections[si]
+    var n = section.measures ? section.measures.length : 0
+    var rows = rowCount(n)
+    var flags = section.rowRepeats || []
+    for (var row = 0; row < rows; row++) {
+      var start = row * BARS_PER_ROW
+      var end = Math.min(start + BARS_PER_ROW, n)
+      var repeats = row < flags.length && flags[row]
+      var passes = repeats ? 2 : 1
+      for (var pass = 0; pass < passes; pass++) {
+        for (var mi = start; mi < end; mi++)
+          beat = appendMeasure(events, beat, section, si, mi, pass)
+      }
+    }
+  }
+  return events
+}

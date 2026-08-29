@@ -262,3 +262,19 @@ assertEq(shiftOctave(4, 1), 5)
 assertEq(shiftOctave(8, 1), 8)
 assertEq(shiftOctave(0, -1), 0)
 assertEq(clampMidi(midiForLaptopKey("a", 0)), midiForLaptopKey("a", 0))
+
+var song = defaultSong()
+var tl = buildTimeline(song)
+assertEq(tl.length, 8)
+var beats = 0
+for (var i = 0; i < tl.length; i++) beats += tl[i].durationBeats
+assertEq(beats, 32)
+var repeated = setRowRepeat(cloneSong(song), 0, 0, true)
+var tl2 = buildTimeline(repeated)
+assertEq(tl2.length, 12)
+beats = 0
+for (i = 0; i < tl2.length; i++) beats += tl2[i].durationBeats
+assertEq(beats, 48)
+assertEq(tl2[4].repeatPass, 1)
+var six = setTimeSignature(cloneSong(song), 0, { numerator: 6, denominator: 8 })
+assertEq(six.sections[0].rowRepeats.length, 2)
