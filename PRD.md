@@ -1,33 +1,64 @@
-# PRD: Chords & Tabs on Omarchy
+# Chords & Tabs — Omarchy plugin
 
-**Source product (read-only):** https://github.com/markschellhas/chords-and-tabs
+**Source (read-only):** https://github.com/markschellhas/chords-and-tabs  
+**Maps:** that repo’s `.features/*.yaml` are the product. This file restates them and says how the plugin implements them. Re-pull the source and re-read the maps before changing this document or the plugin.
 
-**Authoritative feature maps:** that repo’s `.features/*.yaml` (see also `.feature-map.yaml` and `AGENTS.md`). This PRD restates those maps only.
+This repo is the Omarchy destination: plugin id `io.github.markschellhas.songwriter`, a bar chip plus overlay with **full feature parity**. Do not clone-and-edit, commit to, or open PRs against the source.
 
-This repo (`songwriter`) is the Omarchy destination: a bar chip + overlay that must implement the same product. Do not clone-and-edit, commit to, or open PRs against the source repository.
+A user who knows the JUCE app must be able to use the overlay without learning a new model. Same default song, same circle / chips / slots / piano / transport, same keys, same sounding-note highlight, same `chords-agent` contract.
 
-Implementation sequencing lives in [MIGRATION_PLAN.md](MIGRATION_PLAN.md). This document is the product contract.
+## Plugin
 
-## Product
+Third-party Omarchy plugin: `manifest.json` at git root, kinds `overlay` + `bar-widget`.
 
-Chords & Tabs is a song-builder: pick a key on the circle of fifths, drag diatonic (and neighbouring) triads into verse/chorus slots, and hear the progression with the sounding notes lit on the piano.
+```
+manifest.json          id: io.github.markschellhas.songwriter
+BarWidget.qml          bar chip → shell toggle
+Songwriter.qml         overlay host: title, hint, Esc, keys, persist, agent
+Transport.qml          Play, Stop, Loop, BPM 40–240
+CircleOfFifths.qml     rotating circle + seven I–vii° chips
+SongStructure.qml      sections / 4-bar rows / measures / slots / :||
+Piano.qml              C3–C5, SoundPicker, laptop-key glyph
+js/Model.js            MusicTheory: stations, diatonic I–vii°, encodeChord
+js/Song.js             Song + Timeline: span, meter, place/split/resize, repeats
+js/Keyboard.js         LaptopKeys.h exactly (off until toggled)
+play-notes.py          triad + live notes (PipeWire) until a richer synth exists
+tests/                 MusicTheory, Song, LaptopKeys, Timeline cases from source
+```
 
-| Layer | Source | This port |
-|-------|--------|-----------|
-| Shell | Standalone JUCE window on Omarchy (Arch + Hyprland + PipeWire) | Omarchy plugin `io.github.markschellhas.songwriter` (`overlay` + `bar-widget`) |
-| Layout (top → bottom) | Title **Chords & Tabs**, hint, TransportStrip, CircleOfFifths, SectionList, PianoKeyboard | Same regions in the overlay |
-| Apps | `chords_and_tabs`, `chords-agent` | Overlay + a CLI that speaks the same `chords-agent` contract |
+Layout, top → bottom, matching `MainComponent`:
 
-Chords are **triads** (`rootPc` + `Quality`). There is no chord-symbol text field, no typed `Cmaj7`, and changing the circle **does not transpose** placed chords. It changes the tonic, the rotated wedge, and the diatonic chip set.
+1. Title **Chords & Tabs** + hint (current `region_focus`)
+2. Transport — Play, Stop, Loop, BPM
+3. Circle of fifths — rotating circle + seven “in this key” chips
+4. Song structure — sections → 4-bar rows → measures → slots
+5. Piano — C3–C5, sound picker, optional laptop-key map
 
-## Feature set (exact)
+Bar chip toggles the overlay. Clicks outside the card pass through. Esc closes.
 
-These twelve slugs are the entire product. A feature is in scope if and only if it has a map in the source `.features/` directory.
+**License:** source application code is GPLv3-style (matching herman-band). Follow that for the port. JUCE is not vendored here.
 
-| Slug | Purpose (from the map) |
-|------|------------------------|
-| `circle_of_fifths` | Rotate the circle so the active key sits at 12 o'clock and drag diatonic or neighbouring triads into bars. |
+**One adaptation:** `audio_device` — no JUCE Device dialog. Play through PipeWire (`pw-play` / `paplay` / `aplay`). Everything else matches the maps.
+
+## Rules
+
+| Rule | Meaning |
+|------|---------|
+| Twelve features only | A capability is in scope iff it has a source `.features/*.yaml` map |
+| Triads | `{ rootPc, quality }`. No chord-symbol text field, no typed `Cmaj7` |
+| No transpose on key change | Circle changes tonic, rotation, and chips. Placed chords stay |
+| Same data | Song document, defaults, and agent JSON match the source |
+| Same keys | j/k regions, h/l key or sound, ←/→ / wheel rotate, Space play/stop, optional laptop map |
+| Do not invent a second model | Port `Song`, `Timeline`, `MusicTheory`, `LaptopKeys` by reading the source |
+
+Out of scope: editing the source repo; replacing Omarchy’s bar or shipping a second Quickshell process; tap tempo; Space-as-sustain; typed chord grids.
+
+## Feature set
+
+| Slug | Purpose |
+|------|---------|
 | `music_theory` | Name triads, diatonic sets, time signatures, and chord drag payloads for the rest of the app. |
+| `circle_of_fifths` | Rotate the circle so the active key sits at 12 o'clock and drag diatonic or neighbouring triads into bars. |
 | `song_structure` | Hold Verse/Chorus (and extra) sections whose bar count follows time signature; add, rename, or delete them. |
 | `chord_slots` | Place, split, shrink, and clear chords in bar slots (4/4 holds at most four). |
 | `row_repeats` | Toggle a :|| at the end of each 4-bar row so that row plays twice. |
@@ -39,28 +70,23 @@ These twelve slugs are the entire product. A feature is in scope if and only if 
 | `agent_api` | Let any command-running agent read placed chords and the full song from live loopback or last snapshot. |
 | `audio_device` | Pick JACK (PipeWire) or ALSA output and persist the device graph. |
 
-Omarchy adaptation for `audio_device` only: the plugin lives inside `omarchy-shell` and plays through PipeWire (`pw-play` / `paplay` / `aplay`) instead of opening JUCE’s Device dialog. All other features must match the source maps and the flows below.
-
 ---
 
-## 1. `music_theory`
+## 1. `music_theory` → `js/Model.js`
 
 **Purpose:** Name triads, diatonic sets, time signatures, and chord drag payloads for the rest of the app.
 
+**Source:** `src/theory/MusicTheory.h`, `src/theory/MusicTheory.cpp`  
 **Apps:** `chords_and_tabs`, `chords-agent`
-
-### User flows
 
 | Path | Flow |
 |------|------|
 | primary | Caller → `CircleOfFifths::diatonicTriads(index)` → seven triads sharing the relative-minor set |
 | payload | GUI → `encodeChord` / `decodeChord` → `chord\|<name>\|<rootPc>\|<qualityInt>` |
 
-### Contract
-
-- A chord is `{ rootPc: 0–11 (C=0), quality: major \| minor \| diminished \| augmented }`.
-- Name: major `C`, minor `Cm`, diminished `Cdim`, augmented `Caug`. Pitch-class names: `C Db D Eb E F F# G Ab A Bb B`.
-- Circle stations (index 0 = C / Am), clockwise fifths:
+- Chord: `{ rootPc: 0–11 (C=0), quality: major \| minor \| diminished \| augmented }`.
+- Name: major `C`, minor `Cm`, diminished `Cdim`, augmented `Caug`. Pitch classes: `C Db D Eb E F F# G Ab A Bb B`.
+- Stations, clockwise fifths, index 0 = C / Am:
 
   | index | major | relative minor |
   |------:|-------|----------------|
@@ -77,22 +103,22 @@ Omarchy adaptation for `audio_device` only: the plugin lives inside `omarchy-she
   | 10 | Bb | Gm |
   | 11 | F | Dm |
 
-- Diatonic numerals: `I`, `ii`, `iii`, `IV`, `V`, `vi`, `vii°` (major-key qualities: M m m M M m dim). Major and its relative minor share the same triad set.
-- Drag payload: `chord|<name>|<rootPc>|<qualityInt>` with `qualityInt` 0=major, 1=minor, 2=diminished, 3=augmented.
-- Time signature: `maxSlots()` = numerator (`4/4` → 4, `3/4` → 3, `2/4` → 2, `6/8` → 6). Quarter-note beats per bar = `4 * numerator / denominator`.
-- Triad MIDI is voiced inside C3–C5 (48–72).
+- Numerals: `I ii iii IV V vi vii°` (qualities M m m M M m dim). Major and relative minor share the triad set.
+- Payload: `chord|<name>|<rootPc>|<qualityInt>` (`0` major, `1` minor, `2` diminished, `3` augmented).
+- `maxSlots()` = numerator (`4/4` → 4, `3/4` → 3, `2/4` → 2, `6/8` → 6). Beats per bar = `4 * numerator / denominator`.
+- Triad MIDI voiced in C3–C5 (48–72).
+
+**Parity:** source `MusicTheoryTest` cases pass against `js/Model.js`.
 
 **Related:** `circle_of_fifths`, `chord_slots`, `song_structure`, `agent_api`, `playback`
 
 ---
 
-## 2. `circle_of_fifths`
+## 2. `circle_of_fifths` → `CircleOfFifths.qml`
 
 **Purpose:** Rotate the circle so the active key sits at 12 o'clock and drag diatonic or neighbouring triads into bars.
 
-**App:** `chords_and_tabs`
-
-### User flows
+**Source:** `src/gui/CircleOfFifthsComponent.cpp`, `src/MainComponent.cpp`
 
 | Path | Flow |
 |------|------|
@@ -100,24 +126,22 @@ Omarchy adaptation for `audio_device` only: the plugin lives inside `omarchy-she
 | drag | User → drag outer/inner wedge or DiatonicChip → `encodeChord` payload onto a bar slot |
 | preview | User → hover/press wedge → `onChordPreview` lights the piano triad |
 
-### Contract
+- 12 stations; outer = major, inner = relative minor.
+- Active wedge **rotates to 12 o’clock** (not a highlight left in place).
+- Seven chips `I ii iii IV V vi vii°`. Click = preview only. Click does not insert or transpose.
+- Key change updates tonic, rotation, and chips. Placed chords stay.
 
-- 12 stations; outer ring = major, inner ring = relative minor.
-- Active wedge is **rotated to 12 o’clock**, not merely highlighted in place.
-- Seven “in this key” chips: `I ii iii IV V vi vii°`. Click or drag; click does **not** insert or transpose the song.
-- Changing key updates tonic, rotation, and chips only. Placed chords stay where they are.
+**Parity:** rotate by click / wheel / h/l / arrows; drag starts `chord|…` payload; preview lights the piano; song chords do not move.
 
 **Related:** `music_theory`, `chord_slots`, `region_focus`, `piano_keyboard`, `agent_api`
 
 ---
 
-## 3. `song_structure`
+## 3. `song_structure` → `SongStructure.qml` + `js/Song.js`
 
 **Purpose:** Hold Verse/Chorus (and extra) sections whose bar count follows time signature; add, rename, or delete them.
 
-**App:** `chords_and_tabs`
-
-### User flows
+**Source:** `src/gui/SectionListComponent.cpp`, `src/gui/SectionComponent.cpp`, `src/model/Song.h`
 
 | Path | Flow |
 |------|------|
@@ -126,25 +150,23 @@ Omarchy adaptation for `audio_device` only: the plugin lives inside `omarchy-she
 | rename | User → double-click title, More → Rename, or Edit → Rename → `setSectionName` |
 | error | User → Delete last section → ignored (cannot delete last) |
 
-### Contract
+- Default (`Song::resetToDefault`): **120 BPM**, **4/4**, Verse `C | G | F | Dm`, Chorus `D | G | C | Em`. Four bars per 4/4 section, one full-bar slot (`span` = 4).
+- `barsForTimeSignature` = numerator: 4/4 → 4, 3/4 → 3, 2/4 → 2, 6/8 → 6.
+- Append: Verse, Chorus, Pre-Chorus, Bridge, Intro, Outro, Solo, Custom (empty → `"Section"`).
+- Edit menu: `4/4 (4 bars)`, `3/4 (3 bars)`, `2/4 (2 bars)`, `6/8 (6 bars)`.
+- Rows of `kBarsPerRow = 4`.
 
-- Default song (`Song::resetToDefault`): **120 BPM**, **4/4**, Verse `C \| G \| F \| Dm`, Chorus `D \| G \| C \| Em`. Each 4/4 section has four bars, one full-bar slot each (`span` = 4).
-- `barsForTimeSignature` = numerator: 4/4 → 4 bars, 3/4 → 3, 2/4 → 2, 6/8 → 6.
-- Append names: Verse, Chorus, Pre-Chorus, Bridge, Intro, Outro, Solo, or Custom (empty name becomes `"Section"`).
-- Time-signature menu: `4/4 (4 bars)`, `3/4 (3 bars)`, `2/4 (2 bars)`, `6/8 (6 bars)`.
-- Measures layout in rows of `kBarsPerRow = 4`.
+**Parity:** source `SongModelTest` section / meter / cannot-delete-last cases. Overlay opens on the default Verse/Chorus, not empty cells.
 
 **Related:** `chord_slots`, `row_repeats`, `playback`, `agent_api`, `music_theory`, `region_focus`
 
 ---
 
-## 4. `chord_slots`
+## 4. `chord_slots` → `SongStructure.qml` + `js/Song.js`
 
 **Purpose:** Place, split, shrink, and clear chords in bar slots (4/4 holds at most four).
 
-**App:** `chords_and_tabs`
-
-### User flows
+**Source:** `src/gui/ChordSlotComponent.cpp`, `src/gui/MeasureComponent.cpp`, `src/model/Song.h`
 
 | Path | Flow |
 |------|------|
@@ -153,48 +175,43 @@ Omarchy adaptation for `audio_device` only: the plugin lives inside `omarchy-she
 | resize | User → drag left/right edge → `resizeSlot` opens empty slots in freed units |
 | clear | User → hover × on filled chip → `setChord` nullopt |
 
-### Contract
+- Slots in a bar sum to `timeSig.maxSlots()`. 4/4 holds at most four (filled, empty, or mixed).
+- Drop on a filled chord halves it and inserts on the drop side (`placeChord(..., insertAfter)`). At max capacity, a further drop **replaces**.
+- Edge-drag snaps `span` down; freed units become empty slots on that edge.
+- Empty slots are rests. Click a filled slot auditions it. No type-to-enter symbol.
 
-- Slots in a bar sum to `timeSig.maxSlots()`. A 4/4 bar holds at most four slots (filled, empty, or mixed).
-- Drop on a filled chord halves that slot and inserts the new chord on the drop side (`placeChord(..., insertAfter)`). At max capacity, a further drop **replaces**.
-- Edge-drag snaps a filled slot to a smaller `span`; freed units become empty slots on that edge.
-- Empty slots are rests. Click a filled slot auditions it (`playback`).
-- There is no type-to-enter chord symbol.
+**Parity:** source `placeChord` / `resizeSlot` tests. QML drop, split, edge-resize, and hover-×.
 
 **Related:** `circle_of_fifths`, `song_structure`, `playback`, `music_theory`, `agent_api`
 
 ---
 
-## 5. `row_repeats`
+## 5. `row_repeats` → `SongStructure.qml` + `js/Song.js`
 
 **Purpose:** Toggle a :|| at the end of each 4-bar row so that row plays twice.
 
-**App:** `chords_and_tabs`
-
-### User flows
+**Source:** `src/gui/SectionComponent.cpp`, `src/model/Song.h`, `src/model/Timeline.cpp`
 
 | Path | Flow |
 |------|------|
 | primary | User → click RepeatSignButton → `setRowRepeat`; `buildTimeline` emits the row with `repeatPass=1` |
 
-### Contract
+- One bool per 4-bar row (`Section.rowRepeats`). Off by default.
+- 4 bars → one row; 6 bars (6/8) → two rows and two flags.
+- Timeline duplicates only the toggled row. First pass `repeatPass=0`, second `1`.
+- Default Verse+Chorus, no repeats: 8 events / 32 beats. Verse row on: 12 events / 48 beats.
 
-- One boolean per 4-bar row (`Section.rowRepeats`). Off by default.
-- 4 bars → one row; 6 bars (e.g. 6/8) → two rows and two flags.
-- Timeline duplicates only the toggled row. First pass `repeatPass=0`, second `repeatPass=1`.
-- Default Verse+Chorus (8 bars, no repeats) is 8 events / 32 quarter-note beats. Verse row on → 12 events / 48 beats.
+**Parity:** `:||` visible per row; timeline length matches source tests.
 
 **Related:** `song_structure`, `playback`, `agent_api`
 
 ---
 
-## 6. `playback`
+## 6. `playback` → `Transport.qml` + `js/Song.js`
 
 **Purpose:** Play, stop, and loop the song at BPM; audition a slot; drive playhead and sounding-note highlight.
 
-**App:** `chords_and_tabs`
-
-### User flows
+**Source:** `src/gui/TransportStrip.cpp`, `src/audio/ChordEngine.cpp`, `src/model/Timeline.h`
 
 | Path | Flow |
 |------|------|
@@ -203,78 +220,70 @@ Omarchy adaptation for `audio_device` only: the plugin lives inside `omarchy-she
 | bpm | User → BPM slider 40–240 → `Song.setBpm` and `engine.setBpm` |
 | audition | User → click filled slot → `playChord` for `slotDurationBeats`, then cancel |
 
-### Contract
+- Transport: Play, Stop, Loop, BPM 40–240. Space toggles play/stop when laptop mapping is off.
+- Events: `{ startBeat, durationBeats, chord, rest, sectionIndex, measureIndex, slotIndex, repeatPass }`.
+- Playhead on the current slot. Sounding triad lights the piano.
+- Slot duration in quarter-note beats. A full 4/4 bar is 4.0.
 
-- Transport: Play, Stop, Loop, BPM (40–240). Space toggles play/stop when laptop mapping is off.
-- Timeline events: `{ startBeat, durationBeats, chord, rest, sectionIndex, measureIndex, slotIndex, repeatPass }`.
-- Playhead sits on the current slot. Sounding triad lights the piano (`piano_keyboard`).
-- Slot duration is in quarter-note beats (same units as `PlayEvent`). A full 4/4 bar is 4.0 beats.
+**Parity:** playhead follows span, meter, and repeats. No tap tempo.
 
 **Related:** `song_structure`, `chord_slots`, `row_repeats`, `piano_keyboard`, `instruments`, `audio_device`
 
 ---
 
-## 7. `piano_keyboard`
+## 7. `piano_keyboard` → `Piano.qml`
 
 **Purpose:** Show a C3–C5 piano; click keys to play notes; light triad notes from play, preview, or selection.
 
-**App:** `chords_and_tabs`
-
-### User flows
+**Source:** `src/gui/PianoKeyboard.cpp`, `src/MainComponent.cpp`
 
 | Path | Flow |
 |------|------|
 | primary | User → mouse down on key → `onNoteOn` midi → `ChordEngine.noteOn` |
 | highlight | Timer → `soundingNotes` or selected/preview triad → `setHighlightedNotes` |
 
-### Contract
+- MIDI **48–72** (C3–C5), inclusive.
+- Click: note on while held, off on release.
+- Highlight from playback, circle preview, and selected slot.
+- Hosts SoundPicker chevrons and the laptop-key glyph.
 
-- Range: MIDI **48–72** (C3–C5), inclusive.
-- Click a key: note on while held, note off on release.
-- Highlight sources: playback sounding notes, circle preview, selected slot triad.
-- Hosts SoundPicker chevrons (`instruments`) and the keyboard-glyph toggle (`laptop_keys`).
+**Parity:** range is C3–C5, not a sliding two-octave window from C4.
 
 **Related:** `playback`, `instruments`, `laptop_keys`, `circle_of_fifths`, `region_focus`
 
 ---
 
-## 8. `instruments`
+## 8. `instruments` → `Piano.qml` + engine
 
 **Purpose:** Cycle synth timbre among Piano, Electric Piano, Organ, Pad, and Strings.
 
-**App:** `chords_and_tabs`
-
-### User flows
+**Source:** `src/audio/Instruments.h`, `src/gui/PianoKeyboard.cpp`
 
 | Path | Flow |
 |------|------|
 | primary | User → SoundPicker chevrons or h/l in Keyboard region → `cycleInstrument`; persist `prefs.xml` |
 
-### Contract
-
 - Order: Piano (0), Electric Piano, Organ, Pad, Strings. Cycle wraps.
-- Same engine timbre for playback, audition, preview, and live notes.
-- Persist last instrument with the rest of app prefs.
+- Same timbre for playback, audition, preview, and live notes.
+- Persist last instrument with song prefs. Sine stand-ins are fine until a richer synth exists.
+
+**Parity:** five named sounds, chevrons, h/l in Keyboard region, persist.
 
 **Related:** `piano_keyboard`, `playback`, `region_focus`, `audio_device`
 
 ---
 
-## 9. `laptop_keys`
+## 9. `laptop_keys` → `js/Keyboard.js` + `Piano.qml`
 
 **Purpose:** Optional QWERTY map (A=C …; Z/X octave) that plays live notes and steals H/J/K/L from vim nav.
 
-**App:** `chords_and_tabs`
-
-### User flows
+**Source:** `src/theory/LaptopKeys.h`, `src/gui/PianoKeyboard.cpp`
 
 | Path | Flow |
 |------|------|
 | primary | User → KeyboardToggle on → `handleComputerKeyPress` maps A/W/S… to MIDI |
 | octave | User → Z/X → `shiftOctave` (0–8) |
 | alt | Mapping off → j/k/h/l remain region nav |
-
-### Contract
 
 - **Off by default.** Glyph toggle turns it on.
 - Semitone from C (default octave 4 → C4 = MIDI 60):
@@ -295,44 +304,43 @@ Omarchy adaptation for `audio_device` only: the plugin lives inside `omarchy-she
   | J | 11 | B | | | |
 
 - MIDI = `(clamp(octave, 0, 8) + 1) * 12 + semitone`, clamped 0–127.
-- When on, these keys take over H/J/K/L from `region_focus`. Space is not sustain.
+- When on, these keys take over H/J/K/L. Space is not sustain.
+
+**Parity:** source `LaptopKeysTest`. Map is `LaptopKeys.h`, off until the glyph is on.
 
 **Related:** `piano_keyboard`, `playback`, `region_focus`
 
 ---
 
-## 10. `region_focus`
+## 10. `region_focus` → `Songwriter.qml`
 
 **Purpose:** j/k cycle focus among circle, song structure, and keyboard; h/l then rotate key or cycle sound.
 
-**App:** `chords_and_tabs`
-
-### User flows
+**Source:** `src/nav/RegionFocus.h`, `src/MainComponent.cpp`
 
 | Path | Flow |
 |------|------|
 | primary | User → j/k → `cycleNavRegion`; focus frame and hint text update |
 | hl | User → h/l → Circle rotates key; Keyboard cycles instrument; Song ignores |
 
-### Contract
-
-- Regions, top to bottom: Circle (0) → Song → Keyboard. j = down, k = up; wrap.
-- Display names: “Circle of fifths”, “Song structure”, “Keyboard”.
+- Regions top → bottom: Circle (0), Song, Keyboard. j = down, k = up; wrap.
+- Names: “Circle of fifths”, “Song structure”, “Keyboard”.
 - h/l: Circle = previous/next key; Keyboard = previous/next sound; Song = no-op.
-- ←/→ and wheel still rotate the circle regardless of region.
+- ←/→ and wheel still rotate the circle in any region.
 - When `laptop_keys` is on, H/J/K/L are notes, not nav.
+
+**Parity:** focus frame + hint update; h/l meaning depends on region.
 
 **Related:** `circle_of_fifths`, `instruments`, `laptop_keys`, `song_structure`, `piano_keyboard`
 
 ---
 
-## 11. `agent_api`
+## 11. `agent_api` → `Songwriter.qml` + CLI
 
 **Purpose:** Let any command-running agent read placed chords and the full song from live loopback or last snapshot.
 
+**Source:** `src/cli/chords-agent.cpp`, `src/api/AgentHttpServer.cpp`, `src/api/SongJson.cpp`, `AGENTS.md`  
 **Apps:** `chords-agent`, `chords_and_tabs`
-
-### User flows
 
 | Path | Flow |
 |------|------|
@@ -341,9 +349,7 @@ Omarchy adaptation for `audio_device` only: the plugin lives inside `omarchy-she
 | health | Agent → `chords-agent health` → exit 0 if live else 2 |
 | error | `chords-agent --live` with app down → exit 2 |
 
-### Contract
-
-Do not infer the song from source defaults. Read live state.
+Do not infer the song from defaults. Read live state.
 
 | Command | Output |
 |---------|--------|
@@ -352,10 +358,10 @@ Do not infer the song from source defaults. Read live state.
 | `chords-agent health` | Live app up (exit `0`) or not (exit `2`) |
 
 - Loopback: `127.0.0.1` port **17891**, or `$CHORDS_AGENT_PORT`, or the port in `agent-api.json`.
-- Snapshot dir: `$CHORDS_AGENT_HOME` or `~/.config/chords-and-tabs/` (macOS source path is `~/Library/Application Support/chords-and-tabs/`). The app still writes snapshots if the bind fails.
-- `--live` skips the snapshot and fails if the app is not running.
+- Snapshot: `$CHORDS_AGENT_HOME` or `~/.config/chords-and-tabs/`. Still write snapshots if the bind fails.
+- `--live` skips the snapshot and fails if the app is down.
 
-**`progressions` body** (placed chords only; empty slots omitted from `chords`, shown as `-` in `progression`; `numeral` only when diatonic in the current key):
+**`progressions`** — empty slots omitted from `chords`, shown as `-` in `progression`; `numeral` only when diatonic in the current key:
 
 ```json
 {
@@ -375,7 +381,9 @@ Do not infer the song from source defaults. Read live state.
 }
 ```
 
-**`song` body** includes every slot (`null` if empty) as `sections[].measures[].slots[]`, plus the same `key`, `bpm`, `timeSignature`, and `rowRepeats`. Chord objects in `song` omit `bar` / `slot` (position is the array index).
+**`song`** includes every slot as `sections[].measures[].slots[]` (`null` if empty), plus `key`, `bpm`, `timeSignature`, `rowRepeats`. Chord objects there omit `bar` / `slot` (position is the array index).
+
+**Parity:** `chords-agent progressions | song | health` works against the running overlay. Persist last song + key in the source JSON shape.
 
 **Related:** `song_structure`, `chord_slots`, `circle_of_fifths`, `row_repeats`, `music_theory`
 
@@ -385,23 +393,21 @@ Do not infer the song from source defaults. Read live state.
 
 **Purpose:** Pick JACK (PipeWire) or ALSA output and persist the JUCE device graph.
 
-**App:** `chords_and_tabs`
-
-### User flows
+**Source:** `src/gui/TransportStrip.cpp`, `src/MainComponent.cpp`
 
 | Path | Flow |
 |------|------|
 | primary | User → Device → AudioDeviceSelectorComponent → `device.xml` under `userApplicationDataDirectory/chords-and-tabs` |
 
-### Omarchy mapping (only intentional change)
+**Omarchy:** no Device button and no JUCE selector. Output is PipeWire via the host. Persist instrument prefs next to song state.
 
-The overlay does not open a JUCE device selector. Output is PipeWire via the plugin host (`pw-play` / `paplay` / `aplay`). Persist instrument prefs next to song state. Do not invent a second audio-device UI.
+**Parity:** play, preview, and live notes come out the speakers. Do not invent a second device UI.
 
 **Related:** `playback`, `instruments`
 
 ---
 
-## Shared song document
+## Song document
 
 ```
 Song
@@ -416,50 +422,32 @@ Song
     rowRepeats[]        # one bool per 4-bar row
 ```
 
-Default after `resetToDefault`:
-
 | Section | Meter | Bars | Slots |
 |---------|-------|------|-------|
 | Verse | 4/4 | 4 | C, G, F, Dm (one full-bar slot each) |
 | Chorus | 4/4 | 4 | D, G, C, Em (one full-bar slot each) |
 
-## Overlay chrome (not a separate feature map)
+Port `Song` + `Timeline` from `src/model/`. Do not invent a second song model.
 
-The source window also shows the title **Chords & Tabs**, a hint line that reflects `region_focus`, and Esc-equivalent close. The plugin maps that to the overlay card + bar chip. Esc closes. This is shell chrome around the twelve features, not a thirteenth feature.
+## Build order
 
-## Explicitly out of scope
+Implement against the contracts above. Each phase is done only when its parity line holds.
 
-Anything that is not one of the twelve source feature maps.
+1. **Model** — `js/Model.js`, `js/Song.js`, `js/Keyboard.js` + tests from `MusicTheoryTest`, `SongModelTest`, `LaptopKeysTest`, plus timeline / row-repeat cases. Default JSON matches source. `placeChord` / `resizeSlot` / meter bar counts match C++.
+2. **Circle + chips** — rotate to 12 o’clock; outer major / inner minor; seven chips; click = preview; drag = payload.
+3. **Song structure** — section header (name, Edit, more); 4-bar rows; `:||`; drop / split / edge-resize / clear; time-signature menu.
+4. **Transport + piano** — Play / Stop / Loop / BPM / Space; timeline playhead; C3–C5; five sounds; glyph map; Z/X; sounding-note glow.
+5. **Focus + persist + agent** — j/k regions; h/l by region; source-shaped snapshot; `chords-agent` on 17891.
+6. **Omarchy** — `omarchy plugin validate`, enable, bar chip, overlay, Esc, drag, play, agent CLI. That last check needs a real Omarchy box (`omarchy-shell` is not in this VM).
 
-- Capabilities the source app does not have (typed chord-symbol fields, key-change transpose of placed chords, tap tempo, Space-as-sustain)
-- Editing https://github.com/markschellhas/chords-and-tabs
+## Done
 
-## Acceptance
+- All twelve purposes and user flows behave as in the source maps.
+- Default song and agent JSON match the source contracts.
+- `chords-agent progressions`, `song`, and `health` work against the plugin.
+- Source repo remains untouched.
 
-A user who knows the JUCE app can use the overlay without learning a new model:
-
-1. All twelve feature purposes and user flows above behave as in the source maps.
-2. Default song and agent JSON match the source contracts.
-3. `chords-agent progressions`, `song`, and `health` work against the plugin.
-4. Source repo remains untouched.
-
-## Sources
-
-Read, do not invent a second model:
-
-| Map | Source doors |
-|-----|----------------|
-| `circle_of_fifths` | `src/gui/CircleOfFifthsComponent.cpp`, `src/MainComponent.cpp` |
-| `music_theory` | `src/theory/MusicTheory.h`, `src/theory/MusicTheory.cpp` |
-| `song_structure` | `src/gui/SectionListComponent.cpp`, `src/gui/SectionComponent.cpp`, `src/model/Song.h` |
-| `chord_slots` | `src/gui/ChordSlotComponent.cpp`, `src/gui/MeasureComponent.cpp`, `src/model/Song.h` |
-| `row_repeats` | `src/gui/SectionComponent.cpp`, `src/model/Song.h`, `src/model/Timeline.cpp` |
-| `playback` | `src/gui/TransportStrip.cpp`, `src/audio/ChordEngine.cpp`, `src/model/Timeline.h` |
-| `piano_keyboard` | `src/gui/PianoKeyboard.cpp`, `src/MainComponent.cpp` |
-| `instruments` | `src/audio/Instruments.h`, `src/gui/PianoKeyboard.cpp` |
-| `laptop_keys` | `src/theory/LaptopKeys.h`, `src/gui/PianoKeyboard.cpp` |
-| `region_focus` | `src/nav/RegionFocus.h`, `src/MainComponent.cpp` |
-| `agent_api` | `src/cli/chords-agent.cpp`, `src/api/AgentHttpServer.cpp`, `AGENTS.md` |
-| `audio_device` | `src/gui/TransportStrip.cpp`, `src/MainComponent.cpp` |
-
-Re-pull the source and re-read `.features/` before changing this PRD.
+```bash
+python3 tests/run.py
+omarchy plugin validate ~/.config/omarchy/plugins/io.github.markschellhas.songwriter
+```

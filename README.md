@@ -6,7 +6,7 @@ Source product (read-only, do not modify): https://github.com/markschellhas/chor
 
 Plugin id: `io.github.markschellhas.songwriter`
 
-Product contract: [PRD.md](PRD.md) — exactly the twelve features in the source `.features/` directory. Port sequencing: [MIGRATION_PLAN.md](MIGRATION_PLAN.md).
+Spec (exact feature maps + plugin parity): [PRD.md](PRD.md).
 
 ## Features (from the source maps)
 
@@ -48,7 +48,7 @@ o.bind("SUPER + CTRL + ALT + S", "Songwriter", "omarchy-shell shell toggle io.gi
 
 ## Status
 
-The overlay chrome is in place. Behavior is **not** yet at parity with the PRD (drag-to-slot, rotating circle, row repeats, agent CLI, and the source laptop-key map are still to do). Until the migration plan is done, treat this as a port in progress.
+The overlay chrome is in place. Behavior is not yet at full parity — implement [PRD.md](PRD.md) through the build order there.
 
 ## Remove
 
