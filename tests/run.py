@@ -38,6 +38,7 @@ def test_js() -> None:
         "Model": load_pragma_js(ROOT / "js" / "Model.js"),
         "Chords": load_pragma_js(ROOT / "js" / "Chords.js"),
         "Song": load_pragma_js(ROOT / "js" / "Song.js"),
+        "Agent": load_pragma_js(ROOT / "js" / "Agent.js"),
         "Keyboard": load_pragma_js(ROOT / "js" / "Keyboard.js"),
     }
     harness = r"""
@@ -50,14 +51,16 @@ function assertEq(a, b, msg) {
 """
     body = (ROOT / "tests" / "js_tests.js").read_text()
     script = (
-        "const Model = {};\nconst Chords = {};\nconst Song = {};\nconst Keyboard = {};\n"
-        + "void Model; void Chords; void Song; void Keyboard;\n"
+        "const Model = {};\nconst Chords = {};\nconst Song = {};\nconst Keyboard = {};\nconst Agent = {};\n"
+        + "void Model; void Chords; void Song; void Keyboard; void Agent;\n"
         + libs["Model"].replace("function ", "function ")
         + "Object.assign(Model, {PC_NAMES, station, chordName, qualityInt, encodeChord, decodeChord, diatonicTriads, numeralFor, maxSlots, beatsPerBar, triadMidi, FIFTHS, wrap, keyAt, label, diatonic, inKeyWedge, wedgeChords, triad, hitTest, PITCH_CLASS});\n"
         + libs["Chords"]
         + "Object.assign(Chords, {parseChord, isValidChord, getChordSuggestions, transposeChord, midiToHz, midiToNoteName});\n"
         + libs["Song"]
         + "Object.assign(Song, {defaultSong, normalizeSong, setChord, addSection, removeSection, flattenSlots, nextFilledSlot, transposeSong});\n"
+        + libs["Agent"]
+        + "Object.assign(Agent, {progressionsJson, songJson});\n"
         + libs["Keyboard"]
         + "Object.assign(Keyboard, {midiForKey, twoOctaveKeys, midiToHz, clampOctave, computerKeyForMidi});\n"
         + harness
@@ -71,10 +74,10 @@ function assertEq(a, b, msg) {
         "const vm = require('vm');\n"
         "const sandbox = { console, Math, Date, JSON, Object, Array, String, Number, isFinite };\n"
         "vm.createContext(sandbox);\n"
-        + json.dumps(harness + libs["Model"] + libs["Chords"] + libs["Song"] + libs["Keyboard"] + body + "\nconsole.log('js tests ok');\n")
+        + json.dumps(harness + libs["Model"] + libs["Chords"] + libs["Song"] + libs["Agent"] + libs["Keyboard"] + body + "\nconsole.log('js tests ok');\n")
         + ".split('').length;\n"
         "vm.runInContext("
-        + json.dumps(harness + libs["Model"] + libs["Chords"] + libs["Song"] + libs["Keyboard"] + body + "\nconsole.log('js tests ok');\n")
+        + json.dumps(harness + libs["Model"] + libs["Chords"] + libs["Song"] + libs["Agent"] + libs["Keyboard"] + body + "\nconsole.log('js tests ok');\n")
         + ", sandbox);\n"
     )
     run_node(wrapped)
