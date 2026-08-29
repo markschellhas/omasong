@@ -21,7 +21,7 @@ Spec (exact feature maps + plugin parity): [docs/prds/prd-chords-and-tabs-omarch
 | `piano_keyboard` | C3–C5; click keys; light triads from play, preview, or selection |
 | `instruments` | Piano, Electric Piano, Organ, Pad, Strings |
 | `laptop_keys` | Off by default; A=C, W=C♯, …; Z/X octave; steals H/J/K/L when on |
-| `region_focus` | j/k cycle Circle / Song / Keyboard; h/l rotate key or cycle sound |
+| `region_focus` | j/k or ↑/↓ cycle Circle / Song / Keyboard; h/l or ←/→ act on the highlighted region; Tab moves Song cells |
 | `agent_api` | `chords-agent progressions \| song \| health` on 127.0.0.1:17891 |
 | `audio_device` | PipeWire output in this plugin (no JUCE Device dialog) |
 

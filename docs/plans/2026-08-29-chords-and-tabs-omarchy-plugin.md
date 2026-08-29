@@ -662,7 +662,7 @@ Expected: FAIL (`cycleNavRegion` undefined)
 - Header hint = current region name (and laptop-on warning if needed).
 - Focus frame around the active region.
 - h/l: Circle → previous/next key; Keyboard → previous/next instrument; Song → no-op.
-- ←/→ and wheel still rotate the circle in any region.
+- ←/→ follow the highlighted region; the circle rotates only when highlighted.
 - Laptop glyph **off by default**. When on, `handleComputerKey` uses `midiForLaptopKey`; Z/X `shiftOctave`; H/J/K/L are notes. When off, those keys are nav. Space is never sustain.
 
 **Step 4: Run test to verify it passes**

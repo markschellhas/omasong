@@ -13,6 +13,7 @@ user_flow:
   primary: "User → + Append Section → Verse/Chorus/…/Custom → addSection with barsForTimeSignature bars"
   edit: "User → More (…) → 4/4, 3/4, 2/4, or 6/8 → setTimeSignature resizes measures"
   rename: "User → double-click title or More (…) → Rename → setSectionName"
+  tab: "User → Tab or Shift+Tab while Song structure is highlighted → move selected cell across sections"
   error: "User → Delete last section → ignored"
 
 related_features:

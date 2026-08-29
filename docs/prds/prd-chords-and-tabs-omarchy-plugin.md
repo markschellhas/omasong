@@ -19,7 +19,7 @@ Users who know the JUCE app should use the overlay without learning a new model:
 
 1. Ship all twelve source-mapped capabilities in the Omarchy overlay with behavior matching the source maps and parity tests.
 2. Match the source song document, default Verse/Chorus song, triad chord model (`{ rootPc, quality }`), and agent JSON shapes.
-3. Match source keyboard UX: j/k region focus, h/l by region, ←/→ / wheel rotate, Space play/stop, optional laptop-key map.
+3. Match source keyboard UX: j/k and ↑/↓ region focus, h/l and ←/→ by region, Space play/stop, optional laptop-key map.
 4. Expose `chords-agent progressions | song | health` against the running overlay (loopback or snapshot).
 5. Play audio through PipeWire on the host (no JUCE device dialog).
 6. Keep the source repo untouched; validate with `python3 tests/run.py` and `omarchy plugin validate`.
@@ -84,7 +84,7 @@ Bar chip toggles the overlay; clicks outside the card pass through; Esc closes.
 | `piano_keyboard` | C3–C5; click notes; triad highlight from play / preview / selection |
 | `instruments` | Piano, Electric Piano, Organ, Pad, Strings; persist with prefs |
 | `laptop_keys` | Off by default; A=C …; Z/X octave; steals H/J/K/L when on |
-| `region_focus` | j/k among Circle / Song / Keyboard; h/l rotate key or cycle sound |
+| `region_focus` | j/k or ↑/↓ among Circle / Song / Keyboard; h/l or ←/→ act by region |
 | `agent_api` | `chords-agent` read live or snapshot song/progressions/health |
 | `audio_device` | PipeWire host output only (no Device UI) — sole intentional adaptation |
 

@@ -517,6 +517,10 @@ Item {
     navRegion = index
   }
 
+  function moveNavRegion(delta) {
+    navRegion = Focus.cycleNavRegion(navRegion, delta)
+  }
+
   function applyHorizontalNav(delta) {
     if (navRegion === 0) {
       circle.step(delta)
@@ -524,6 +528,42 @@ Item {
     }
     if (navRegion === 2)
       applySongFields({ instrument: KeyMap.wrapInstrument(currentInstrument() + delta) })
+  }
+
+  function moveSelectedCell(delta) {
+    if (navRegion !== 1)
+      return false
+    var sections = song && song.sections ? song.sections : []
+    var cells = []
+    var currentIndex = -1
+    var i
+    var j
+    var k
+    for (i = 0; i < sections.length; i++) {
+      var measures = sections[i] && sections[i].measures ? sections[i].measures : []
+      for (j = 0; j < measures.length; j++) {
+        var slots = measures[j] && measures[j].slots ? measures[j].slots : []
+        for (k = 0; k < slots.length; k++) {
+          cells.push({ section: i, measure: j, slot: k })
+          if (i === selectedSection && j === selectedMeasure && k === selectedSlot)
+            currentIndex = cells.length - 1
+        }
+      }
+    }
+    if (!cells.length)
+      return false
+    var direction = Number(delta) < 0 ? -1 : 1
+    if (currentIndex < 0)
+      currentIndex = direction > 0 ? -1 : cells.length
+    var nextIndex = (currentIndex + direction) % cells.length
+    if (nextIndex < 0)
+      nextIndex += cells.length
+    var next = cells[nextIndex]
+    selectedSection = next.section
+    selectedMeasure = next.measure
+    selectedSlot = next.slot
+    refreshPiano()
+    return true
   }
 
   function clearSelectedSlot() {
@@ -556,12 +596,12 @@ Item {
     var left = event.key === Qt.Key_H || event.text === "h" || event.text === "H"
     var right = event.key === Qt.Key_L || event.text === "l" || event.text === "L"
     if (down) {
-      navRegion = Focus.cycleNavRegion(navRegion, 1)
+      moveNavRegion(1)
       event.accepted = true
       return
     }
     if (up) {
-      navRegion = Focus.cycleNavRegion(navRegion, -1)
+      moveNavRegion(-1)
       event.accepted = true
       return
     }
@@ -722,13 +762,32 @@ Item {
             return
           }
           if (event.key === Qt.Key_Left) {
-            circle.step(-1)
+            root.applyHorizontalNav(-1)
             event.accepted = true
             return
           }
           if (event.key === Qt.Key_Right) {
-            circle.step(1)
+            root.applyHorizontalNav(1)
             event.accepted = true
+            return
+          }
+          if (event.key === Qt.Key_Up) {
+            root.moveNavRegion(-1)
+            event.accepted = true
+            return
+          }
+          if (event.key === Qt.Key_Down) {
+            root.moveNavRegion(1)
+            event.accepted = true
+            return
+          }
+          if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
+            if (root.textFieldHasFocus())
+              return
+            var direction = (event.key === Qt.Key_Backtab
+              || (event.modifiers & Qt.ShiftModifier)) ? -1 : 1
+            if (root.moveSelectedCell(direction))
+              event.accepted = true
             return
           }
           if (event.key === Qt.Key_Space) {
