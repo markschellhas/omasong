@@ -13,7 +13,7 @@ user_flow:
   primary: "User → Play or Space → walk buildTimeline events"
   loop: "User → Loop toggle → wrap currentBeat"
   bpm: "User → BPM 40–240 → Song.setBpm"
-  audition: "User → click filled slot → play chord for slotDurationBeats"
+  audition: "User → click filled slot → play chord for slotDurationBeats; chip fill follows wall clock at BPM"
 
 related_features:
   - song_structure (Song as source)
@@ -26,4 +26,4 @@ related_features:
 core_components:
   - play-notes.py
 
-notes: "No tap tempo. Space is play/stop when laptop map is off, not sustain. Overlay playhead is not in CI."
+notes: "No tap tempo. Space is play/stop when laptop map is off, not sustain. Slot fill uses wall-clock BPM, not audio callbacks. Overlay playhead is not in CI."

@@ -27,6 +27,14 @@ Item {
   property var song: seedSong(Song.defaultSong())
   property bool playing: false
   property var playEvent: null
+  property int fillSection: -1
+  property int fillMeasure: -1
+  property int fillSlot: -1
+  property real fillTotalBeats: 0
+  property real fillBaseProgress: 0
+  property real fillSegmentStartedMs: 0
+  property bool fillAudition: false
+  property real slotFillProgress: 0
   property int currentBar: 1
   property real currentBeat: 0
   property int displayBeat: 1
@@ -163,6 +171,7 @@ Item {
   }
 
   function updateSong(next) {
+    var prevBpm = song && song.bpm
     var loop = next && next.loop !== undefined ? next.loop : (song && song.loop)
     var octave = next && next.octave !== undefined ? next.octave : (song && song.octave)
     var layout = next && next.layout !== undefined ? next.layout : (song && song.layout)
@@ -181,6 +190,8 @@ Item {
     normalized.laptopKeys = !!laptopKeys
     normalized.laptopOctave = KeyMap.clampOctave(laptopOctave)
     song = normalized
+    if (fillSection >= 0 && prevBpm !== undefined && normalized.bpm !== prevBpm)
+      retimeFillForBpm()
     clampSelection()
     persistSoon()
     refreshPiano()
@@ -321,6 +332,49 @@ Item {
       && a.repeatPass === b.repeatPass)
   }
 
+  function clearSlotFill() {
+    fillSection = -1
+    fillMeasure = -1
+    fillSlot = -1
+    fillTotalBeats = 0
+    fillBaseProgress = 0
+    fillSegmentStartedMs = 0
+    fillAudition = false
+    slotFillProgress = 0
+    fillClock.stop()
+  }
+
+  function updateFillProgress() {
+    if (fillSection < 0 || !(fillTotalBeats > 0)) {
+      slotFillProgress = 0
+      return
+    }
+    var segmentBeats = (Date.now() - fillSegmentStartedMs) / 1000 * song.bpm / 60
+    slotFillProgress = Math.min(1, fillBaseProgress + segmentBeats / fillTotalBeats)
+    if (slotFillProgress >= 1 && fillAudition)
+      clearSlotFill()
+  }
+
+  function beginSlotFill(sectionIndex, measureIndex, slotIndex, beats, audition) {
+    fillSection = sectionIndex
+    fillMeasure = measureIndex
+    fillSlot = slotIndex
+    fillAudition = !!audition
+    fillTotalBeats = beats
+    fillBaseProgress = 0
+    fillSegmentStartedMs = Date.now()
+    slotFillProgress = 0
+    fillClock.start()
+  }
+
+  function retimeFillForBpm() {
+    if (fillSection < 0 || !(fillTotalBeats > 0))
+      return
+    updateFillProgress()
+    fillBaseProgress = slotFillProgress
+    fillSegmentStartedMs = Date.now()
+  }
+
   function applySounding(event) {
     if (!event || event.rest || !event.chord) {
       soundingNotes = []
@@ -348,11 +402,16 @@ Item {
     playEvent = event
     if (changed) {
       var name = (song.sections[event.sectionIndex] || {}).name || ""
-      if (event.rest || !event.chord)
+      if (event.rest || !event.chord) {
         statusText = name ? name + " · Rest" : "Rest"
-      else
+        clearSlotFill()
+      } else {
         statusText = name + " · " + Model.chordName(event.chord.rootPc, event.chord.quality)
+        beginSlotFill(event.sectionIndex, event.measureIndex, event.slotIndex, event.durationBeats, false)
+      }
       applySounding(event)
+    } else if (playing && !event.rest && event.chord) {
+      updateFillProgress()
     }
     displayBeat = Math.max(1, Math.floor(currentBeat - measureStartBeat(timeline, event)) + 1)
   }
@@ -389,6 +448,7 @@ Item {
     displayBeat = 1
     soundingNotes = []
     transportTimer.stop()
+    clearSlotFill()
     refreshPiano()
   }
 
@@ -397,11 +457,12 @@ Item {
     var chord = Song.getChord(song, sectionIndex, measureIndex, slotIndex)
     if (!chord)
       return
-    var section = song.sections[sectionIndex]
-    var slot = section.measures[measureIndex].slots[slotIndex]
-    var beats = Song.slotDurationBeats(slot.span, section.timeSig && section.timeSig.denominator)
+    var beats = Song.slotDurationBeatsAt(song, sectionIndex, measureIndex, slotIndex)
+    if (!(beats > 0))
+      return
     var seconds = Song.beatsToSeconds(beats, song.bpm)
     statusText = Model.chordName(chord.rootPc, chord.quality)
+    beginSlotFill(sectionIndex, measureIndex, slotIndex, beats, true)
     playMidiNotes(Model.triadMidi(chord), seconds)
   }
 
@@ -476,6 +537,17 @@ Item {
     return true
   }
 
+  function previewCircleDegree(event) {
+    if (navRegion !== 0 || root.laptopKeys)
+      return false
+    var degree = Focus.degreeIndexFromKey(event.key, event.text)
+    if (degree < 0)
+      return false
+    focusRegion(0)
+    circle.previewChip(degree)
+    return true
+  }
+
   function handleNavKey(event) {
     if (root.laptopKeys)
       return
@@ -517,6 +589,14 @@ Item {
       root.previewNotes = []
       root.refreshPiano()
     }
+  }
+
+  Timer {
+    id: fillClock
+    interval: 16
+    repeat: true
+    running: false
+    onTriggered: root.updateFillProgress()
   }
 
   Timer {
@@ -668,6 +748,8 @@ Item {
               event.accepted = true
             return
           }
+          if (root.previewCircleDegree(event))
+            return
           if (root.laptopKeys)
             root.handleComputerKey(event)
           else
@@ -845,6 +927,10 @@ Item {
             playSection: root.playing && root.playEvent ? root.playEvent.sectionIndex : -1
             playMeasure: root.playing && root.playEvent ? root.playEvent.measureIndex : -1
             playSlot: root.playing && root.playEvent ? root.playEvent.slotIndex : -1
+            fillSection: root.fillSection
+            fillMeasure: root.fillMeasure
+            fillSlot: root.fillSlot
+            slotFillProgress: root.slotFillProgress
             chordDragPayload: circle.chordDragPayload
             onChordDropped: function(sectionIndex, measureIndex, slotIndex, chord, insertAfter) {
               root.updateSong(Song.placeChord(root.song, sectionIndex, measureIndex, slotIndex, chord, insertAfter))

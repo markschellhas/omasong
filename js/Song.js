@@ -529,6 +529,14 @@ function slotDurationBeats(span, denominator) {
   return spanOf({ span: span }) * (4 / d)
 }
 
+function slotDurationBeatsAt(song, sectionIndex, measureIndex, slotIndex) {
+  if (!validSlot(song, sectionIndex, measureIndex, slotIndex))
+    return 0
+  var section = song.sections[sectionIndex]
+  var slot = section.measures[measureIndex].slots[slotIndex]
+  return slotDurationBeats(spanOf(slot), section.timeSig && section.timeSig.denominator)
+}
+
 function appendMeasure(events, beat, section, si, mi, repeatPass) {
   var measure = section.measures[mi]
   var slots = measure && measure.slots ? measure.slots : []
