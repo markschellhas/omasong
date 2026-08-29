@@ -358,6 +358,26 @@ while (clockBeat < timelineDurationBeats(sixTl)) {
   clockBeat += beatTickDelta(sixTl, clockBeat)
 }
 assert(clockHits["0.5"], "beat clock hits 0.5")
+assertEq(beatTickDelta([{ startBeat: 0, durationBeats: 4 }], 0), 1)
+assertEq(beatTickDelta([{ startBeat: 0.5, durationBeats: 1.5 }], 0.5), 0.5)
+assertEq(beatTickDelta([{ startBeat: 0.5, durationBeats: 0.5 }], 0.5), 0.5)
+var sixTwo = resizeSlot(cloneSong(six), 0, 0, 0, 3, "right")
+sixTwo = resizeSlot(sixTwo, 0, 0, 1, 3, "right")
+assertEq(sixTwo.sections[0].measures[0].slots.length, 2)
+assertEq(sixTwo.sections[0].measures[0].slots[0].span, 3)
+assertEq(sixTwo.sections[0].measures[0].slots[1].span, 3)
+var twoTl = buildTimeline(sixTwo)
+assertEq(twoTl[0].durationBeats, 1.5)
+assertEq(twoTl[1].startBeat, 1.5)
+assertEq(twoTl[1].durationBeats, 1.5)
+var twoClock = []
+var twoBeat = 0
+while (twoBeat < 3) {
+  twoClock.push(twoBeat)
+  twoBeat += beatTickDelta(twoTl, twoBeat)
+}
+twoClock.push(twoBeat)
+assertEq(twoClock.join(","), "0,1,1.5,2,3")
 
 // Task 5: Agent JSON (progressions omit empties; song includes every slot).
 var song = defaultSong()

@@ -612,8 +612,9 @@ function beatTickDelta(events, beat) {
   if (!event)
     return 0
   var remaining = event.startBeat + event.durationBeats - beat
-  var nextStart = event.startBeat + event.durationBeats
-  var toNext = nextStart - beat
-  var delta = Math.min(1, remaining, toNext)
+  var onInteger = Math.abs(beat - Math.round(beat)) < 1e-9
+  var nextInteger = onInteger ? Math.round(beat) + 1 : Math.ceil(beat)
+  var toInteger = nextInteger - beat
+  var delta = Math.min(1, remaining, toInteger)
   return delta > 0 ? delta : 0
 }

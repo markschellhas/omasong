@@ -286,6 +286,7 @@ Item {
     playing = false
     playEvent = null
     currentBeat = 0
+    currentBar = 1
     displayBeat = 1
     soundingNotes = []
     transportTimer.stop()
