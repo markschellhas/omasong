@@ -137,11 +137,27 @@ def test_manifest() -> None:
     print("manifest ok")
 
 
+def test_agent() -> None:
+    proc = subprocess.run(
+        [sys.executable, str(ROOT / "tests" / "agent_tests.py")],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        sys.stderr.write(proc.stdout)
+        sys.stderr.write(proc.stderr)
+        raise SystemExit(proc.returncode or 1)
+    if proc.stdout.strip():
+        print(proc.stdout, end="")
+
+
 def main() -> int:
     test_manifest()
     test_write_json()
     test_play_notes()
     test_js()
+    test_agent()
     print("all tests passed")
     return 0
 

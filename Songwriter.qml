@@ -6,6 +6,7 @@ import qs.Commons
 import qs.Ui
 import "js/Model.js" as Model
 import "js/Song.js" as Song
+import "js/Agent.js" as Agent
 import "js/Keyboard.js" as KeyMap
 import "js/Focus.js" as Focus
 
@@ -59,6 +60,24 @@ Item {
   readonly property string songPath: Quickshell.env("HOME") + "/.local/state/omarchy/songwriter/song.json"
   readonly property string writeScript: decodeURIComponent(
     Qt.resolvedUrl("write-json.py").toString().replace(/^file:\/\//, ""))
+  readonly property string agentServerScript: decodeURIComponent(
+    Qt.resolvedUrl("agent-server.py").toString().replace(/^file:\/\//, ""))
+  readonly property string agentHome: {
+    var override = Quickshell.env("CHORDS_AGENT_HOME")
+    if (override && String(override).length)
+      return override
+    return Quickshell.env("HOME") + "/.config/chords-and-tabs"
+  }
+  readonly property int agentPort: {
+    var env = Quickshell.env("CHORDS_AGENT_PORT")
+    var n = Number(env)
+    if (env && env.length && isFinite(n) && n >= 0 && n <= 65535)
+      return Math.round(n)
+    return 17891
+  }
+  readonly property string agentSongPath: agentHome + "/song.json"
+  readonly property string agentProgressionsPath: agentHome + "/progressions.json"
+  readonly property string agentApiPath: agentHome + "/agent-api.json"
   function seedSong(raw) {
     var next = Song.normalizeSong(raw)
     if (raw && raw.loop !== undefined)
@@ -167,6 +186,13 @@ Item {
     if (!persistReady)
       return
     Quickshell.execDetached(["python3", writeScript, songPath, JSON.stringify(song)])
+    Quickshell.execDetached(["python3", writeScript, agentSongPath, JSON.stringify(Agent.songJson(song))])
+    Quickshell.execDetached(["python3", writeScript, agentProgressionsPath, JSON.stringify(Agent.progressionsJson(song))])
+    Quickshell.execDetached(["python3", writeScript, agentApiPath, JSON.stringify({ port: agentPort })])
+  }
+
+  function startAgentServer() {
+    Quickshell.execDetached(["python3", agentServerScript, "--home", agentHome, "--port", String(agentPort)])
   }
 
   function currentInstrument() {
@@ -508,18 +534,25 @@ Item {
     onLoaded: {
       try {
         var raw = text()
-        if (raw && String(raw).trim())
-          song = seedSong(JSON.parse(raw))
+        if (raw && String(raw).trim()) {
+          var parsed = JSON.parse(raw)
+          if (Song.looksLikeSongDocument(parsed))
+            song = seedSong(parsed)
+          else
+            song = seedSong(Song.defaultSong())
+        }
       } catch (e) {
         song = seedSong(Song.defaultSong())
       }
       persistReady = true
       persistFallback.stop()
+      persistNow()
       refreshPiano()
     }
     onLoadFailed: {
       persistReady = true
       persistFallback.stop()
+      persistNow()
     }
   }
 
@@ -528,12 +561,15 @@ Item {
     interval: 2000
     running: true
     onTriggered: {
-      if (!persistReady)
+      if (!persistReady) {
         persistReady = true
+        persistNow()
+      }
     }
   }
 
   Component.onCompleted: {
+    startAgentServer()
     songFile.reload()
     refreshPiano()
   }
