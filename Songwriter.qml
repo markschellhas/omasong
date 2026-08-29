@@ -41,6 +41,7 @@ Item {
   property int navRegion: 0
   readonly property var timeline: Song.buildTimeline(song)
   readonly property bool laptopKeys: !!(song && song.laptopKeys)
+  readonly property int laptopOctave: KeyMap.clampOctave(song && song.laptopOctave)
   readonly property string headerHint: {
     var name = Focus.regionName(navRegion)
     if (root.laptopKeys)
@@ -73,6 +74,9 @@ Item {
     else
       next.instrument = 0
     next.laptopKeys = !!(raw && raw.laptopKeys)
+    next.laptopOctave = raw && raw.laptopOctave !== undefined
+      ? KeyMap.clampOctave(raw.laptopOctave)
+      : KeyMap.DEFAULT_OCTAVE
     return next
   }
 
@@ -135,6 +139,7 @@ Item {
     var layout = next && next.layout !== undefined ? next.layout : (song && song.layout)
     var instrument = next && next.instrument !== undefined ? next.instrument : (song && song.instrument)
     var laptopKeys = next && next.laptopKeys !== undefined ? next.laptopKeys : (song && song.laptopKeys)
+    var laptopOctave = next && next.laptopOctave !== undefined ? next.laptopOctave : (song && song.laptopOctave)
     var normalized = Song.normalizeSong(next)
     if (loop !== undefined)
       normalized.loop = loop
@@ -145,6 +150,7 @@ Item {
     if (instrument !== undefined)
       normalized.instrument = KeyMap.clampInstrument(instrument)
     normalized.laptopKeys = !!laptopKeys
+    normalized.laptopOctave = KeyMap.clampOctave(laptopOctave)
     song = normalized
     clampSelection()
     persistSoon()
@@ -204,6 +210,7 @@ Item {
     next.layout = fields.layout !== undefined ? fields.layout : (song && song.layout)
     next.instrument = fields.instrument !== undefined ? fields.instrument : (song && song.instrument)
     next.laptopKeys = fields.laptopKeys !== undefined ? !!fields.laptopKeys : !!(song && song.laptopKeys)
+    next.laptopOctave = fields.laptopOctave !== undefined ? fields.laptopOctave : (song && song.laptopOctave)
     if (fields.keyIndex !== undefined)
       next.keyIndex = fields.keyIndex
     updateSong(next)
@@ -213,7 +220,7 @@ Item {
     var chord = Song.getChord(song, selectedSection, selectedMeasure, selectedSlot)
     if (!chord)
       return []
-    return Model.triadMidi(chord, song.octave)
+    return Model.triadMidi(chord)
   }
 
   function refreshPiano() {
@@ -288,7 +295,7 @@ Item {
       refreshPiano()
       return
     }
-    soundingNotes = Model.triadMidi(event.chord, song.octave)
+    soundingNotes = Model.triadMidi(event.chord)
     playMidiNotes(soundingNotes, Song.beatsToSeconds(event.durationBeats, song.bpm))
   }
 
@@ -363,7 +370,7 @@ Item {
     var beats = Song.slotDurationBeats(slot.span, section.timeSig && section.timeSig.denominator)
     var seconds = Song.beatsToSeconds(beats, song.bpm)
     statusText = Model.chordName(chord.rootPc, chord.quality)
-    playMidiNotes(Model.triadMidi(chord, song.octave), seconds)
+    playMidiNotes(Model.triadMidi(chord), seconds)
   }
 
   function laptopKeyText(event) {
@@ -382,17 +389,17 @@ Item {
     var key = laptopKeyText(event)
     if (key === "z") {
       if (!event.isAutoRepeat)
-        applySongFields({ octave: KeyMap.shiftOctave(KeyMap.clampOctave(song.octave), -1) })
+        applySongFields({ laptopOctave: KeyMap.shiftOctave(root.laptopOctave, -1) })
       event.accepted = true
       return
     }
     if (key === "x") {
       if (!event.isAutoRepeat)
-        applySongFields({ octave: KeyMap.shiftOctave(KeyMap.clampOctave(song.octave), 1) })
+        applySongFields({ laptopOctave: KeyMap.shiftOctave(root.laptopOctave, 1) })
       event.accepted = true
       return
     }
-    var midi = KeyMap.midiForLaptopKey(key, song.octave)
+    var midi = KeyMap.midiForLaptopKey(key, root.laptopOctave)
     if (midi < 0)
       return
     holdLiveNote(midi)
@@ -406,11 +413,15 @@ Item {
     }
     if (!root.laptopKeys)
       return
-    var midi = KeyMap.midiForLaptopKey(laptopKeyText(event), song.octave)
+    var midi = KeyMap.midiForLaptopKey(laptopKeyText(event), root.laptopOctave)
     if (midi < 0)
       return
     releaseLiveNote(midi)
     event.accepted = true
+  }
+
+  function focusRegion(index) {
+    navRegion = index
   }
 
   function applyHorizontalNav(delta) {
@@ -695,6 +706,11 @@ Item {
           anchors.top: transport.bottom
           height: content.circleHeight
 
+          MouseArea {
+            anchors.fill: parent
+            onPressed: root.focusRegion(0)
+          }
+
           Rectangle {
             anchors.fill: parent
             visible: root.navRegion === 0
@@ -713,6 +729,7 @@ Item {
             faint: root.faint
             keyIndex: root.song.keyIndex
             onTonicPicked: function(index, ring) {
+              root.focusRegion(0)
               if (index === root.song.keyIndex)
                 return
               var next = Song.cloneSong(root.song)
@@ -720,6 +737,7 @@ Item {
               root.updateSong(Song.normalizeSong(next))
             }
             onChordPreviewed: function(index, ring, triad) {
+              root.focusRegion(0)
               if (!triad)
                 return
               root.statusText = triad.label
@@ -734,6 +752,11 @@ Item {
           anchors.right: parent.right
           anchors.top: circleHost.bottom
           anchors.bottom: pianoHost.top
+
+          MouseArea {
+            anchors.fill: parent
+            onPressed: root.focusRegion(1)
+          }
 
           Rectangle {
             anchors.fill: parent
@@ -790,6 +813,7 @@ Item {
               root.updateSong(Song.setRowRepeat(root.song, sectionIndex, rowIndex, shouldRepeat))
             }
             onSlotSelected: function(sectionIndex, measureIndex, slotIndex) {
+              root.focusRegion(1)
               root.selectedSection = sectionIndex
               root.selectedMeasure = measureIndex
               root.selectedSlot = slotIndex
@@ -804,6 +828,11 @@ Item {
           anchors.right: parent.right
           anchors.bottom: parent.bottom
           height: root.pianoHeight
+
+          MouseArea {
+            anchors.fill: parent
+            onPressed: root.focusRegion(2)
+          }
 
           Rectangle {
             anchors.fill: parent
@@ -820,18 +849,23 @@ Item {
             anchors.margins: Style.space(2)
             foreground: root.foreground
             dim: root.dim
-            octave: root.song.octave
+            octave: root.laptopOctave
             instrument: root.song.instrument !== undefined ? root.song.instrument : 0
             layoutName: root.song.layout
             laptopKeys: root.laptopKeys
             activeNotes: root.activeNotes
-            onNoteOn: function(midi) { root.holdLiveNote(midi) }
+            onNoteOn: function(midi) {
+              root.focusRegion(2)
+              root.holdLiveNote(midi)
+            }
             onNoteOff: function(midi) { root.releaseLiveNote(midi) }
             onInstrumentChangedByUser: function(value) {
+              root.focusRegion(2)
               root.applySongFields({ instrument: KeyMap.wrapInstrument(value) })
               root.refocusKeys()
             }
             onLaptopToggled: {
+              root.focusRegion(2)
               root.applySongFields({ laptopKeys: !root.laptopKeys })
               root.refocusKeys()
             }
