@@ -337,3 +337,14 @@ assertEq(progressionsJson(repeated).sections[0].rowRepeats[0], true)
 var sixDoc = songJson(setTimeSignature(cloneSong(song), 0, { numerator: 6, denominator: 8 }))
 assertEq(sixDoc.sections[0].timeSignature, "6/8")
 assertEq(sixDoc.sections[0].rowRepeats.length, 2)
+
+assertEq(progressionsJson({}).bpm, 120)
+assertEq(songJson({}).bpm, 120)
+var wrappedPc = cloneSong(song)
+wrappedPc.sections[0].measures[0].slots[0].chord = { rootPc: 12, quality: "major" }
+assertEq(progressionsJson(wrappedPc).sections[0].chords[0].numeral, "I")
+assertEq(progressionsJson(wrappedPc).sections[0].chords[0].rootPc, 0)
+var savedNumeralFor = numeralFor
+numeralFor = function () { return "" }
+assertEq(progressionsJson(defaultSong()).sections[0].chords[0].numeral, "I")
+numeralFor = savedNumeralFor

@@ -20,7 +20,8 @@ def load_pragma_js(path: Path) -> str:
 
 def run_node(script: str) -> None:
     proc = subprocess.run(
-        ["node", "--input-type=commonjs", "-e", script],
+        ["node", "--input-type=commonjs"],
+        input=script,
         cwd=ROOT,
         capture_output=True,
         text=True,

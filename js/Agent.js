@@ -1,11 +1,16 @@
 .pragma library
 
 // Port of source SongJson (progressions + full song document).
-// Prefer Model.js / Song.js globals when the test VM has already loaded them.
+// Diatonic numerals are local: QML pragma libraries cannot see Model.js.
 
-function wrapKey(index) {
-  if (typeof wrap === "function")
-    return wrap(index)
+var AGENT_PC_NAMES = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+var AGENT_NUMERALS = ["I", "ii", "iii", "IV", "V", "vi", "vii°"]
+var AGENT_MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11]
+var AGENT_MAJOR_QUALITIES = ["major", "minor", "minor", "major", "major", "minor", "diminished"]
+var AGENT_MAJOR_NAMES = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"]
+var AGENT_MINOR_NAMES = ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "D#m", "Bbm", "Fm", "Cm", "Gm", "Dm"]
+
+function agentWrapKey(index) {
   var n = Number(index)
   if (!isFinite(n))
     return 0
@@ -14,9 +19,7 @@ function wrapKey(index) {
   return m < 0 ? m + 12 : m
 }
 
-function wrapPc(pc) {
-  if (typeof wrapPitchClass === "function")
-    return wrapPitchClass(pc)
+function agentWrapPc(pc) {
   var n = Number(pc)
   if (!isFinite(n))
     return 0
@@ -26,15 +29,10 @@ function wrapPc(pc) {
 }
 
 function pcName(pc) {
-  var names = typeof PC_NAMES !== "undefined"
-    ? PC_NAMES
-    : ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
-  return names[wrapPc(pc)]
+  return AGENT_PC_NAMES[agentWrapPc(pc)]
 }
 
 function nameOfChord(chord) {
-  if (typeof chordName === "function")
-    return chordName(chord.rootPc, chord.quality)
   var n = pcName(chord.rootPc)
   if (chord.quality === "minor")
     return n + "m"
@@ -53,23 +51,24 @@ function qualityOf(chord) {
 }
 
 function numeralOf(chord, keyIndex) {
-  if (typeof numeralFor === "function")
-    return numeralFor(chord, keyIndex)
+  if (!chord)
+    return ""
+  var tonic = agentWrapPc(7 * agentWrapKey(keyIndex))
+  var pc = agentWrapPc(chord.rootPc)
+  var quality = qualityOf(chord)
+  for (var i = 0; i < 7; i++) {
+    if (agentWrapPc(tonic + AGENT_MAJOR_SCALE[i]) === pc && AGENT_MAJOR_QUALITIES[i] === quality)
+      return AGENT_NUMERALS[i]
+  }
   return ""
 }
 
 function keyStation(index) {
-  if (typeof station === "function")
-    return station(index)
-  var majors = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"]
-  var minors = ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "D#m", "Bbm", "Fm", "Cm", "Gm", "Dm"]
-  var i = wrapKey(index)
-  return { major: majors[i], relativeMinor: minors[i] }
+  var i = agentWrapKey(index)
+  return { major: AGENT_MAJOR_NAMES[i], relativeMinor: AGENT_MINOR_NAMES[i] }
 }
 
 function rowsFor(measureCount) {
-  if (typeof rowCount === "function")
-    return rowCount(measureCount)
   if (measureCount <= 0)
     return 0
   return Math.floor((measureCount + 3) / 4)
@@ -85,8 +84,13 @@ function timeSigLabel(ts) {
   return n + "/" + d
 }
 
+function bpmOf(song) {
+  var n = Number(song && song.bpm)
+  return isFinite(n) ? n : 120
+}
+
 function keyJson(keyIndex) {
-  var idx = wrapKey(keyIndex)
+  var idx = agentWrapKey(keyIndex)
   var s = keyStation(idx)
   return { index: idx, major: s.major, relativeMinor: s.relativeMinor }
 }
@@ -105,7 +109,7 @@ function chordObject(chord, keyIndex, loc) {
   var obj = {
     name: nameOfChord(chord),
     root: pcName(chord.rootPc),
-    rootPc: wrapPc(chord.rootPc),
+    rootPc: agentWrapPc(chord.rootPc),
     quality: qualityOf(chord)
   }
   if (loc) {
@@ -146,7 +150,7 @@ function progressionsJson(song) {
   var sections = song.sections || []
   var out = {
     key: keyJson(keyIndex),
-    bpm: song.bpm,
+    bpm: bpmOf(song),
     sections: []
   }
   for (var si = 0; si < sections.length; si++) {
@@ -178,7 +182,7 @@ function songJson(song) {
   var sections = song.sections || []
   var out = {
     key: keyJson(keyIndex),
-    bpm: song.bpm,
+    bpm: bpmOf(song),
     sections: []
   }
   for (var si = 0; si < sections.length; si++) {
