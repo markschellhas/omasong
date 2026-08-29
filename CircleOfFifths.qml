@@ -222,7 +222,7 @@ Item {
     Item {
       id: ring
       width: parent.width
-      height: Math.max(Style.space(180), parent.height - Style.space(108))
+      height: Math.max(Style.space(360), parent.height - Style.space(108))
 
       property int hoverIndex: -1
       property string hoverRing: ""
