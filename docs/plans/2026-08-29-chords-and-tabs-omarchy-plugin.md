@@ -22,30 +22,30 @@
 
 ## Progress
 
-**Status:** `░░░░░░░░░░░░░░░░░░░░` 0/12 done (0%) · 0 in flight
+**Status:** `████████████████████` 12/12 done (100%) · 0 in flight
 
 | # | Task | Status | Next |
 |---|------|--------|------|
-| 1 | Music theory JS | `todo` | implement |
-| 2 | LaptopKeys JS | `todo` | implement |
-| 3 | Song document + slots | `todo` | implement |
-| 4 | Timeline + row repeats | `todo` | implement |
-| 5 | Agent JSON | `todo` | implement |
-| 6 | Circle of fifths UI | `todo` | implement |
-| 7 | Song structure + slots + :\|\| UI | `todo` | implement |
-| 8 | Playback + transport | `todo` | implement |
-| 9 | Piano C3–C5 + instruments + PipeWire | `todo` | implement |
-| 10 | Region focus + laptop toggle | `todo` | implement |
-| 11 | chords-agent HTTP + CLI | `todo` | implement |
-| 12 | Remove non-parity paths + maps | `todo` | implement |
+| 1 | Music theory JS | `done` | — |
+| 2 | LaptopKeys JS | `done` | — |
+| 3 | Song document + slots | `done` | — |
+| 4 | Timeline + row repeats | `done` | — |
+| 5 | Agent JSON | `done` | — |
+| 6 | Circle of fifths UI | `done` | — |
+| 7 | Song structure + slots + :\|\| UI | `done` | — |
+| 8 | Playback + transport | `done` | — |
+| 9 | Piano C3–C5 + instruments + PipeWire | `done` | — |
+| 10 | Region focus + laptop toggle | `done` | — |
+| 11 | chords-agent HTTP + CLI | `done` | — |
+| 12 | Remove non-parity paths + maps | `done` | — |
 
 ---
 
-### [ ] Task 1: Music theory JS
+### [x] Task 1: Music theory JS
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** d05b530
 
 **Files:**
 - Modify: `js/Model.js` (replace symbol/wedge helpers with source `MusicTheory` port)
@@ -133,11 +133,11 @@ EOF
 
 ---
 
-### [ ] Task 2: LaptopKeys JS
+### [x] Task 2: LaptopKeys JS
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** 06e7dbf
 
 **Files:**
 - Modify: `js/Keyboard.js` (replace multi-layout sliding map with source `LaptopKeys.h`)
@@ -195,11 +195,11 @@ EOF
 
 ---
 
-### [ ] Task 3: Song document + slots
+### [x] Task 3: Song document + slots
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** 0344a9e
 
 **Files:**
 - Modify: `js/Song.js` (replace string `chords[]` with source Song document)
@@ -287,11 +287,11 @@ EOF
 
 ---
 
-### [ ] Task 4: Timeline + row repeats
+### [x] Task 4: Timeline + row repeats
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** e75e55e
 
 **Files:**
 - Modify: `js/Song.js` (`setRowRepeat`, `buildTimeline`)
@@ -349,11 +349,11 @@ EOF
 
 ---
 
-### [ ] Task 5: Agent JSON
+### [x] Task 5: Agent JSON
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** 4bf4fdd ace6ba1
 
 **Files:**
 - Create: `js/Agent.js` (progressions + song document serializers; port `src/api/SongJson.cpp`)
@@ -409,11 +409,11 @@ EOF
 
 ---
 
-### [ ] Task 6: Circle of fifths UI
+### [x] Task 6: Circle of fifths UI
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** dde7386 ae4c9be 3ea684d
 
 **Files:**
 - Modify: `CircleOfFifths.qml`
@@ -466,11 +466,11 @@ EOF
 
 ---
 
-### [ ] Task 7: Song structure + slots + :|| UI
+### [x] Task 7: Song structure + slots + :|| UI
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** 2d2129b 9914fc2 78b41eb
 
 **Files:**
 - Modify: `SongStructure.qml` (rewrite against measures/slots; drop `Chords.js` typing)
@@ -514,11 +514,11 @@ EOF
 
 ---
 
-### [ ] Task 8: Playback + transport
+### [x] Task 8: Playback + transport
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** b1b3624 54ba6de 94ddc72 029d4b9
 
 **Files:**
 - Modify: `Songwriter.qml` (playhead walks `buildTimeline`; Space play/stop)
@@ -570,11 +570,11 @@ EOF
 
 ---
 
-### [ ] Task 9: Piano C3–C5 + instruments + PipeWire
+### [x] Task 9: Piano C3–C5 + instruments + PipeWire
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** a15026a
 
 **Files:**
 - Modify: `Piano.qml` (fixed C3–C5; SoundPicker; laptop glyph placeholder)
@@ -628,11 +628,11 @@ EOF
 
 ---
 
-### [ ] Task 10: Region focus + laptop toggle
+### [x] Task 10: Region focus + laptop toggle
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** 63e6887 08efeb5 48b35dd
 
 **Files:**
 - Modify: `Songwriter.qml` (j/k/h/l, hint, focus frame)
@@ -685,11 +685,11 @@ EOF
 
 ---
 
-### [ ] Task 11: chords-agent HTTP + CLI
+### [x] Task 11: chords-agent HTTP + CLI
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** cd08441 fb1b3eb
 
 **Files:**
 - Create: `chords-agent` (Python CLI: `progressions`, `song`, `health`; `--live`)
@@ -741,11 +741,11 @@ EOF
 
 ---
 
-### [ ] Task 12: Remove non-parity paths + maps
+### [x] Task 12: Remove non-parity paths + maps
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete
+**Commits:** 1d5cf70
 
 **Files:**
 - Delete: `js/Chords.js` if unused
