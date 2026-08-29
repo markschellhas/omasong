@@ -2,3 +2,6 @@ venv/
 frontend/node_modules/
 output/*.wav
 output/*.mid
+__pycache__/
+*.pyc
+.pytest_cache/

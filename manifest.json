@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.markschellhas.songwriter",
+  "name": "Songwriter",
+  "version": "0.2.0",
+  "author": "Mark Schellhas",
+  "license": "MIT",
+  "description": "Chords & Tabs as an Omarchy overlay: circle of fifths, song structure, and piano.",
+  "homepage": "https://github.com/markschellhas/songwriter",
+  "repository": "https://github.com/markschellhas/songwriter",
+  "keywords": [
+    "music",
+    "chords",
+    "tabs",
+    "circle of fifths",
+    "songwriter"
+  ],
+  "kinds": [
+    "overlay",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Songwriter.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Songwriter",
+    "description": "Open the songwriter overlay",
+    "category": "Music",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
