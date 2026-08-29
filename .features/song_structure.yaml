@@ -27,4 +27,4 @@ related_features:
 core_components:
   - tests/js_tests.js
 
-notes: "Default song matches source Verse C|G|F|Dm Chorus D|G|C|Em. Cannot delete the last section."
+notes: "Default song matches source Verse C|G|F|Dm Chorus D|G|C|Em. Cannot delete the last section. Add/more menus parent to card menuOverlay (z 1000) above piano."

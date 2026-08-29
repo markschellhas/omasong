@@ -34,6 +34,8 @@ Item {
   property int menuSection: -1
   property real menuX: 0
   property real menuY: 0
+  property Item menuLayer: root
+  property var menuAnchor: null
 
   signal chordDropped(int sectionIndex, int measureIndex, int slotIndex, var chord, bool insertAfter)
   signal chordMoved(int fromSection, int fromMeasure, int fromSlot, int toSection, int toMeasure, int toSlot, bool insertAfter)
@@ -88,14 +90,32 @@ Item {
   function closeMenu() {
     menuKind = ""
     menuSection = -1
+    menuAnchor = null
   }
 
   function openMenu(kind, sectionIndex, anchor) {
     menuKind = kind
     menuSection = sectionIndex
-    var p = anchor.mapToItem(root, 0, anchor.height + Style.space(4))
-    menuX = Math.max(0, Math.min(p.x, root.width - Style.space(180)))
-    menuY = Math.max(0, Math.min(p.y, root.height - Style.space(8)))
+    menuAnchor = anchor
+    positionMenu()
+  }
+
+  function positionMenu() {
+    var layer = root.menuLayer ? root.menuLayer : root
+    var anchor = root.menuAnchor
+    if (!anchor)
+      return
+    var gap = Style.space(4)
+    var menuW = Style.space(180)
+    var menuH = menuPanel.height
+    var below = anchor.mapToItem(layer, 0, anchor.height + gap)
+    menuX = Math.max(0, Math.min(below.x, Math.max(0, layer.width - menuW)))
+    var y = below.y
+    if (y + menuH > layer.height)
+      y = layer.height - menuH
+    if (y < 0)
+      y = 0
+    menuY = y
   }
 
   function rowCount(measureCount) {
@@ -650,23 +670,27 @@ Item {
   }
 
   MouseArea {
+    parent: root.menuLayer
     visible: root.menuKind !== ""
     anchors.fill: parent
-    z: 8
+    z: 1000
     onClicked: root.closeMenu()
   }
 
   Rectangle {
+    id: menuPanel
+    parent: root.menuLayer
     visible: root.menuKind !== ""
     x: root.menuX
     y: root.menuY
-    z: 9
+    z: 1001
     width: Style.space(180)
     height: menuCol.implicitHeight + Style.spacing.sm * 2
     radius: Style.cornerRadius
     color: Color.menu.background
     border.width: 1
     border.color: Color.menu.border
+    onHeightChanged: if (root.menuKind !== "") root.positionMenu()
 
     Column {
       id: menuCol

@@ -976,6 +976,7 @@ Item {
             id: structure
             anchors.fill: parent
             anchors.margins: Style.space(2)
+            menuLayer: menuOverlay
             foreground: root.foreground
             dim: root.dim
             faint: root.faint
@@ -1091,6 +1092,12 @@ Item {
               root.refocusKeys()
             }
           }
+        }
+
+        Item {
+          id: menuOverlay
+          anchors.fill: parent
+          z: 1000
         }
       }
       }
