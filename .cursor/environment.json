@@ -1,0 +1,17 @@
+{
+  "name": "Songwriter",
+  "install": "cd frontend && npm ci",
+  "terminals": [
+    {
+      "name": "frontend-dev",
+      "command": "cd frontend && npm run dev -- --host 127.0.0.1 --port 5173",
+      "description": "SvelteKit MIDI studio dev server (the songwriter feature reference) on http://127.0.0.1:5173"
+    }
+  ],
+  "ports": [
+    {
+      "name": "frontend dev",
+      "port": 5173
+    }
+  ]
+}
