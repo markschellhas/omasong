@@ -2,7 +2,7 @@
 
 **Source product (read-only):** https://github.com/markschellhas/chords-and-tabs
 
-**Authoritative feature maps:** that repo’s `.features/*.yaml` (see also `.feature-map.yaml` and `AGENTS.md`). This PRD restates those maps only. It does not add capabilities from this repo’s leftover Svelte MIDI studio (`frontend/`).
+**Authoritative feature maps:** that repo’s `.features/*.yaml` (see also `.feature-map.yaml` and `AGENTS.md`). This PRD restates those maps only.
 
 This repo (`songwriter`) is the Omarchy destination: a bar chip + overlay that must implement the same product. Do not clone-and-edit, commit to, or open PRs against the source repository.
 
@@ -297,8 +297,6 @@ Omarchy adaptation for `audio_device` only: the plugin lives inside `omarchy-she
 - MIDI = `(clamp(octave, 0, 8) + 1) * 12 + semitone`, clamped 0–127.
 - When on, these keys take over H/J/K/L from `region_focus`. Space is not sustain.
 
-This is **not** the leftover songwriter-frontend map (`a s d f g h j k l ; '` white / `w e r t y u i o p [` black, Space = sustain).
-
 **Related:** `piano_keyboard`, `playback`, `region_focus`
 
 ---
@@ -431,15 +429,9 @@ The source window also shows the title **Chords & Tabs**, a hint line that refle
 
 ## Explicitly out of scope
 
-These appear in `frontend/specification.md` (leftover Svelte MIDI studio). They are **not** product requirements.
+Anything that is not one of the twelve source feature maps.
 
-- MIDI recording, armed tracks, overdub, quantization, count-in, tap tempo
-- Multi-track mixer (solo, mute, volume, pan, track colors)
-- Typed chord-symbol grid (`Cmaj`, `Dm7`, `Csus4`, …) or key-change transpose of placed chords
-- AI chat sidebar
-- MIDI file import/export
-- Demucs / `audio_splitter.py` / `vocal_to_midi.py`
-- Laptop map `a s d f g h j k l ; '` / Space-as-sustain
+- Capabilities the source app does not have (typed chord-symbol fields, key-change transpose of placed chords, tap tempo, Space-as-sustain)
 - Editing https://github.com/markschellhas/chords-and-tabs
 
 ## Acceptance

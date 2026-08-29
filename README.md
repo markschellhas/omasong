@@ -64,8 +64,6 @@ python3 tests/run.py
 omarchy-shell shell rescanPlugins
 ```
 
-`frontend/` is a leftover Svelte MIDI studio. It is not the source product. See the banner in `frontend/specification.md`.
-
 ## License
 
 Follow the source product’s GPLv3-style terms when this port is complete. JUCE itself is licensed separately and is not vendored here.

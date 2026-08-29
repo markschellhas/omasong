@@ -27,20 +27,16 @@ Re-pull https://github.com/markschellhas/chords-and-tabs and read `.features/` b
 | `agent_api` | `.features/agent_api.yaml` |
 | `audio_device` | `.features/audio_device.yaml` |
 
-`frontend/specification.md` is a leftover Svelte MIDI studio spec. Ignore it for parity.
-
 ## Constraints
 
 | Rule | Meaning |
 |------|---------|
 | Source is immutable | No commits, issues, or PRs on `markschellhas/chords-and-tabs` |
-| Feature parity | Overlay must do what the JUCE app does, not what the leftover Svelte MIDI studio does |
+| Feature parity | Overlay must do what the JUCE app’s `.features/` maps describe |
 | Same data | Song document, defaults, and agent JSON match the source contracts |
 | Same interaction | Drag/split/resize slots, vim-style region focus, laptop-key map, row repeats |
 | Plugin contract | Third-party Omarchy plugin: `manifest.json` at git root, `overlay` + `bar-widget` |
 | License | Source application code is GPLv3-style (matching herman-band). The plugin port must follow that, not relicense the behavior as MIT |
-
-`frontend/` in this repo is **not** the source product. Ignore it for parity.
 
 ## Source architecture (what we are porting)
 
@@ -93,7 +89,7 @@ Parity means the overlay behaves like the JUCE app, feature map by feature map. 
 | `piano_keyboard` / `playback` | Sounding triad lights on the piano | Highlight MIDI from engine | Missing (activeNotes not wired to playback) |
 | `piano_keyboard` | Piano C3–C5 (MIDI 48–72); click note on/off | `Piano.qml` | Partial (2 octaves from octave 4 = C4–B5) |
 | `instruments` | Sounds: Piano, EP, Organ, Pad, Strings; chevrons / h/l in Keyboard region | Instrument cycle | Missing |
-| `laptop_keys` | Map **off by default**; glyph toggle; A=C … `'`=F; Z/X octave | `LaptopKeys.h` | Wrong map (songwriter-frontend QWERTY) and always-on |
+| `laptop_keys` | Map **off by default**; glyph toggle; A=C … `'`=F; Z/X octave | `LaptopKeys.h` | Wrong map (not `LaptopKeys.h`) and always-on |
 | `agent_api` | Persist last song + key | Prefer source path `~/.config/chords-and-tabs/` and source JSON shape | Wrong path/shape (`~/.local/state/omarchy/songwriter/song.json`) |
 | `agent_api` | `chords-agent progressions \| song \| health` on port 17891 | Loopback HTTP or `omarchy-shell` IPC + CLI | Missing |
 | `song_structure` | Starter Verse/Chorus progressions | `Song.resetToDefault` | Wrong (empty verse/chorus) |
@@ -151,7 +147,6 @@ Empty slots are omitted from `chords` and shown as `-` in `progression`. `song` 
 ### Phase 0 — Contract ([PRD.md](PRD.md) + this document)
 
 - Treat the source URL and `.features/*.yaml` as canonical.
-- Stop using `frontend/` or “repo is gone” as the brief.
 - Align license with the source before shipping a public port.
 
 ### Phase 1 — Model parity
@@ -193,5 +188,4 @@ A user who knows the JUCE app can use the overlay without learning a new model:
 ## Out of scope
 
 - Editing https://github.com/markschellhas/chords-and-tabs
-- Porting this repo’s Svelte MIDI studio, AI chat, or Demucs splitter
 - Replacing Omarchy’s bar or shipping a second Quickshell process
