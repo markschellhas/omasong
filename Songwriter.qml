@@ -526,6 +526,17 @@ Item {
       applySongFields({ instrument: KeyMap.wrapInstrument(currentInstrument() + delta) })
   }
 
+  function clearSelectedSlot() {
+    if (textFieldHasFocus())
+      return false
+    if (navRegion !== 1)
+      return false
+    if (!Song.getChord(song, selectedSection, selectedMeasure, selectedSlot))
+      return false
+    updateSong(Song.setChord(song, selectedSection, selectedMeasure, selectedSlot, null))
+    return true
+  }
+
   function previewCircleDegree(event) {
     if (navRegion !== 0 || root.laptopKeys)
       return false
@@ -730,6 +741,11 @@ Item {
             else
               root.startPlayback()
             event.accepted = true
+            return
+          }
+          if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace) {
+            if (root.clearSelectedSlot())
+              event.accepted = true
             return
           }
           if (root.previewCircleDegree(event))
