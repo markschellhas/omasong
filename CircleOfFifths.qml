@@ -357,6 +357,8 @@ Item {
           ring.pressX = mouse.x
           ring.pressY = mouse.y
           ring.dragging = false
+          if (ring.pressHit)
+            root.preview(ring.pressHit.index, ring.pressHit.ring)
         }
         onPositionChanged: function(mouse) {
           if (pressed && ring.pressHit && !ring.dragging) {
