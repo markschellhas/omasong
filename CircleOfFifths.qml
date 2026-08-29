@@ -91,6 +91,14 @@ Item {
     return payload
   }
 
+  function startChordDragOn(item, chord) {
+    var payload = root.beginChordDrag(chord)
+    if (!payload)
+      return ""
+    item.Drag.mimeData = { "text/plain": payload }
+    return payload
+  }
+
   function onWedgeClicked(index, ringName) {
     root.tonicPicked(index, ringName)
   }
@@ -349,7 +357,6 @@ Item {
         Drag.active: ring.dragging
         Drag.dragType: Drag.Automatic
         Drag.proposedAction: Qt.CopyAction
-        Drag.mimeData: { "text/plain": root.chordDragPayload }
         Drag.keys: ["text/plain"]
 
         onPressed: function(mouse) {
@@ -365,7 +372,7 @@ Item {
             var dx = mouse.x - ring.pressX
             var dy = mouse.y - ring.pressY
             if (dx * dx + dy * dy >= 64) {
-              root.beginChordDrag(root.stationChord(ring.pressHit.index, ring.pressHit.ring))
+              root.startChordDragOn(ringMouse, root.stationChord(ring.pressHit.index, ring.pressHit.ring))
               ring.dragging = true
             }
           }
@@ -405,42 +412,61 @@ Item {
 
       Repeater {
         model: 7
-        delegate: Button {
-          id: chipButton
+        delegate: Item {
+          id: chip
           required property int index
           readonly property var chipChord: root.chips[index]
-          readonly property string payload: chipChord ? Model.encodeChord(chipChord) : ""
+          implicitWidth: chipButton.implicitWidth
+          implicitHeight: chipButton.implicitHeight
+          width: implicitWidth
+          height: implicitHeight
+          property bool dragging: false
+          property real pressX: 0
+          property real pressY: 0
 
-          property bool didDrag: false
-          text: Model.NUMERALS[index]
-          bordered: true
-          foreground: root.foreground
-          fontFamily: Style.font.menuFamily
-          fontSize: Style.font.bodySmall
-          tooltipText: chipChord ? Model.chordName(chipChord.rootPc, chipChord.quality) : ""
-          onPressed: didDrag = false
-          onClicked: {
-            if (didDrag) {
-              didDrag = false
-              return
-            }
-            root.previewChip(index)
+          Button {
+            id: chipButton
+            anchors.centerIn: parent
+            enabled: false
+            text: Model.NUMERALS[index]
+            bordered: true
+            foreground: root.foreground
+            fontFamily: Style.font.menuFamily
+            fontSize: Style.font.bodySmall
+            tooltipText: chip.chipChord ? Model.chordName(chip.chipChord.rootPc, chip.chipChord.quality) : ""
           }
 
-          Drag.active: chipDrag.active
-          Drag.dragType: Drag.Automatic
-          Drag.proposedAction: Qt.CopyAction
-          Drag.mimeData: { "text/plain": payload }
-          Drag.keys: ["text/plain"]
+          MouseArea {
+            id: chipMouse
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            cursorShape: Qt.PointingHandCursor
+            preventStealing: true
 
-          DragHandler {
-            id: chipDrag
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchScreen
-            onActiveChanged: {
-              if (active && chipButton.chipChord) {
-                chipButton.didDrag = true
-                root.beginChordDrag(chipButton.chipChord)
+            Drag.active: chip.dragging
+            Drag.dragType: Drag.Automatic
+            Drag.proposedAction: Qt.CopyAction
+            Drag.keys: ["text/plain"]
+
+            onPressed: function(mouse) {
+              chip.pressX = mouse.x
+              chip.pressY = mouse.y
+              chip.dragging = false
+            }
+            onPositionChanged: function(mouse) {
+              if (!pressed || chip.dragging || !chip.chipChord)
+                return
+              var dx = mouse.x - chip.pressX
+              var dy = mouse.y - chip.pressY
+              if (dx * dx + dy * dy >= 64) {
+                root.startChordDragOn(chipMouse, chip.chipChord)
+                chip.dragging = true
               }
+            }
+            onReleased: function() {
+              if (!chip.dragging)
+                root.previewChip(chip.index)
+              chip.dragging = false
             }
           }
         }
