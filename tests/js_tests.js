@@ -1,4 +1,4 @@
-// Loaded into a VM with Model/Chords/Song/Keyboard functions in scope.
+// Loaded into a VM with Model/Song/Agent/Keyboard/Focus functions in scope.
 
 assertEq(PC_NAMES.join(" "), "C Db D Eb E F F# G Ab A Bb B")
 assertEq(station(0).major, "C")
@@ -59,76 +59,6 @@ assert(!inKeyWedge(2, 0), "D not in C wedge")
 assertEq(triad(0, "major").label, "C")
 assertEq(triad(0, "minor").label, "Am")
 assertEq(triad(0, "major").notes.length, 3)
-
-var c = parseChord("C")
-assert(c.isValid, "parse C")
-assertEq(c.chord.notes.join(","), "60,64,67")
-assertEq(c.chord.quality, "major")
-
-var cm = parseChord("Cm")
-assert(cm.isValid, "parse Cm")
-assertEq(cm.chord.quality, "minor")
-assertEq(cm.chord.notes.join(","), "60,63,67")
-
-var am = parseChord("Am")
-assert(am.isValid, "parse Am")
-assertEq(am.chord.quality, "minor")
-assertEq(am.chord.notes.join(","), "69,72,76")
-
-var c7 = parseChord("C7")
-assert(c7.isValid, "parse C7")
-assert(c7.chord.notes.indexOf(70) !== -1, "C7 has Bb")
-
-var cmaj7 = parseChord("Cmaj7")
-assert(cmaj7.isValid, "parse Cmaj7")
-assertEq(cmaj7.chord.quality, "major")
-assert(cmaj7.chord.notes.indexOf(71) !== -1, "Cmaj7 has B")
-assertEq(cmaj7.chord.notes.join(","), "60,64,67,71")
-
-var fdim = parseChord("F#dim")
-assert(fdim.isValid, "parse F#dim")
-assertEq(fdim.chord.quality, "diminished")
-assertEq(fdim.chord.notes.join(","), "66,69,72")
-
-var slash = parseChord("G/B")
-assert(slash.isValid, "parse G/B")
-assert(slash.chord.bass === "B" || slash.chord.bass === "b" || !!slash.chord.bass, "slash bass")
-
-var csus4 = parseChord("Csus4")
-assert(csus4.isValid, "parse Csus4")
-assertEq(csus4.chord.quality, "sus4")
-assertEq(csus4.chord.notes.join(","), "60,65,67")
-
-var csus2 = parseChord("Csus2")
-assert(csus2.isValid, "parse Csus2")
-assertEq(csus2.chord.quality, "sus2")
-assertEq(csus2.chord.notes.join(","), "60,62,67")
-
-var dm9 = parseChord("Dm9")
-assert(dm9.isValid, "parse Dm9")
-assertEq(dm9.chord.quality, "minor")
-assert(dm9.chord.notes.indexOf(76) !== -1, "Dm9 has E")
-
-var caug = parseChord("Caug")
-assert(caug.isValid, "parse Caug")
-assertEq(caug.chord.quality, "augmented")
-assertEq(caug.chord.notes.join(","), "60,64,68")
-
-var cdim7 = parseChord("Cdim7")
-assert(cdim7.isValid, "parse Cdim7")
-assertEq(cdim7.chord.quality, "diminished")
-assertEq(cdim7.chord.notes.join(","), "60,63,66,69")
-
-assert(isValidChord("Dm9"))
-assert(isValidChord("Csus4"))
-assert(isValidChord("Csus2"))
-assert(isValidChord("Caug"))
-assert(isValidChord("Cdim7"))
-assert(!isValidChord("Hmin"))
-assert(!isValidChord("Cxyz"))
-assert(getChordSuggestions("C").indexOf("C") !== -1)
-assertEq(transposeChord("C", 7), "G")
-assertEq(transposeChord("Am", 2), "Bm")
 
 var song = defaultSong()
 assertEq(song.bpm, 120)

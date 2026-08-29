@@ -3,6 +3,7 @@ purpose: "j/k cycle focus among circle, song structure, and keyboard; h/l then r
 
 entry_points:
   - Songwriter.qml
+  - js/Focus.js
 
 apps:
   - songwriter
@@ -23,4 +24,4 @@ core_components:
   - Piano.qml
   - SongStructure.qml
 
-notes: "Regions top→bottom: Circle, Song, Keyboard. ←/→ and wheel still rotate the circle in any region. Not implemented yet."
+notes: "Regions top→bottom: Circle, Song, Keyboard. ←/→ and wheel still rotate the circle in any region. Overlay focus frames are not in CI."

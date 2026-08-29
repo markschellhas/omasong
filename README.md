@@ -48,7 +48,9 @@ o.bind("SUPER + CTRL + ALT + S", "Songwriter", "omarchy-shell shell toggle io.gi
 
 ## Status
 
-The overlay chrome is in place. Behavior is not yet at full parity — implement [docs/prds/prd-chords-and-tabs-omarchy-plugin.md](docs/prds/prd-chords-and-tabs-omarchy-plugin.md) through the build order there.
+The overlay follows the twelve source capabilities in `.features/` (circle, slots, timeline, piano, laptop keys, region focus, `chords-agent`). Spec: [docs/prds/prd-chords-and-tabs-omarchy-plugin.md](docs/prds/prd-chords-and-tabs-omarchy-plugin.md).
+
+Automated check: `python3 tests/run.py`. Full overlay and `omarchy plugin validate` need an Omarchy host.
 
 ## Remove
 

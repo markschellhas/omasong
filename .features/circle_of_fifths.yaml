@@ -23,4 +23,4 @@ related_features:
 core_components:
   - js/Model.js
 
-notes: "Key change must not transpose placed chords. Current QML still uses string symbols via Chords.js."
+notes: "Key change must not transpose placed chords."

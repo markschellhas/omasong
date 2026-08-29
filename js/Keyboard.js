@@ -1,7 +1,7 @@
 .pragma library
 
 // Port of source LaptopKeys.h (QWERTY A=C …; Z/X octave).
-// Piano.qml uses pianoKeysC3C5 (MIDI 48–72). twoOctaveKeys remains a helper.
+// Piano.qml uses pianoKeysC3C5 (MIDI 48–72).
 
 var DEFAULT_OCTAVE = 4
 var MIN_OCTAVE = 0
@@ -149,25 +149,6 @@ function pianoKeysC3C5() {
   }
   keys.push(pianoKeyAt(5, PIANO_KEY_META[0]))
   return keys
-}
-
-function twoOctaveKeys(baseOctave) {
-  var start = clampOctave(baseOctave)
-  var keys = []
-  var oct
-  var i
-  for (oct = 0; oct < 2; oct++) {
-    for (i = 0; i < PIANO_KEY_META.length; i++)
-      keys.push(pianoKeyAt(start + oct, PIANO_KEY_META[i]))
-  }
-  return keys
-}
-
-function getLayout(name) {
-  return {
-    white: ["a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'"],
-    black: ["w", "e", "t", "y", "u", "o", "p"]
-  }
 }
 
 var WHITE_KEYS_C3_C5 = 15

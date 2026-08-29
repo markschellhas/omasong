@@ -23,4 +23,4 @@ core_components:
   - js/Keyboard.js
   - play-notes.py
 
-notes: "Range is C3–C5 inclusive, not a sliding two-octave window from C4. Current Piano.qml uses twoOctaveKeys(octave)."
+notes: "Range is C3–C5 inclusive, not a sliding two-octave window from C4."

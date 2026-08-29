@@ -26,4 +26,4 @@ related_features:
 core_components:
   - play-notes.py
 
-notes: "No tap tempo. Space is play/stop when laptop map is off, not sustain. Current timer walks flattenSlots strings, not timeline spans."
+notes: "No tap tempo. Space is play/stop when laptop map is off, not sustain. Overlay playhead is not in CI."

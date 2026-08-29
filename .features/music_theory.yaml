@@ -23,4 +23,4 @@ core_components:
   - tests/js_tests.js
   - tests/run.py
 
-notes: "Parity target is source MusicTheory; current Model.js lacks encodeChord, vii°, quality ints."
+notes: "Triads only: { rootPc, quality }. No typed chord-symbol parser."

@@ -26,4 +26,4 @@ related_features:
 core_components:
   - tests/js_tests.js
 
-notes: "Current Song.js is flat string chords[], not measures/slots/span. Default song must match source Verse C|G|F|Dm Chorus D|G|C|Em."
+notes: "Default song matches source Verse C|G|F|Dm Chorus D|G|C|Em. Cannot delete the last section."

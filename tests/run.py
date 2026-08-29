@@ -35,14 +35,13 @@ def run_node(script: str) -> None:
 
 
 def test_js() -> None:
-    libs = {
-        "Model": load_pragma_js(ROOT / "js" / "Model.js"),
-        "Chords": load_pragma_js(ROOT / "js" / "Chords.js"),
-        "Song": load_pragma_js(ROOT / "js" / "Song.js"),
-        "Agent": load_pragma_js(ROOT / "js" / "Agent.js"),
-        "Keyboard": load_pragma_js(ROOT / "js" / "Keyboard.js"),
-        "Focus": load_pragma_js(ROOT / "js" / "Focus.js"),
-    }
+    libs = [
+        load_pragma_js(ROOT / "js" / "Model.js"),
+        load_pragma_js(ROOT / "js" / "Song.js"),
+        load_pragma_js(ROOT / "js" / "Agent.js"),
+        load_pragma_js(ROOT / "js" / "Keyboard.js"),
+        load_pragma_js(ROOT / "js" / "Focus.js"),
+    ]
     harness = r"""
 function assert(cond, msg) {
   if (!cond) throw new Error(msg || "assertion failed");
@@ -52,34 +51,13 @@ function assertEq(a, b, msg) {
 }
 """
     body = (ROOT / "tests" / "js_tests.js").read_text()
-    script = (
-        "const Model = {};\nconst Chords = {};\nconst Song = {};\nconst Keyboard = {};\nconst Agent = {};\n"
-        + "void Model; void Chords; void Song; void Keyboard; void Agent;\n"
-        + libs["Model"].replace("function ", "function ")
-        + "Object.assign(Model, {PC_NAMES, station, chordName, qualityInt, encodeChord, decodeChord, diatonicTriads, numeralFor, maxSlots, beatsPerBar, triadMidi, FIFTHS, wrap, keyAt, label, diatonic, inKeyWedge, wedgeChords, triad, hitTest, PITCH_CLASS});\n"
-        + libs["Chords"]
-        + "Object.assign(Chords, {parseChord, isValidChord, getChordSuggestions, transposeChord, midiToHz, midiToNoteName});\n"
-        + libs["Song"]
-        + "Object.assign(Song, {defaultSong, normalizeSong, setChord, addSection, removeSection, flattenSlots, nextFilledSlot, transposeSong});\n"
-        + libs["Agent"]
-        + "Object.assign(Agent, {progressionsJson, songJson});\n"
-        + libs["Keyboard"]
-        + "Object.assign(Keyboard, {midiForKey, twoOctaveKeys, midiToHz, clampOctave, computerKeyForMidi});\n"
-        + harness
-        + body
-        + "\nconsole.log('js tests ok');\n"
-    )
-    # The above Object.assign after function declarations copies globals.
-    # Functions declared at top level in the eval'd script become locals in
-    # CommonJS -e, so copy via eval in a Function wrapper instead.
+    source = harness + "".join(libs) + body + "\nconsole.log('js tests ok');\n"
     wrapped = (
         "const vm = require('vm');\n"
         "const sandbox = { console, Math, Date, JSON, Object, Array, String, Number, isFinite };\n"
         "vm.createContext(sandbox);\n"
-        + json.dumps(harness + libs["Model"] + libs["Chords"] + libs["Song"] + libs["Agent"] + libs["Keyboard"] + libs["Focus"] + body + "\nconsole.log('js tests ok');\n")
-        + ".split('').length;\n"
         "vm.runInContext("
-        + json.dumps(harness + libs["Model"] + libs["Chords"] + libs["Song"] + libs["Agent"] + libs["Keyboard"] + libs["Focus"] + body + "\nconsole.log('js tests ok');\n")
+        + json.dumps(source)
         + ", sandbox);\n"
     )
     run_node(wrapped)
