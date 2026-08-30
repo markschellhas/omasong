@@ -21,6 +21,13 @@ import wave
 
 RATE = 44100
 DEFAULT_SECONDS = 0.9
+MAX_SECONDS = 30.0
+MIN_SECONDS = 0.05
+MAX_VOICES = 8
+MIDI_MIN = 0
+MIDI_MAX = 127
+HZ_MIN = 20.0
+HZ_MAX = 20000.0
 AMPLITUDE = 0.18
 PAD = 0.02
 
@@ -68,6 +75,40 @@ def clamp_instrument(value: int) -> int:
         return 0
     if n > 4:
         return 4
+    return n
+
+
+def clamp_seconds(value: float) -> float:
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_SECONDS
+    if not math.isfinite(n):
+        return DEFAULT_SECONDS
+    if n < MIN_SECONDS:
+        return MIN_SECONDS
+    if n > MAX_SECONDS:
+        return MAX_SECONDS
+    return n
+
+
+def clamp_midi(value: float) -> float | None:
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(n) or n < MIDI_MIN or n > MIDI_MAX:
+        return None
+    return n
+
+
+def clamp_hz(value: float) -> float | None:
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(n) or n < HZ_MIN or n > HZ_MAX:
+        return None
     return n
 
 
@@ -175,8 +216,17 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write("play-notes: %s\n" % exc)
         return 2
     if args.seconds is not None:
-        seconds = max(0.05, float(args.seconds))
-    freqs = [midi_to_hz(n) for n in nums] if args.midi else nums
+        seconds = clamp_seconds(args.seconds)
+    else:
+        seconds = clamp_seconds(seconds)
+    if args.midi:
+        freqs = [midi_to_hz(n) for n in nums if clamp_midi(n) is not None]
+    else:
+        freqs = [hz for hz in (clamp_hz(n) for n in nums) if hz is not None]
+    freqs = freqs[:MAX_VOICES]
+    if not freqs:
+        sys.stderr.write("play-notes: no valid pitches\n")
+        return 2
     frames = synth(freqs, seconds, instrument=args.instrument)
     if args.write:
         write_wav(args.write, frames)
