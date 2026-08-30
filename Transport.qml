@@ -13,16 +13,80 @@ Item {
   property int currentBar: 1
   property int currentBeat: 1
   property string statusText: ""
+  property string songTitle: "Untitled"
 
   signal playRequested
   signal stopRequested
   signal loopToggled
   signal bpmChangedByUser(int value)
+  signal titleEdited(string value)
+  signal saveRequested
+  signal openRequested
 
   readonly property int beatPulseMs: Math.max(200, Math.round(60000 / Math.max(40, bpm)))
 
+  function commitTitle() {
+    var next = titleInput.text.trim()
+    if (next === "")
+      next = "Untitled"
+    if (next !== root.songTitle)
+      root.titleEdited(next)
+  }
+
   Row {
-    anchors.fill: parent
+    id: leftCluster
+    anchors.left: parent.left
+    anchors.verticalCenter: parent.verticalCenter
+    spacing: Style.spacing.sm
+
+    Rectangle {
+      anchors.verticalCenter: parent.verticalCenter
+      width: Style.space(220)
+      height: Style.space(28)
+      radius: Math.max(2, Style.cornerRadius / 2)
+      color: "transparent"
+      border.width: 1
+      border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.2)
+
+      TextInput {
+        id: titleInput
+        anchors.fill: parent
+        anchors.margins: 4
+        color: root.foreground
+        font.family: Style.font.menuFamily
+        font.pixelSize: Style.font.body
+        verticalAlignment: Text.AlignVCenter
+        selectByMouse: true
+        clip: true
+        onEditingFinished: root.commitTitle()
+      }
+    }
+
+    Button {
+      anchors.verticalCenter: parent.verticalCenter
+      text: "Save"
+      tooltipText: "Save song to library"
+      focusable: true
+      foreground: root.foreground
+      accent: Color.accent
+      onClicked: root.saveRequested()
+    }
+
+    Button {
+      anchors.verticalCenter: parent.verticalCenter
+      text: "Open"
+      tooltipText: "Open a saved song"
+      focusable: true
+      foreground: root.foreground
+      accent: Color.accent
+      onClicked: root.openRequested()
+    }
+  }
+
+  Row {
+    id: rightCluster
+    anchors.right: parent.right
+    anchors.verticalCenter: parent.verticalCenter
     spacing: Style.spacing.sm
 
     Button {
@@ -161,5 +225,12 @@ Item {
     property: "text"
     value: String(root.bpm)
     when: bpmInput && !bpmInput.activeFocus
+  }
+
+  Binding {
+    target: titleInput
+    property: "text"
+    value: root.songTitle
+    when: titleInput && !titleInput.activeFocus
   }
 }
