@@ -99,11 +99,13 @@ case "$action" in
     fi
 
     entry=$(jq -c '
-      if (.song | type) == "object" then .
-      else {id: (.id // ""), title: (.title // "Untitled"), song: .}
+      if has("song") and (.song | type) == "object" then
+        {id: (.id // ""), title: (.title // "Untitled"), song: .song}
+      else
+        {id: (.id // ""), title: (.title // "Untitled"), song: del(.id, .title, .updatedAt)}
       end
+      | .id = ((.id // "") | gsub("^\\s+|\\s+$";""))
       | .title = (if ((.title // "") | gsub("^\\s+|\\s+$";"")) == "" then "Untitled" else .title end)
-      | .id = (.id // "")
     ' "$selection_file")
 
     id=$(jq -r '.id' <<<"$entry")

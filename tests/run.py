@@ -362,18 +362,84 @@ def test_song_library() -> None:
         if library["songs"][0]["title"] != "Minted":
             raise SystemExit("minted save title mismatch")
 
+        _stage_save(
+            runtime,
+            {"id": "   ", "title": "Whitespace Id", "song": sample_song},
+        )
+        ws_id = _run_song_library(env, "save")
+        if ws_id.returncode != 0:
+            sys.stderr.write(ws_id.stdout + ws_id.stderr)
+            raise SystemExit(ws_id.returncode or 1)
+        library = json.loads(ws_id.stdout)
+        if len(library["songs"]) != 3:
+            raise SystemExit("whitespace id should mint a new entry")
+        ws_minted = library["songs"][0]["id"]
+        if not ws_minted or ws_minted in ("song-1", minted_id, "   "):
+            raise SystemExit("whitespace id was not minted")
+
+        _stage_save(
+            runtime,
+            {
+                "id": "flat-1",
+                "title": "Flat",
+                "sections": [{"name": "Chorus", "measures": []}],
+                "bpm": 100,
+            },
+        )
+        flat = _run_song_library(env, "save")
+        if flat.returncode != 0:
+            sys.stderr.write(flat.stdout + flat.stderr)
+            raise SystemExit(flat.returncode or 1)
+        library = json.loads(flat.stdout)
+        flat_entry = library["songs"][0]
+        if flat_entry["id"] != "flat-1" or flat_entry["title"] != "Flat":
+            raise SystemExit("flat hybrid id/title mismatch")
+        if "id" in flat_entry["song"] or "title" in flat_entry["song"]:
+            raise SystemExit("flat hybrid nested id/title into song")
+        if flat_entry["song"].get("sections") != [{"name": "Chorus", "measures": []}]:
+            raise SystemExit("flat hybrid did not preserve song body")
+        if flat_entry["song"].get("bpm") != 100:
+            raise SystemExit("flat hybrid dropped song fields")
+
         deleted = _run_song_library(env, "delete", minted_id)
         if deleted.returncode != 0:
             sys.stderr.write(deleted.stdout + deleted.stderr)
             raise SystemExit(deleted.returncode or 1)
         library = json.loads(deleted.stdout)
-        if len(library["songs"]) != 1 or library["songs"][0]["id"] != "song-1":
+        if any(s["id"] == minted_id for s in library["songs"]):
             raise SystemExit("delete did not remove minted entry")
 
-        library_path.write_text("not-json")
+        (runtime / "omarchy-songwriter" / "save-selection.json").unlink(missing_ok=True)
+        missing = _run_song_library(env, "save")
+        if missing.returncode != 2:
+            raise SystemExit("missing selection should exit 2, got " + str(missing.returncode))
+
+        _stage_save(runtime, {"id": "bad", "title": "Bad"})
+        invalid = _run_song_library(env, "save")
+        if invalid.returncode != 2:
+            raise SystemExit("invalid selection should exit 2, got " + str(invalid.returncode))
+
+        no_id = _run_song_library(env, "delete")
+        if no_id.returncode != 2:
+            raise SystemExit("delete without id should exit 2, got " + str(no_id.returncode))
+
+        # Restore a valid library, then corrupt and assert bytes unchanged.
+        _stage_save(
+            runtime,
+            {"id": "song-1", "title": "Demo Updated", "song": sample_song},
+        )
+        restored = _run_song_library(env, "save")
+        if restored.returncode != 0:
+            sys.stderr.write(restored.stdout + restored.stderr)
+            raise SystemExit(restored.returncode or 1)
+
+        corrupt_bytes = b"not-json"
+        library_path.write_bytes(corrupt_bytes)
         corrupt = _run_song_library(env, "get")
         if corrupt.returncode != 4:
             raise SystemExit("corrupt library should exit 4, got " + str(corrupt.returncode))
+        if library_path.read_bytes() != corrupt_bytes:
+            raise SystemExit("corrupt library was overwritten")
 
         print("song-library ok")
 
