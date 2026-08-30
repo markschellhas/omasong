@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -66,6 +67,17 @@ function assertEq(a, b, msg) {
 
 
 def test_play_notes() -> None:
+    spec = importlib.util.spec_from_file_location("play_notes", ROOT / "play-notes.py")
+    play_notes = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(play_notes)
+    if play_notes.clamp_seconds(100) != play_notes.MAX_SECONDS:
+        raise SystemExit("play-notes must cap long durations")
+    if play_notes.clamp_midi(200) is not None:
+        raise SystemExit("play-notes must reject out-of-range MIDI")
+    if play_notes.clamp_hz(1) is not None:
+        raise SystemExit("play-notes must reject inaudible Hz")
+
     with tempfile.TemporaryDirectory() as tmp:
         wav = Path(tmp) / "cmaj.wav"
         proc = subprocess.run(
@@ -79,6 +91,27 @@ def test_play_notes() -> None:
         if wav.stat().st_size < 1000:
             raise SystemExit("play-notes wrote a tiny wav")
         print("play-notes wav bytes", wav.stat().st_size)
+
+        huge = Path(tmp) / "huge.wav"
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "play-notes.py"), "--write", str(huge), "--midi", "60", "--seconds", "100"],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            sys.stderr.write(proc.stdout + proc.stderr)
+            raise SystemExit(proc.returncode)
+        max_bytes = int(play_notes.RATE * play_notes.MAX_SECONDS * 2 * 1.2) + 1024
+        if huge.stat().st_size > max_bytes:
+            raise SystemExit("play-notes did not cap --seconds")
+
+        bad = subprocess.run(
+            [sys.executable, str(ROOT / "play-notes.py"), "--write", str(Path(tmp) / "bad.wav"), "--midi", "200"],
+            capture_output=True,
+            text=True,
+        )
+        if bad.returncode == 0:
+            raise SystemExit("play-notes accepted invalid MIDI")
 
 
 def test_write_json() -> None:

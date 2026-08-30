@@ -13,6 +13,7 @@ Item {
   property int keyIndex: 0
   property int soundingIndex: -1
   property string soundingRing: ""
+  property int soundingDegree: -1
   property string chordDragPayload: ""
 
   readonly property var selected: Model.keyAt(keyIndex)
@@ -64,11 +65,23 @@ Item {
     }
   }
 
-  function preview(index, ringName) {
-    var t = Model.triad(index, ringName)
+  function applyPreviewHighlight(degree, index, ringName) {
+    root.soundingDegree = degree
     root.soundingIndex = index
     root.soundingRing = ringName
     soundingTimer.restart()
+  }
+
+  function clearPreviewHighlight() {
+    root.soundingDegree = -1
+    root.soundingIndex = -1
+    root.soundingRing = ""
+  }
+
+  function preview(index, ringName) {
+    var t = Model.triad(index, ringName)
+    var h = Model.previewHighlightFromWedge(root.keyIndex, index, ringName)
+    root.applyPreviewHighlight(h.degree, h.index, h.ring)
     root.chordPreviewed(index, ringName, t)
   }
 
@@ -77,10 +90,9 @@ Item {
     if (!chord)
       return
     var t = root.triadFromChord(chord)
-    root.soundingIndex = -1
-    root.soundingRing = ""
-    soundingTimer.restart()
-    root.chordPreviewed(-1, "chip", t)
+    var h = Model.previewHighlight(root.keyIndex, degreeIndex)
+    root.applyPreviewHighlight(h.degree, h.index, h.ring)
+    root.chordPreviewed(h.index, h.ring || "chip", t)
   }
 
   function beginChordDrag(chord) {
@@ -104,13 +116,12 @@ Item {
     root.tonicPicked(index, ringName)
   }
 
+  onKeyIndexChanged: root.clearPreviewHighlight()
+
   Timer {
     id: soundingTimer
     interval: 750
-    onTriggered: {
-      root.soundingIndex = -1
-      root.soundingRing = ""
-    }
+    onTriggered: root.clearPreviewHighlight()
   }
 
   component AnnularWedge: Shape {
@@ -202,6 +213,7 @@ Item {
     id: chip
     property int degreeIndex: 0
     readonly property var chipChord: root.chips[degreeIndex]
+    readonly property bool sounding: degreeIndex === root.soundingDegree
     implicitWidth: chipButton.implicitWidth
     implicitHeight: chipButton.implicitHeight
     width: implicitWidth
@@ -210,10 +222,20 @@ Item {
     property real pressX: 0
     property real pressY: 0
 
+    Rectangle {
+      anchors.fill: parent
+      color: chip.sounding ? root.soundingFill : "transparent"
+      radius: Math.max(2, Style.cornerRadius / 2)
+      border.width: chip.sounding ? 1 : 0
+      border.color: chip.sounding ? root.foreground : "transparent"
+    }
+
     Button {
       id: chipButton
       anchors.centerIn: parent
       enabled: false
+      selected: chip.sounding
+      bordered: chip.sounding
       text: Model.NUMERALS[chip.degreeIndex]
       foreground: root.foreground
       fontFamily: Style.font.menuFamily
@@ -530,9 +552,7 @@ Item {
         faint: root.faint
         rootPc: Model.tonicPc(root.keyIndex)
         onChordAuditioned: function(chord, notes, label) {
-          root.soundingIndex = -1
-          root.soundingRing = ""
-          soundingTimer.restart()
+          root.clearPreviewHighlight()
           root.chordPreviewed(-1, "grid", {
             notes: notes,
             label: label,

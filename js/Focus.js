@@ -45,3 +45,18 @@ function degreeIndexFromKey(key, text) {
     return k - 0x01000031
   return -1
 }
+
+var PREVIEW_AUDIO_GAP_MS = 100
+
+function shouldSpawnPreviewAudio(lastMs, nowMs, minGapMs) {
+  var now = Number(nowMs)
+  if (!isFinite(now))
+    return false
+  var last = Number(lastMs)
+  var gap = minGapMs === undefined || minGapMs === null ? PREVIEW_AUDIO_GAP_MS : Number(minGapMs)
+  if (!isFinite(gap) || gap < 0)
+    gap = PREVIEW_AUDIO_GAP_MS
+  if (!isFinite(last) || last <= 0)
+    return true
+  return (now - last) >= gap
+}
