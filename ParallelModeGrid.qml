@@ -91,6 +91,21 @@ Item {
     rootPc = Model.wrapPitchClass(rootPc + delta)
   }
 
+  function cellPayload(modeIndex, degreeIndex) {
+    var chord = ParallelMode.toTriadPayload(
+      ParallelMode.cellChord(rootPc, modeIndex, degreeIndex, useSevenths))
+    return Model.encodeChord(chord)
+  }
+
+  function startCellDragOn(item, modeIndex, degreeIndex) {
+    var payload = root.cellPayload(modeIndex, degreeIndex)
+    if (!payload)
+      return ""
+    root.chordDragStarted(payload)
+    item.Drag.mimeData = { "text/plain": payload }
+    return payload
+  }
+
   Item {
     id: gridHost
     anchors.top: parent.top
@@ -258,21 +273,29 @@ Item {
               }
 
               MouseArea {
+                id: cellMouse
                 anchors.fill: parent
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton
-                cursorShape: Qt.PointingHandCursor
+                cursorShape: dragging ? Qt.DragCopyCursor : Qt.PointingHandCursor
                 preventStealing: true
 
                 property bool dragging: false
                 property real pressX: 0
                 property real pressY: 0
 
+                Drag.active: dragging
+                Drag.dragType: Drag.Automatic
+                Drag.proposedAction: Qt.CopyAction
+                Drag.keys: ["text/plain"]
+
                 onEntered: {
                   root.hoverMode = chordCell.info.modeIndex
                   root.hoverDegree = chordCell.info.degreeIndex
                 }
                 onExited: {
+                  if (dragging)
+                    return
                   if (root.hoverMode === chordCell.info.modeIndex
                       && root.hoverDegree === chordCell.info.degreeIndex) {
                     root.hoverMode = -1
@@ -294,19 +317,8 @@ Item {
                   var dy = mouse.y - pressY
                   if (dx * dx + dy * dy < 64)
                     return
-                  var payload = Model.encodeChord(
-                    ParallelMode.toTriadPayload(
-                      ParallelMode.cellChord(
-                        root.rootPc, chordCell.info.modeIndex, chordCell.info.degreeIndex, root.useSevenths)))
-                  if (!payload)
-                    return
-                  dragging = true
-                  root.chordDragStarted(payload)
-                  Drag.active = true
-                  Drag.dragType = Drag.Automatic
-                  Drag.proposedAction = Qt.CopyAction
-                  Drag.keys = ["text/plain"]
-                  Drag.mimeData = { "text/plain": payload }
+                  if (root.startCellDragOn(cellMouse, chordCell.info.modeIndex, chordCell.info.degreeIndex))
+                    dragging = true
                 }
                 onReleased: function() {
                   dragging = false
