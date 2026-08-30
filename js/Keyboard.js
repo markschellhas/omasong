@@ -85,6 +85,43 @@ function clampMidi(midi) {
   return n
 }
 
+function sanitizeMidiNotes(notes, maxCount) {
+  var cap = Number(maxCount)
+  if (!isFinite(cap) || cap < 1)
+    cap = 8
+  cap = Math.floor(cap)
+  if (cap > 16)
+    cap = 16
+  if (!notes || !notes.length)
+    return []
+  var out = []
+  for (var i = 0; i < notes.length && out.length < cap; i++) {
+    var n = Number(notes[i])
+    if (!isFinite(n))
+      continue
+    n = Math.round(n)
+    if (n < 0 || n > 127)
+      continue
+    if (out.indexOf(n) === -1)
+      out.push(n)
+  }
+  return out
+}
+
+function clampSeconds(seconds, fallback) {
+  var def = Number(fallback)
+  if (!isFinite(def) || def <= 0)
+    def = 0.7
+  var n = Number(seconds)
+  if (!isFinite(n) || n <= 0)
+    return def
+  if (n < 0.05)
+    return 0.05
+  if (n > 30)
+    return 30
+  return n
+}
+
 function shiftOctave(octave, delta) {
   return clampOctave(Number(octave) + Number(delta))
 }

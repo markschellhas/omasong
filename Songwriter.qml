@@ -47,6 +47,7 @@ Item {
   property var previewNotes: []
   property var previewChord: null
   property var heldNotes: ({})
+  property real lastPreviewAudioMs: 0
   property string statusText: ""
   property bool persistReady: false
   property int navRegion: 0
@@ -239,20 +240,32 @@ Item {
     Quickshell.execDetached(cmd)
   }
 
-  function playMidiNotes(notes, seconds) {
-    if (!notes || !notes.length)
+  function playMidiNotes(notes, seconds, withAudio) {
+    var safe = KeyMap.sanitizeMidiNotes(notes)
+    if (!safe.length)
       return
-    var cmd = ["python3", playScript, "--midi"]
-    for (var i = 0; i < notes.length; i++)
-      cmd.push(String(notes[i]))
-    cmd.push("--instrument", String(currentInstrument()))
-    if (seconds)
-      cmd.push("--seconds", String(seconds))
-    Quickshell.execDetached(cmd)
-    previewNotes = notes.slice()
+    var dur = seconds ? KeyMap.clampSeconds(seconds) : 0.7
+    if (withAudio !== false) {
+      var cmd = ["python3", playScript, "--midi"]
+      for (var i = 0; i < safe.length; i++)
+        cmd.push(String(safe[i]))
+      cmd.push("--instrument", String(currentInstrument()))
+      if (seconds)
+        cmd.push("--seconds", String(dur))
+      Quickshell.execDetached(cmd)
+    }
+    previewNotes = safe
     refreshPiano()
-    noteClear.interval = Math.max(80, Math.round((seconds || 0.7) * 1000))
+    noteClear.interval = Math.max(80, Math.round(dur * 1000))
     noteClear.restart()
+  }
+
+  function playCirclePreview(notes) {
+    var now = Date.now()
+    var audio = Focus.shouldSpawnPreviewAudio(root.lastPreviewAudioMs, now)
+    if (audio)
+      root.lastPreviewAudioMs = now
+    playMidiNotes(notes, 0.7, audio)
   }
 
   function applySongFields(fields) {
@@ -627,6 +640,8 @@ Item {
     var degree = Focus.degreeIndexFromKey(event.key, event.text)
     if (degree < 0)
       return false
+    if (event.isAutoRepeat)
+      return true
     focusRegion(0)
     circle.previewChip(degree)
     return true
@@ -851,8 +866,10 @@ Item {
               event.accepted = true
             return
           }
-          if (root.previewCircleDegree(event))
+          if (root.previewCircleDegree(event)) {
+            event.accepted = true
             return
+          }
           if (root.laptopKeys)
             root.handleComputerKey(event)
           else
@@ -992,7 +1009,7 @@ Item {
               root.statusText = triad.label
               if (triad.rootPc !== undefined)
                 root.previewChord = { rootPc: triad.rootPc, quality: triad.quality }
-              root.playMidiNotes(triad.notes, 0.7)
+                root.playCirclePreview(triad.notes)
             }
           }
         }
