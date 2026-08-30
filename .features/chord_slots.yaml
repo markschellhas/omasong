@@ -16,7 +16,7 @@ user_flow:
   clear: "User → hover × on filled chip or Delete/Backspace on selected slot → setChord null"
 
 related_features:
-  - circle_of_fifths (drag source)
+  - circle_of_fifths (drag source: wedges, chips, parallel-mode grid)
   - song_structure (capacity from time signature)
   - playback (click auditions slot)
   - music_theory (encode/decode payload)
