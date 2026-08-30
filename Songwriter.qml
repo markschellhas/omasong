@@ -50,10 +50,14 @@ Item {
   property real lastPreviewAudioMs: 0
   property string statusText: ""
   property bool persistReady: false
+  property var playTimeline: []
   property int navRegion: 0
-  readonly property var timeline: root.playScopeSection >= 0
-    ? Song.buildSectionTimeline(song, root.playScopeSection)
-    : Song.buildTimeline(song)
+  // Freeze the event list for the active play session so edits cannot race the transport.
+  readonly property var timeline: (playing && playTimeline && playTimeline.length)
+    ? playTimeline
+    : (root.playScopeSection >= 0
+      ? Song.buildSectionTimeline(song, root.playScopeSection)
+      : Song.buildTimeline(song))
   readonly property bool laptopKeys: !!(song && song.laptopKeys)
   readonly property int laptopOctave: KeyMap.clampOctave(song && song.laptopOctave)
   readonly property string headerHint: {
@@ -86,7 +90,7 @@ Item {
     var override = Quickshell.env("CHORDS_AGENT_HOME")
     if (override && String(override).length)
       return override
-    return Quickshell.env("HOME") + "/.config/chords-and-tabs"
+    return Quickshell.env("HOME") + "/.config/songwriter"
   }
   readonly property int agentPort: {
     var env = Quickshell.env("CHORDS_AGENT_PORT")
@@ -97,7 +101,6 @@ Item {
   }
   readonly property string agentSongPath: agentHome + "/song.json"
   readonly property string agentProgressionsPath: agentHome + "/progressions.json"
-  readonly property string agentApiPath: agentHome + "/agent-api.json"
   function seedSong(raw) {
     var next = Song.normalizeSong(raw)
     if (raw && raw.loop !== undefined)
@@ -138,10 +141,12 @@ Item {
   }
 
   function startAgentServer() {
-    agentServer.running = true
+    if (!agentServer.running)
+      agentServer.running = true
   }
 
   function stopAgentServer() {
+    agentRestart.stop()
     agentServer.running = false
   }
 
@@ -218,10 +223,14 @@ Item {
   function persistNow() {
     if (!persistReady)
       return
-    Quickshell.execDetached(["python3", writeScript, songPath, JSON.stringify(song)])
-    Quickshell.execDetached(["python3", writeScript, agentSongPath, JSON.stringify(Agent.songJson(song))])
-    Quickshell.execDetached(["python3", writeScript, agentProgressionsPath, JSON.stringify(Agent.progressionsJson(song))])
-    Quickshell.execDetached(["python3", writeScript, agentApiPath, JSON.stringify({ port: agentPort })])
+    // One process, atomic renames per file — avoids parallel torn writes and
+    // cross-file generations racing each other. agent-api.json is owned by agent-server.
+    Quickshell.execDetached([
+      "python3", writeScript,
+      songPath, JSON.stringify(song),
+      agentSongPath, JSON.stringify(Agent.songJson(song)),
+      agentProgressionsPath, JSON.stringify(Agent.progressionsJson(song))
+    ])
   }
 
   function currentInstrument() {
@@ -446,7 +455,8 @@ Item {
       stopPlayback()
       return
     }
-    transportTimer.interval = Math.max(1, Math.round(Song.beatsToSeconds(delta, song.bpm) * 1000))
+    // Floor at 8ms so float residuals cannot storm the UI thread at ~1ms.
+    transportTimer.interval = Math.max(8, Math.round(Song.beatsToSeconds(delta, song.bpm) * 1000))
     transportTimer.restart()
   }
 
@@ -457,6 +467,7 @@ Item {
       return
     }
     playScopeSection = -1
+    playTimeline = tl
     playing = true
     currentBeat = 0
     currentBar = 1
@@ -472,6 +483,7 @@ Item {
       return
     }
     playScopeSection = sectionIndex
+    playTimeline = tl
     playing = true
     currentBeat = 0
     currentBar = 1
@@ -491,6 +503,7 @@ Item {
   function stopPlayback() {
     playing = false
     playScopeSection = -1
+    playTimeline = []
     playEvent = null
     currentBeat = 0
     currentBar = 1
@@ -767,7 +780,28 @@ Item {
   Process {
     id: agentServer
     running: false
-    command: ["python3", root.agentServerScript, "--home", root.agentHome, "--port", String(root.agentPort)]
+    command: ["/usr/bin/python3", "-u", root.agentServerScript, "--home", root.agentHome, "--port", String(root.agentPort)]
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var text = String(this.text || "").trim()
+        if (text.length)
+          console.warn("songwriter agent-server:", text)
+      }
+    }
+    onExited: {
+      if (root.opened)
+        agentRestart.restart()
+    }
+  }
+
+  Timer {
+    id: agentRestart
+    interval: 400
+    onTriggered: {
+      if (root.opened && !agentServer.running)
+        agentServer.running = true
+    }
   }
 
   Component.onCompleted: {
@@ -903,11 +937,12 @@ Item {
             anchors.right: closeButton.left
             anchors.rightMargin: Style.spacing.sm
             height: Style.space(30)
-            text: "Chords & Tabs"
+            text: "Mark's Songwriter Board"
             color: root.foreground
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.heading
             font.bold: true
+            elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
           }
@@ -1009,7 +1044,7 @@ Item {
               root.statusText = triad.label
               if (triad.rootPc !== undefined)
                 root.previewChord = { rootPc: triad.rootPc, quality: triad.quality }
-                root.playCirclePreview(triad.notes)
+              root.playCirclePreview(triad.notes)
             }
           }
         }
@@ -1147,7 +1182,7 @@ Item {
               dim: root.dim
               octave: root.laptopOctave
               instrument: root.song.instrument !== undefined ? root.song.instrument : 0
-              layoutName: root.song.layout
+              layoutName: root.song.layout ? String(root.song.layout) : "qwerty"
               laptopKeys: root.laptopKeys
               activeNotes: root.activeNotes
               onNoteOn: function(midi) {

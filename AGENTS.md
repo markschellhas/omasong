@@ -6,7 +6,7 @@ Any agent that can run a command can read the chords that have been added to the
 python3 ./chords-agent progressions
 ```
 
-That is the contract. Do not infer the song from source defaults or the starter Verse/Chorus.
+That is the contract. Do not infer the song from the starter Verse/Chorus.
 
 | Command | Output |
 |---------|--------|
@@ -16,7 +16,7 @@ That is the contract. Do not infer the song from source defaults or the starter 
 
 `--live` skips the on-disk snapshot and fails if the app is not running (exit `2`).
 
-`chords-agent` talks to the overlay on `127.0.0.1` (port `17891`, or `$CHORDS_AGENT_PORT`, or the port in `agent-api.json`). If the process is down it prints the last snapshot from `$CHORDS_AGENT_HOME` or `~/.config/chords-and-tabs/`.
+`chords-agent` talks to the overlay on `127.0.0.1` (port `17891`, or `$CHORDS_AGENT_PORT`, or the port in `agent-api.json`). If the process is down it prints the last snapshot from `$CHORDS_AGENT_HOME` or `~/.config/songwriter/`.
 
 ## Example `progressions` body
 

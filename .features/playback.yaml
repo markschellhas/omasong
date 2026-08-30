@@ -28,4 +28,4 @@ related_features:
 core_components:
   - play-notes.py
 
-notes: "No tap tempo. Space is play/stop when laptop map is off, not sustain. Slot fill uses wall-clock BPM, not audio callbacks. Overlay playhead is not in CI."
+notes: "Loop defaults on. No tap tempo. Space is play/stop when laptop map is off, not sustain. Slot fill uses wall-clock BPM. Overlay playhead is not in CI."

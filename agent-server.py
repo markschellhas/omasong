@@ -8,7 +8,9 @@ import json
 import os
 import signal
 import sys
+import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
@@ -17,7 +19,11 @@ from urllib.request import Request, urlopen
 
 
 DEFAULT_PORT = 17891
-APP_NAME = "chords-and-tabs"
+APP_NAME = "songwriter"
+MAX_SNAPSHOT_BYTES = 1_500_000
+# Token bucket: refill_rate tokens/sec, burst capacity.
+RATE_REFILL_PER_SEC = 30.0
+RATE_BURST = 60.0
 
 
 def home_dir() -> Path:
@@ -34,31 +40,55 @@ def home_dir() -> Path:
 
 
 def search_dirs() -> list[Path]:
-    dirs = [home_dir()]
-    home = os.environ.get("HOME")
-    if home:
-        for extra in (
-            Path(home) / ".config" / APP_NAME,
-            Path(home) / "Library" / "Application Support" / APP_NAME,
-        ):
-            if extra not in dirs:
-                dirs.append(extra)
-    return dirs
+    return [home_dir()]
 
 
 def read_snapshot(file_name: str) -> Optional[str]:
     for directory in search_dirs():
         path = directory / file_name
-        if path.is_file():
-            return path.read_text()
+        if not path.is_file():
+            continue
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
+        if size > MAX_SNAPSHOT_BYTES:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if len(text.encode("utf-8")) > MAX_SNAPSHOT_BYTES:
+            continue
+        return text
     return None
 
 
 def write_snapshot(file_name: str, contents: str) -> bool:
     directory = home_dir()
     try:
+        encoded = contents.encode("utf-8")
+        if len(encoded) > MAX_SNAPSHOT_BYTES:
+            return False
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / file_name).write_text(contents)
+        path = directory / file_name
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{file_name}.",
+            suffix=".tmp",
+            dir=str(directory),
+        )
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_name, path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
         return True
     except OSError:
         return False
@@ -143,7 +173,33 @@ def snapshot_body(name: str) -> Optional[str]:
     text = read_snapshot(name)
     if text is None or text == "":
         return None
+    try:
+        json.loads(text)
+    except json.JSONDecodeError:
+        return None
     return text
+
+
+class RateLimiter:
+    """Process-wide token bucket for loopback GET flood protection."""
+
+    def __init__(self, refill_per_sec: float, burst: float) -> None:
+        self.refill_per_sec = refill_per_sec
+        self.burst = burst
+        self.tokens = burst
+        self.updated = time.monotonic()
+        self.lock = threading.Lock()
+
+    def allow(self) -> bool:
+        with self.lock:
+            now = time.monotonic()
+            elapsed = now - self.updated
+            self.updated = now
+            self.tokens = min(self.burst, self.tokens + elapsed * self.refill_per_sec)
+            if self.tokens < 1.0:
+                return False
+            self.tokens -= 1.0
+            return True
 
 
 class AgentHandler(BaseHTTPRequestHandler):
@@ -159,12 +215,20 @@ class AgentHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Connection", "close")
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        if status == 429:
+            self.send_header("Retry-After", "1")
         self.end_headers()
         if not head_only:
             self.wfile.write(payload)
 
-    def _document(self, path: str) -> Optional[str]:
+    def _rate_limited(self) -> bool:
+        limiter = getattr(self.server, "rate_limiter", None)
+        if limiter is None:
+            return False
+        return not limiter.allow()
+
+    def _document(self, path: str) -> tuple[Optional[str], Optional[int]]:
+        """Return (body, error_status). error_status is set when body is None and not 404."""
         port = int(self.server.server_address[1])
         if path in ("/", "/index.json"):
             return (
@@ -172,29 +236,55 @@ class AgentHandler(BaseHTTPRequestHandler):
                 '"/health":"liveness",'
                 '"/song":"full song including empty slots",'
                 '"/progressions":"chords that have been added, by section"}}'
-                % (APP_NAME, port)
+                % (APP_NAME, port),
+                None,
             )
         if path == "/health":
-            return '{"ok":true,"app":"%s","port":%d}' % (APP_NAME, port)
+            return '{"ok":true,"app":"%s","port":%d}' % (APP_NAME, port), None
         if path == "/song":
-            return snapshot_body("song.json")
+            body = snapshot_body("song.json")
+            if body is None:
+                # Distinguish missing vs torn/invalid for clients that care.
+                raw = read_snapshot("song.json")
+                if raw is not None and raw != "":
+                    return None, 503
+                return None, 404
+            return body, None
         if path == "/progressions":
-            return snapshot_body("progressions.json")
-        return None
+            body = snapshot_body("progressions.json")
+            if body is None:
+                raw = read_snapshot("progressions.json")
+                if raw is not None and raw != "":
+                    return None, 503
+                return None, 404
+            return body, None
+        return None, 404
 
     def do_GET(self) -> None:  # noqa: N802
+        if self._rate_limited():
+            self._json(429, '{"error":"rate limit exceeded"}')
+            return
         path = self.path.split("?", 1)[0]
-        body = self._document(path)
+        body, err = self._document(path)
         if body is None:
-            self._json(404, '{"error":"not found"}')
+            if err == 503:
+                self._json(503, '{"error":"snapshot unavailable"}')
+            else:
+                self._json(404, '{"error":"not found"}')
             return
         self._json(200, body)
 
     def do_HEAD(self) -> None:  # noqa: N802
+        if self._rate_limited():
+            self._json(429, '{"error":"rate limit exceeded"}', head_only=True)
+            return
         path = self.path.split("?", 1)[0]
-        body = self._document(path)
+        body, err = self._document(path)
         if body is None:
-            self._json(404, '{"error":"not found"}', head_only=True)
+            if err == 503:
+                self._json(503, '{"error":"snapshot unavailable"}', head_only=True)
+            else:
+                self._json(404, '{"error":"not found"}', head_only=True)
             return
         self._json(200, body, head_only=True)
 
@@ -210,6 +300,7 @@ def serve(port: int, home: Optional[Path] = None) -> int:
     except OSError as exc:
         sys.stderr.write(f"agent-server: bind 127.0.0.1:{port} failed: {exc}\n")
         return 2
+    httpd.rate_limiter = RateLimiter(RATE_REFILL_PER_SEC, RATE_BURST)  # type: ignore[attr-defined]
     bound = int(httpd.server_address[1])
     write_snapshot("agent-api.json", json.dumps({"port": bound}))
 

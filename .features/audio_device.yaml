@@ -1,5 +1,5 @@
 feature_name: audio_device
-purpose: "Play through PipeWire on the host; no JUCE Device dialog."
+purpose: "Play through PipeWire on the host."
 
 entry_points:
   - play-notes.py
@@ -18,4 +18,4 @@ related_features:
 core_components:
   - tests/run.py
 
-notes: "Sole Omarchy adaptation vs source Device selector. Persist instrument prefs next to song state, not device.xml. play-notes caps duration, pitch, and voice count before synth. PipeWire and omarchy plugin validate are not in CI."
+notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count before synth. PipeWire and omarchy plugin validate are not in CI."

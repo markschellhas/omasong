@@ -30,4 +30,4 @@ core_components:
   - tests/run.py
   - tests/agent_tests.py
 
-notes: "Live overlay/loopback is not in CI. Port 17891, $CHORDS_AGENT_PORT, or agent-api.json; snapshots $CHORDS_AGENT_HOME or ~/.config/chords-and-tabs/."
+notes: "Live overlay/loopback is not in CI. Port 17891, $CHORDS_AGENT_PORT, or agent-api.json; snapshots $CHORDS_AGENT_HOME or ~/.config/songwriter/. Atomic snapshot writes; GET rate-limited (~30/s burst 60); invalid/oversized snapshots → 503/skip."

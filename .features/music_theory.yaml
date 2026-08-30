@@ -15,7 +15,7 @@ user_flow:
 related_features:
   - circle_of_fifths (12 stations, chips)
   - chord_slots (payload decode onto Song)
-  - song_structure (TimeSignature.maxSlots)
+  - song_structure (timeSig.numerator = slots per bar)
   - agent_api (numeral when diatonic)
   - playback (triad MIDI for synth)
 
@@ -23,4 +23,4 @@ core_components:
   - tests/js_tests.js
   - tests/run.py
 
-notes: "Triads only: { rootPc, quality }. No typed chord-symbol parser."
+notes: "Song chords are triads only: { rootPc, quality }. No typed chord-symbol parser. timeSig still serializes in agent JSON; overlay does not pick meters."

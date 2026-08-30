@@ -25,4 +25,4 @@ core_components:
   - js/Guitar.js
   - tests/js_tests.js
 
-notes: "Low E → high e frets; muted = x. Open/first-position major and minor shapes. Default horizontal; vertical is a view toggle on GuitarTab."
+notes: "Low E → high e frets; muted = x. Open/first-position major and minor; movable dim/aug plus search fallback. Default horizontal; vertical is 90° clockwise of that."

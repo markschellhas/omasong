@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "chords-agent"
 
-# Matches js/Agent.js progressionsJson / songJson for defaultSong() in C.
+# Matches js/Agent.js progressionsJson / songJson for defaultSong().
 PROGRESSIONS = {
     "key": {"index": 0, "major": "C", "relativeMinor": "Am"},
     "bpm": 120,
@@ -381,6 +381,56 @@ def test_health_after_server_stop() -> None:
         print("agent health after stop ok")
 
 
+def test_invalid_snapshot_returns_503() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        home.mkdir(parents=True, exist_ok=True)
+        (home / "song.json").write_text("{not-json")
+        (home / "progressions.json").write_text(json.dumps(PROGRESSIONS))
+        port = unused_port()
+        proc = start_server(home, port)
+        if proc is None:
+            print("agent invalid-snapshot skip")
+            return
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/song") as resp:
+                raise SystemExit(f"invalid song snapshot should not be 200, got {resp.status}")
+        except urllib.error.HTTPError as exc:
+            if exc.code != 503:
+                raise SystemExit(f"invalid song snapshot expected 503, got {exc.code}")
+        finally:
+            stop_server(proc)
+        print("agent invalid snapshot 503 ok")
+
+
+def test_rate_limit_returns_429() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        write_snapshots(home)
+        port = unused_port()
+        proc = start_server(home, port)
+        if proc is None:
+            print("agent rate-limit skip")
+            return
+        try:
+            saw_429 = False
+            for _ in range(200):
+                try:
+                    with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.5) as resp:
+                        if resp.status != 200:
+                            raise SystemExit(f"unexpected health status {resp.status}")
+                except urllib.error.HTTPError as exc:
+                    if exc.code == 429:
+                        saw_429 = True
+                        break
+                    raise SystemExit(f"unexpected HTTP error {exc.code}")
+            if not saw_429:
+                raise SystemExit("expected rate limit 429 after burst")
+        finally:
+            stop_server(proc)
+        print("agent rate limit 429 ok")
+
+
 def run() -> int:
     if not CLI.is_file():
         raise SystemExit("missing chords-agent")
@@ -391,6 +441,8 @@ def run() -> int:
     test_missing_snapshot_does_not_invent_defaults()
     test_live_optional()
     test_health_after_server_stop()
+    test_invalid_snapshot_returns_503()
+    test_rate_limit_returns_429()
     print("agent tests ok")
     return 0
 

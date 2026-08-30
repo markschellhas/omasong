@@ -1,9 +1,13 @@
 .pragma library
 
-// Port of source Song (measures, slot spans, place/resize). Do not call
+// Measures, slot spans, place/resize. Do not call
 // Model.js helpers as globals — this file is a .pragma library in QML.
 
 var BARS_PER_ROW = 4
+var MAX_SECTIONS = 32
+var MAX_MEASURES_PER_SECTION = 128
+var MAX_TIME_NUMERATOR = 16
+var MAX_SLOTS_PER_MEASURE = 16
 
 function spanOf(slot) {
   var n = slot && Number(slot.span)
@@ -14,7 +18,9 @@ function spanOf(slot) {
 
 function barCapacity(ts) {
   var n = ts && ts.numerator
-  return n < 1 ? 1 : n
+  if (!(n >= 1))
+    return 1
+  return Math.min(MAX_SLOTS_PER_MEASURE, Math.floor(n))
 }
 
 function wrapPc(pc) {
@@ -160,13 +166,6 @@ function normalizeMeasure(measure, capacity) {
     measure.slots[i].span = spans[i]
 }
 
-function barsForTimeSignature(ts) {
-  var n = ts && Number(ts.numerator)
-  if (!isFinite(n) || n < 1)
-    return 1
-  return Math.floor(n)
-}
-
 function rowCount(measureCount) {
   if (measureCount <= 0)
     return 0
@@ -215,7 +214,7 @@ function normalizeTimeSig(ts) {
   if (!isFinite(n) || n < 1)
     n = 4
   else
-    n = Math.floor(n)
+    n = Math.min(MAX_TIME_NUMERATOR, Math.floor(n))
   if (d !== 2 && d !== 4 && d !== 8)
     d = 4
   return { numerator: n, denominator: d }
@@ -285,7 +284,8 @@ function normalizeSection(src) {
   if (!list.length) {
     syncMeasuresToTimeSignature(section)
   } else {
-    for (var i = 0; i < list.length; i++)
+    var measureLimit = Math.min(list.length, MAX_MEASURES_PER_SECTION)
+    for (var i = 0; i < measureLimit; i++)
       section.measures.push(copyMeasure(list[i], cap))
     for (var m = 0; m < section.measures.length; m++)
       normalizeMeasure(section.measures[m], cap)
@@ -318,7 +318,8 @@ function normalizeSong(raw) {
   if (!looksLikeSongDocument(raw))
     return song
   song.sections = []
-  for (var i = 0; i < raw.sections.length; i++)
+  var sectionLimit = Math.min(raw.sections.length, MAX_SECTIONS)
+  for (var i = 0; i < sectionLimit; i++)
     song.sections.push(normalizeSection(raw.sections[i]))
   if (!song.sections.length)
     return defaultSong()
@@ -358,6 +359,8 @@ function setBpm(song, bpm) {
 
 function addSection(song, name) {
   var next = cloneSong(song)
+  if (next.sections.length >= MAX_SECTIONS)
+    return next
   next.sections.push(makeSection(sectionName(name)))
   return next
 }
@@ -401,6 +404,11 @@ function addBars(song, sectionIndex, count) {
   else
     n = Math.floor(n)
   var section = next.sections[sectionIndex]
+  var room = MAX_MEASURES_PER_SECTION - section.measures.length
+  if (room <= 0)
+    return next
+  if (n > room)
+    n = room
   var cap = barCapacity(section.timeSig)
   for (var i = 0; i < n; i++)
     section.measures.push({ slots: [emptySlot(cap)] })

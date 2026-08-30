@@ -1,6 +1,6 @@
 .pragma library
 
-// Port of source MusicTheory (circle stations, triads, payloads, meter).
+// Circle stations, triads, payloads, and meter.
 // Polar helpers: wrap, rotate, visualSector, hitTest (logical = geometric + tonic).
 
 var PC_NAMES = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
