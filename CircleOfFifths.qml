@@ -519,6 +519,7 @@ Item {
       anchors.right: parent.right
       width: root.sideWidth
       height: parent.height
+      clip: true
 
       ParallelModeGrid {
         id: modeGrid
