@@ -329,27 +329,41 @@ Item {
   }
 
   function refreshLibrary() {
-    enqueueLibrary("get")
+    enqueueLibrary({ action: "get" })
   }
 
-  function enqueueLibrary(action, id) {
+  function enqueueLibrary(job) {
+    if (!job || !job.action)
+      return
     if (libraryProcess.running) {
-      libraryQueue = libraryQueue.concat([{ action: action, id: id || "" }])
+      libraryQueue = libraryQueue.concat([job])
       return
     }
-    startLibrary(action, id)
+    startLibrary(job)
   }
 
-  function startLibrary(action, id) {
-    libraryProcess.action = action || "get"
+  function startLibrary(job) {
+    var action = (job && job.action) || "get"
+    libraryProcess.action = action
+    libraryProcess.expectedId = ""
     libraryProcess.output = ""
     libraryProcess.errorOutput = ""
-    if (action === "save")
+    if (action === "save") {
+      var payload = job.payload || {}
+      libraryProcess.expectedId = payload.id ? String(payload.id) : ""
+      try {
+        saveSelectionFile.setText(JSON.stringify(payload) + "\n")
+      } catch (e) {
+        statusText = "Save failed"
+        Qt.callLater(function() { root.drainLibraryQueue() })
+        return
+      }
       libraryProcess.command = [root.libraryScript, "save"]
-    else if (action === "delete")
-      libraryProcess.command = [root.libraryScript, "delete", String(id || "")]
-    else
+    } else if (action === "delete") {
+      libraryProcess.command = [root.libraryScript, "delete", String(job.id || "")]
+    } else {
       libraryProcess.command = [root.libraryScript, "get"]
+    }
     libraryProcess.running = true
   }
 
@@ -358,33 +372,43 @@ Item {
       return
     var next = libraryQueue[0]
     libraryQueue = libraryQueue.slice(1)
-    Qt.callLater(function() { root.startLibrary(next.action, next.id) })
+    Qt.callLater(function() { root.startLibrary(next) })
   }
 
-  function applyLibraryResult(raw, action) {
+  function songStillMatchesSave(expectedId) {
+    var currentId = song && song.id ? String(song.id) : ""
+    if (expectedId)
+      return currentId === expectedId
+    return currentId === ""
+  }
+
+  function applyLibraryResult(raw, action, expectedId) {
+    var ok = false
     try {
       var parsed = JSON.parse(raw || "{}")
       var songs = Array.isArray(parsed.songs) ? parsed.songs : []
       librarySongs = songs
       libraryLoaded = true
+      ok = true
       if (action === "save") {
-        var entry = null
-        var wantId = song && song.id ? String(song.id) : ""
-        if (wantId) {
-          for (var i = 0; i < songs.length; i++) {
-            if (songs[i] && String(songs[i].id) === wantId) {
-              entry = songs[i]
-              break
+        if (songStillMatchesSave(expectedId)) {
+          var entry = null
+          if (expectedId) {
+            for (var i = 0; i < songs.length; i++) {
+              if (songs[i] && String(songs[i].id) === expectedId) {
+                entry = songs[i]
+                break
+              }
             }
+          } else if (songs.length) {
+            entry = songs[0]
           }
-        }
-        if (!entry && songs.length)
-          entry = songs[0]
-        if (entry) {
-          applySongFields({
-            id: entry.id || "",
-            title: entry.title || "Untitled"
-          })
+          if (entry) {
+            applySongFields({
+              id: entry.id || "",
+              title: entry.title || "Untitled"
+            })
+          }
         }
         statusText = "Saved"
       } else if (action === "delete") {
@@ -394,23 +418,21 @@ Item {
       }
     } catch (e) {
       statusText = action === "save" ? "Save failed" : "Library error"
+      ok = false
     }
+    return ok
   }
 
   function saveToLibrary() {
     var doc = songDocumentForLibrary()
-    var payload = {
-      title: doc.title,
-      id: doc.id || "",
-      song: doc
-    }
-    try {
-      saveSelectionFile.setText(JSON.stringify(payload) + "\n")
-    } catch (e) {
-      statusText = "Save failed"
-      return
-    }
-    enqueueLibrary("save")
+    enqueueLibrary({
+      action: "save",
+      payload: {
+        title: doc.title,
+        id: doc.id || "",
+        song: doc
+      }
+    })
   }
 
   function openLibraryMenu() {
@@ -481,7 +503,7 @@ Item {
       return
     }
     if (item.kind === "delete" && item.id)
-      enqueueLibrary("delete", item.id)
+      enqueueLibrary({ action: "delete", id: item.id })
   }
 
   function loadFromLibrary(entry) {
@@ -982,6 +1004,7 @@ Item {
   Process {
     id: libraryProcess
     property string action: ""
+    property string expectedId: ""
     property string output: ""
     property string errorOutput: ""
     command: []
@@ -995,13 +1018,15 @@ Item {
     }
     onExited: function(exitCode) {
       var completed = libraryProcess.action
+      var expectedId = libraryProcess.expectedId
       var raw = libraryProcess.output
+      var wantOpen = root.libraryOpenAfterGet
+      if (completed === "get")
+        root.libraryOpenAfterGet = false
       if (exitCode === 0) {
-        root.applyLibraryResult(raw, completed)
-        if (completed === "get" && root.libraryOpenAfterGet) {
-          root.libraryOpenAfterGet = false
+        var parsedOk = root.applyLibraryResult(raw, completed, expectedId)
+        if (completed === "get" && wantOpen && parsedOk)
           root.showLibraryMenu()
-        }
       } else {
         var err = String(libraryProcess.errorOutput || "").trim()
         if (completed === "save")
@@ -1010,8 +1035,6 @@ Item {
           root.statusText = err || "Remove failed"
         else
           root.statusText = err || "Library error"
-        if (completed === "get")
-          root.libraryOpenAfterGet = false
       }
       root.drainLibraryQueue()
     }
