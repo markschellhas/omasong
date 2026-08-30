@@ -68,20 +68,12 @@ Item {
   readonly property int transportHeight: Style.space(44)
   readonly property int pianoHeight: Style.space(146)
   readonly property int guitarTabWidth: Style.space(148)
-  readonly property var displayChord: {
-    var playingNow = root.playing
-    var ev = root.playEvent
-    var preview = root.previewChord
-    var s = root.song
-    var sec = root.selectedSection
-    var meas = root.selectedMeasure
-    var slot = root.selectedSlot
-    if (playingNow && ev && ev.chord)
-      return ev.chord
-    if (preview && preview.rootPc !== undefined)
-      return preview
-    return Song.getChord(s, sec, meas, slot)
-  }
+  readonly property var displayChord: Model.resolveDisplayChord(
+    root.playing,
+    root.playEvent && root.playEvent.chord,
+    root.previewChord,
+    Song.getChord(root.song, root.selectedSection, root.selectedMeasure, root.selectedSlot)
+  )
   readonly property string playScript: decodeURIComponent(
     Qt.resolvedUrl("play-notes.py").toString().replace(/^file:\/\//, ""))
   readonly property string songPath: Quickshell.env("HOME") + "/.local/state/omarchy/songwriter/song.json"
@@ -278,11 +270,8 @@ Item {
     updateSong(next)
   }
 
-  function selectedSlotNotes() {
-    var chord = Song.getChord(song, selectedSection, selectedMeasure, selectedSlot)
-    if (!chord)
-      return []
-    return Model.triadMidi(chord)
+  function clearCirclePreview() {
+    previewChord = null
   }
 
   function refreshPiano() {
@@ -296,13 +285,16 @@ Item {
         next.push(midi)
     }
     var i
-    var selected = selectedSlotNotes()
     for (i = 0; i < soundingNotes.length; i++)
       add(soundingNotes[i])
     for (i = 0; i < previewNotes.length; i++)
       add(previewNotes[i])
-    for (i = 0; i < selected.length; i++)
-      add(selected[i])
+    var shown = root.displayChord
+    if (shown) {
+      var shownNotes = Model.triadMidi(shown)
+      for (i = 0; i < shownNotes.length; i++)
+        add(shownNotes[i])
+    }
     for (var held in heldNotes)
       add(held)
     activeNotes = next
@@ -506,6 +498,7 @@ Item {
       return
     var seconds = Song.beatsToSeconds(beats, song.bpm)
     statusText = Model.chordName(chord.rootPc, chord.quality)
+    clearCirclePreview()
     beginSlotFill(sectionIndex, measureIndex, slotIndex, beats, true)
     playMidiNotes(Model.triadMidi(chord), seconds)
   }
@@ -606,6 +599,7 @@ Item {
     selectedSection = next.section
     selectedMeasure = next.measure
     selectedSlot = next.slot
+    clearCirclePreview()
     refreshPiano()
     return true
   }
@@ -677,7 +671,6 @@ Item {
     interval: 700
     onTriggered: {
       root.previewNotes = []
-      root.previewChord = null
       root.refreshPiano()
     }
   }
@@ -1092,6 +1085,7 @@ Item {
             }
             onSlotSelected: function(sectionIndex, measureIndex, slotIndex) {
               root.focusRegion(1)
+              root.clearCirclePreview()
               root.selectedSection = sectionIndex
               root.selectedMeasure = measureIndex
               root.selectedSlot = slotIndex

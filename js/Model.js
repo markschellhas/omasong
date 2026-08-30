@@ -169,6 +169,16 @@ function beatsPerBar(ts) {
   return 4 * ts.numerator / ts.denominator
 }
 
+function resolveDisplayChord(playing, playChord, previewChord, selectedChord) {
+  if (playing && playChord && playChord.rootPc !== undefined)
+    return playChord
+  if (previewChord && previewChord.rootPc !== undefined)
+    return previewChord
+  if (selectedChord && selectedChord.rootPc !== undefined)
+    return selectedChord
+  return null
+}
+
 function triadMidi(chord, octave) {
   if (octave === undefined || octave === null)
     octave = 4

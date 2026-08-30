@@ -59,6 +59,15 @@ assert(!inKeyWedge(2, 0), "D not in C wedge")
 assertEq(triad(0, "major").label, "C")
 assertEq(triad(0, "minor").label, "Am")
 assertEq(triad(0, "major").notes.length, 3)
+var selectedC = { rootPc: 0, quality: "major" }
+var previewG = { rootPc: 7, quality: "major" }
+var playF = { rootPc: 5, quality: "major" }
+assertEq(resolveDisplayChord(false, null, null, selectedC).rootPc, 0)
+assertEq(resolveDisplayChord(false, null, previewG, selectedC).rootPc, 7, "circle preview sticks over selected slot")
+assertEq(resolveDisplayChord(false, null, previewG, selectedC).rootPc, 7, "preview still wins after audition notes clear")
+assertEq(resolveDisplayChord(true, playF, previewG, selectedC).rootPc, 5)
+assertEq(resolveDisplayChord(false, playF, previewG, selectedC).rootPc, 7, "after stop, circle preview remains")
+assertEq(resolveDisplayChord(false, null, null, null), null)
 assertEq(triad(0, "major").rootPc, 0)
 assertEq(triad(0, "major").quality, "major")
 assertEq(triad(0, "minor").rootPc, 9)
