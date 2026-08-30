@@ -234,7 +234,7 @@ function tabLine(stringName, fret) {
   return stringName + "|--" + g + "-"
 }
 
-function tabLines(voicing) {
+function tabLines(voicing, orientation) {
   var frets = voicing && voicing.frets ? voicing.frets : EMPTY_FRETS
   var lines = []
   var i
@@ -249,11 +249,22 @@ function tabLines(voicing) {
       text: hasChord ? tabLine(name, fret) : name + "|-----"
     })
   }
+  if (orientation === "vertical")
+    return rotateTabLinesClockwise(lines)
   return lines
 }
 
+// Horizontal rows (high e on top) → columns (low E on the left).
+function rotateTabLinesClockwise(lines) {
+  var out = []
+  var i
+  for (i = lines.length - 1; i >= 0; i--)
+    out.push(lines[i])
+  return out
+}
+
 function tabBlock(voicing, orientation) {
-  var lines = tabLines(voicing)
+  var lines = tabLines(voicing, orientation)
   var i
   if (orientation === "vertical") {
     var names = []

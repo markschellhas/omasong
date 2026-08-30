@@ -12,7 +12,7 @@ user_flow:
   primary: "Selected, previewed, or playing triad → voicing → six-line tab in the Keyboard right column"
   preview: "Circle audition ends → tab stays on that triad until a slot is selected or auditioned"
   empty: "No triad → em-dash and blank string lines"
-  orientation: "User → header orientation button → strings run vertically (high e left) or horizontally (high e top, default)"
+  orientation: "User → header orientation button → 90° clockwise of the horizontal tab (low E left, high e right) or horizontal (high e top, default)"
 
 related_features:
   - piano_keyboard (shares Keyboard region; piano stays C3–C5, narrower)
