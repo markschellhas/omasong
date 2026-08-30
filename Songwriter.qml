@@ -101,6 +101,19 @@ Item {
   }
   readonly property string agentSongPath: agentHome + "/song.json"
   readonly property string agentProgressionsPath: agentHome + "/progressions.json"
+  readonly property string libraryScript: decodeURIComponent(
+    Qt.resolvedUrl("song-library").toString().replace(/^file:\/\//, ""))
+  readonly property string libraryRuntimeDir: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-songwriter"
+  readonly property string saveSelectionPath: libraryRuntimeDir + "/save-selection.json"
+
+  property var librarySongs: []
+  property string libraryMenuKind: ""
+  property bool libraryLoaded: false
+  property bool libraryOpenAfterGet: false
+  property var libraryQueue: []
+  property real libraryMenuX: 0
+  property real libraryMenuY: 0
+
   function seedSong(raw) {
     var next = Song.normalizeSong(raw)
     if (raw && raw.loop !== undefined)
@@ -125,11 +138,13 @@ Item {
   function open(payloadJson) {
     opened = true
     startAgentServer()
+    refreshLibrary()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
   function close() {
     stopPlayback()
+    closeLibraryMenu()
     opened = false
     stopAgentServer()
   }
@@ -289,7 +304,195 @@ Item {
     next.laptopOctave = fields.laptopOctave !== undefined ? fields.laptopOctave : (song && song.laptopOctave)
     if (fields.keyIndex !== undefined)
       next.keyIndex = fields.keyIndex
+    if (fields.title !== undefined)
+      next.title = fields.title
+    if (fields.id !== undefined)
+      next.id = fields.id
     updateSong(next)
+  }
+
+  function songDocumentForLibrary() {
+    var s = song || {}
+    return {
+      title: s.title || "Untitled",
+      id: s.id || "",
+      bpm: s.bpm,
+      keyIndex: s.keyIndex,
+      sections: s.sections,
+      loop: !!s.loop,
+      octave: s.octave,
+      layout: s.layout,
+      instrument: s.instrument,
+      laptopKeys: !!s.laptopKeys,
+      laptopOctave: s.laptopOctave
+    }
+  }
+
+  function refreshLibrary() {
+    enqueueLibrary("get")
+  }
+
+  function enqueueLibrary(action, id) {
+    if (libraryProcess.running) {
+      libraryQueue = libraryQueue.concat([{ action: action, id: id || "" }])
+      return
+    }
+    startLibrary(action, id)
+  }
+
+  function startLibrary(action, id) {
+    libraryProcess.action = action || "get"
+    libraryProcess.output = ""
+    libraryProcess.errorOutput = ""
+    if (action === "save")
+      libraryProcess.command = [root.libraryScript, "save"]
+    else if (action === "delete")
+      libraryProcess.command = [root.libraryScript, "delete", String(id || "")]
+    else
+      libraryProcess.command = [root.libraryScript, "get"]
+    libraryProcess.running = true
+  }
+
+  function drainLibraryQueue() {
+    if (!libraryQueue.length)
+      return
+    var next = libraryQueue[0]
+    libraryQueue = libraryQueue.slice(1)
+    Qt.callLater(function() { root.startLibrary(next.action, next.id) })
+  }
+
+  function applyLibraryResult(raw, action) {
+    try {
+      var parsed = JSON.parse(raw || "{}")
+      var songs = Array.isArray(parsed.songs) ? parsed.songs : []
+      librarySongs = songs
+      libraryLoaded = true
+      if (action === "save") {
+        var entry = null
+        var wantId = song && song.id ? String(song.id) : ""
+        if (wantId) {
+          for (var i = 0; i < songs.length; i++) {
+            if (songs[i] && String(songs[i].id) === wantId) {
+              entry = songs[i]
+              break
+            }
+          }
+        }
+        if (!entry && songs.length)
+          entry = songs[0]
+        if (entry) {
+          applySongFields({
+            id: entry.id || "",
+            title: entry.title || "Untitled"
+          })
+        }
+        statusText = "Saved"
+      } else if (action === "delete") {
+        statusText = "Removed"
+        if (libraryMenuKind === "open" && !songs.length)
+          closeLibraryMenu()
+      }
+    } catch (e) {
+      statusText = action === "save" ? "Save failed" : "Library error"
+    }
+  }
+
+  function saveToLibrary() {
+    var doc = songDocumentForLibrary()
+    var payload = {
+      title: doc.title,
+      id: doc.id || "",
+      song: doc
+    }
+    try {
+      saveSelectionFile.setText(JSON.stringify(payload) + "\n")
+    } catch (e) {
+      statusText = "Save failed"
+      return
+    }
+    enqueueLibrary("save")
+  }
+
+  function openLibraryMenu() {
+    if (!libraryLoaded) {
+      libraryOpenAfterGet = true
+      refreshLibrary()
+      return
+    }
+    showLibraryMenu()
+  }
+
+  function showLibraryMenu() {
+    libraryMenuKind = "open"
+    positionLibraryMenu()
+  }
+
+  function closeLibraryMenu() {
+    libraryMenuKind = ""
+  }
+
+  function positionLibraryMenu() {
+    var layer = menuOverlay
+    var anchor = transport
+    if (!layer || !anchor)
+      return
+    var gap = Style.space(4)
+    var menuW = Style.space(260)
+    var menuH = libraryMenuPanel.height
+    var below = anchor.mapToItem(layer, 0, anchor.height + gap)
+    libraryMenuX = Math.max(0, Math.min(below.x, Math.max(0, layer.width - menuW)))
+    var y = below.y
+    if (y + menuH > layer.height)
+      y = layer.height - menuH
+    if (y < 0)
+      y = 0
+    libraryMenuY = y
+  }
+
+  function libraryMenuItems() {
+    var items = []
+    var songs = librarySongs || []
+    var i
+    for (i = 0; i < songs.length; i++) {
+      var entry = songs[i] || {}
+      items.push({
+        kind: "load",
+        label: entry.title || "Untitled",
+        entry: entry
+      })
+    }
+    for (i = 0; i < songs.length; i++) {
+      var doomed = songs[i] || {}
+      items.push({
+        kind: "delete",
+        label: "Remove · " + (doomed.title || "Untitled"),
+        id: doomed.id || ""
+      })
+    }
+    return items
+  }
+
+  function pickLibraryMenu(item) {
+    if (!item)
+      return
+    if (item.kind === "load") {
+      closeLibraryMenu()
+      loadFromLibrary(item.entry)
+      return
+    }
+    if (item.kind === "delete" && item.id)
+      enqueueLibrary("delete", item.id)
+  }
+
+  function loadFromLibrary(entry) {
+    if (!entry || !entry.song)
+      return
+    stopPlayback()
+    var next = seedSong(entry.song)
+    next.id = entry.id || ""
+    next.title = entry.title || "Untitled"
+    updateSong(next)
+    statusText = "Loaded " + (next.title || "Untitled")
   }
 
   function clearCirclePreview() {
@@ -765,6 +968,55 @@ Item {
     }
   }
 
+  FileView {
+    id: saveSelectionFile
+    path: root.saveSelectionPath
+    preload: false
+    watchChanges: false
+    blockWrites: true
+    atomicWrites: true
+    printErrors: true
+    onSaveFailed: root.statusText = "Save failed"
+  }
+
+  Process {
+    id: libraryProcess
+    property string action: ""
+    property string output: ""
+    property string errorOutput: ""
+    command: []
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: libraryProcess.output = text
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: libraryProcess.errorOutput = text
+    }
+    onExited: function(exitCode) {
+      var completed = libraryProcess.action
+      var raw = libraryProcess.output
+      if (exitCode === 0) {
+        root.applyLibraryResult(raw, completed)
+        if (completed === "get" && root.libraryOpenAfterGet) {
+          root.libraryOpenAfterGet = false
+          root.showLibraryMenu()
+        }
+      } else {
+        var err = String(libraryProcess.errorOutput || "").trim()
+        if (completed === "save")
+          root.statusText = err || "Save failed"
+        else if (completed === "delete")
+          root.statusText = err || "Remove failed"
+        else
+          root.statusText = err || "Library error"
+        if (completed === "get")
+          root.libraryOpenAfterGet = false
+      }
+      root.drainLibraryQueue()
+    }
+  }
+
   Timer {
     id: persistFallback
     interval: 2000
@@ -805,6 +1057,7 @@ Item {
   }
 
   Component.onCompleted: {
+    Quickshell.execDetached(["install", "-d", "-m", "700", root.libraryRuntimeDir])
     songFile.reload()
     refreshPiano()
   }
@@ -990,6 +1243,7 @@ Item {
           currentBar: root.currentBar
           currentBeat: root.displayBeat
           statusText: root.statusText
+          songTitle: (root.song && root.song.title) ? root.song.title : "Untitled"
           onPlayRequested: { root.startPlayback(); root.refocusKeys() }
           onStopRequested: { root.stopPlayback(); root.refocusKeys() }
           onLoopToggled: {
@@ -999,6 +1253,11 @@ Item {
           onBpmChangedByUser: function(value) {
             root.applySongFields({ bpm: value })
           }
+          onTitleEdited: function(value) {
+            root.applySongFields({ title: value })
+          }
+          onSaveRequested: { root.saveToLibrary(); root.refocusKeys() }
+          onOpenRequested: { root.openLibraryMenu(); root.refocusKeys() }
         }
 
         Item {
@@ -1230,6 +1489,52 @@ Item {
           id: menuOverlay
           anchors.fill: parent
           z: 1000
+        }
+
+        MouseArea {
+          parent: menuOverlay
+          visible: root.libraryMenuKind !== ""
+          anchors.fill: parent
+          z: 1000
+          onClicked: root.closeLibraryMenu()
+        }
+
+        Rectangle {
+          id: libraryMenuPanel
+          parent: menuOverlay
+          visible: root.libraryMenuKind !== ""
+          x: root.libraryMenuX
+          y: root.libraryMenuY
+          z: 1001
+          width: Style.space(260)
+          height: libraryMenuCol.implicitHeight + Style.spacing.sm * 2
+          radius: Style.cornerRadius
+          color: Color.menu.background
+          border.width: 1
+          border.color: Color.menu.border
+          onHeightChanged: if (root.libraryMenuKind !== "") root.positionLibraryMenu()
+
+          Column {
+            id: libraryMenuCol
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Style.spacing.sm
+            spacing: Style.space(4)
+
+            Repeater {
+              model: root.libraryMenuKind !== "" ? root.libraryMenuItems() : []
+
+              delegate: Button {
+                required property var modelData
+                width: parent.width
+                text: modelData.label
+                bordered: true
+                foreground: root.foreground
+                onClicked: root.pickLibraryMenu(modelData)
+              }
+            }
+          }
         }
       }
       }
