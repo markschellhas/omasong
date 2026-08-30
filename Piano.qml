@@ -72,7 +72,6 @@ Item {
       Button {
         iconText: "\uf11c"
         tooltipText: root.laptopKeys ? "Laptop keys on" : "Laptop keys"
-        bordered: true
         selected: root.laptopKeys
         foreground: root.laptopKeys ? root.foreground : root.dim
         onClicked: root.laptopToggled()
