@@ -1,6 +1,6 @@
 .pragma library
 
-// Port of source Song (measures, slot spans, place/resize). Do not call
+// Measures, slot spans, place/resize. Do not call
 // Model.js helpers as globals — this file is a .pragma library in QML.
 
 var BARS_PER_ROW = 4
@@ -158,13 +158,6 @@ function normalizeMeasure(measure, capacity) {
 
   for (i = 0; i < n; i++)
     measure.slots[i].span = spans[i]
-}
-
-function barsForTimeSignature(ts) {
-  var n = ts && Number(ts.numerator)
-  if (!isFinite(n) || n < 1)
-    return 1
-  return Math.floor(n)
 }
 
 function rowCount(measureCount) {

@@ -16,7 +16,7 @@ related_features:
   - piano_keyboard (SoundPicker UI)
   - playback (same timbre for play, audition, preview, live)
   - region_focus (h/l when Keyboard focused)
-  - audio_device (PipeWire, no device.xml)
+  - audio_device (PipeWire)
 
 core_components:
   - tests/run.py

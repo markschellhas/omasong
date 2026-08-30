@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "chords-agent"
 
-# Matches js/Agent.js progressionsJson / songJson for defaultSong() in C.
+# Matches js/Agent.js progressionsJson / songJson for defaultSong().
 PROGRESSIONS = {
     "key": {"index": 0, "major": "C", "relativeMinor": "Am"},
     "bpm": 120,

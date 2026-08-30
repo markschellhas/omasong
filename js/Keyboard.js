@@ -1,6 +1,6 @@
 .pragma library
 
-// Port of source LaptopKeys.h (QWERTY A=C …; Z/X octave).
+// QWERTY laptop map (A=C …; Z/X octave).
 // Piano.qml uses pianoKeysC3C5 (MIDI 48–72).
 
 var DEFAULT_OCTAVE = 4

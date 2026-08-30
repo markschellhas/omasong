@@ -85,7 +85,7 @@ Item {
     var override = Quickshell.env("CHORDS_AGENT_HOME")
     if (override && String(override).length)
       return override
-    return Quickshell.env("HOME") + "/.config/chords-and-tabs"
+    return Quickshell.env("HOME") + "/.config/songwriter"
   }
   readonly property int agentPort: {
     var env = Quickshell.env("CHORDS_AGENT_PORT")
@@ -137,10 +137,12 @@ Item {
   }
 
   function startAgentServer() {
-    agentServer.running = true
+    if (!agentServer.running)
+      agentServer.running = true
   }
 
   function stopAgentServer() {
+    agentRestart.stop()
     agentServer.running = false
   }
 
@@ -752,7 +754,28 @@ Item {
   Process {
     id: agentServer
     running: false
-    command: ["python3", root.agentServerScript, "--home", root.agentHome, "--port", String(root.agentPort)]
+    command: ["/usr/bin/python3", "-u", root.agentServerScript, "--home", root.agentHome, "--port", String(root.agentPort)]
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var text = String(this.text || "").trim()
+        if (text.length)
+          console.warn("songwriter agent-server:", text)
+      }
+    }
+    onExited: {
+      if (root.opened)
+        agentRestart.restart()
+    }
+  }
+
+  Timer {
+    id: agentRestart
+    interval: 400
+    onTriggered: {
+      if (root.opened && !agentServer.running)
+        agentServer.running = true
+    }
   }
 
   Component.onCompleted: {
@@ -886,11 +909,12 @@ Item {
             anchors.right: closeButton.left
             anchors.rightMargin: Style.spacing.sm
             height: Style.space(30)
-            text: "Chords & Tabs"
+            text: "Mark's Songwriter Board"
             color: root.foreground
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.heading
             font.bold: true
+            elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
           }
@@ -1130,7 +1154,7 @@ Item {
               dim: root.dim
               octave: root.laptopOctave
               instrument: root.song.instrument !== undefined ? root.song.instrument : 0
-              layoutName: root.song.layout
+              layoutName: root.song.layout ? String(root.song.layout) : "qwerty"
               laptopKeys: root.laptopKeys
               activeNotes: root.activeNotes
               onNoteOn: function(midi) {

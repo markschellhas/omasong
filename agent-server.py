@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 
 
 DEFAULT_PORT = 17891
-APP_NAME = "chords-and-tabs"
+APP_NAME = "songwriter"
 
 
 def home_dir() -> Path:
@@ -34,16 +34,7 @@ def home_dir() -> Path:
 
 
 def search_dirs() -> list[Path]:
-    dirs = [home_dir()]
-    home = os.environ.get("HOME")
-    if home:
-        for extra in (
-            Path(home) / ".config" / APP_NAME,
-            Path(home) / "Library" / "Application Support" / APP_NAME,
-        ):
-            if extra not in dirs:
-                dirs.append(extra)
-    return dirs
+    return [home_dir()]
 
 
 def read_snapshot(file_name: str) -> Optional[str]:

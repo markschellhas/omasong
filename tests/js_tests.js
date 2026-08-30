@@ -95,9 +95,6 @@ assertEq(chordName(song.sections[1].measures[0].slots[0].chord.rootPc, song.sect
 assertEq(chordName(song.sections[1].measures[1].slots[0].chord.rootPc, song.sections[1].measures[1].slots[0].chord.quality), "G")
 assertEq(chordName(song.sections[1].measures[2].slots[0].chord.rootPc, song.sections[1].measures[2].slots[0].chord.quality), "C")
 assertEq(chordName(song.sections[1].measures[3].slots[0].chord.rootPc, song.sections[1].measures[3].slots[0].chord.quality), "Em")
-assertEq(barsForTimeSignature({ numerator: 4, denominator: 4 }), 4)
-assertEq(barsForTimeSignature({ numerator: 3, denominator: 4 }), 3)
-assertEq(barsForTimeSignature({ numerator: 6, denominator: 8 }), 6)
 assertEq(rowCount(4), 1)
 assertEq(rowCount(6), 2)
 assertEq(rowIndexForMeasure(3), 0)
@@ -105,7 +102,7 @@ assertEq(rowIndexForMeasure(4), 1)
 assertEq(slotSpan(song, 0, 0, 0), 4)
 assert(canSplitSlot(song, 0, 0, 0), "full chord can split")
 
-// C++: removeSection is a no-op only for the last remaining section.
+// removeSection is a no-op only for the last remaining section.
 assertEq(removeSection(song, 0).sections.length, 1)
 assertEq(removeSection(song, 0).sections[0].name, "Chorus")
 assertEq(song.sections.length, 2)
@@ -154,7 +151,7 @@ assertEq(slotSpanSum(resized.sections[0].measures[0]), 4)
 var cleared = setChord(cloneSong(song), 0, 0, 0, null)
 assertEq(cleared.sections[0].measures[0].slots[0].chord, null)
 
-// C++ SongModelTest placeChord edges: split, insert side, max-capacity replace.
+// placeChord edges: split, insert side, max-capacity replace.
 var sPlace = cloneSong(song)
 sPlace = placeChord(sPlace, 0, 0, 0, { rootPc: 5, quality: "major" }, true)
 assertEq(sPlace.sections[0].measures[0].slots.length, 2)
@@ -195,7 +192,7 @@ assertEq(chordName(crossBar.sections[0].measures[1].slots[0].chord.rootPc, cross
 assertEq(chordName(crossBar.sections[0].measures[1].slots[1].chord.rootPc, crossBar.sections[0].measures[1].slots[1].chord.quality), "G")
 assertEq(moveChord(song, 0, 0, 0, 0, 0, 0, true).sections[0].measures[0].slots[0].chord.rootPc, 0)
 
-// C++ resizeSlot: shrink opens unit empties; grow absorbs them.
+// resizeSlot: shrink opens unit empties; grow absorbs them.
 var sResize = resizeSlot(cloneSong(song), 0, 0, 0, 2, "right")
 assertEq(sResize.sections[0].measures[0].slots.length, 3)
 assertEq(chordName(sResize.sections[0].measures[0].slots[0].chord.rootPc, sResize.sections[0].measures[0].slots[0].chord.quality), "C")
@@ -382,7 +379,7 @@ while (twoBeat < 3) {
 twoClock.push(twoBeat)
 assertEq(twoClock.join(","), "0,1,1.5,2,3")
 
-// Task 5: Agent JSON (progressions omit empties; song includes every slot).
+// Agent JSON (progressions omit empties; song includes every slot).
 var song = defaultSong()
 song.keyIndex = 0
 var p = progressionsJson(song)
@@ -394,7 +391,7 @@ var doc = songJson(song)
 assertEq(doc.sections[0].measures[0].slots[0].rootPc, 0)
 assertEq(songJson(setChord(cloneSong(song), 0, 0, 0, null)).sections[0].measures[0].slots[0], null)
 
-// C++ SongJson / AgentApiTest shapes.
+// Progressions and song JSON shapes.
 assertEq(p.key.index, 0)
 assertEq(p.key.relativeMinor, "Am")
 assertEq(p.sections[0].name, "Verse")
@@ -452,7 +449,7 @@ numeralFor = function () { return "" }
 assertEq(progressionsJson(defaultSong()).sections[0].chords[0].numeral, "I")
 numeralFor = savedNumeralFor
 
-// Task 10: region focus cycle (j down, k up, wrap).
+// Region focus cycle (j down, k up, wrap).
 assertEq(cycleNavRegion(0, 1), 1)
 assertEq(cycleNavRegion(2, 1), 0)
 assertEq(cycleNavRegion(0, -1), 2)

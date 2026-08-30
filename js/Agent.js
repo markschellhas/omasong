@@ -1,6 +1,6 @@
 .pragma library
 
-// Port of source SongJson (progressions + full song document).
+// Progressions JSON and the full song document.
 // Diatonic numerals are local: QML pragma libraries cannot see Model.js.
 
 var AGENT_PC_NAMES = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
