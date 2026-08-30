@@ -15,7 +15,7 @@ Item {
   readonly property var voicing: root.chord && root.chord.rootPc !== undefined
     ? Guitar.voicingFor(root.chord.rootPc, root.chord.quality)
     : null
-  readonly property var lines: Guitar.tabLines(root.voicing)
+  readonly property var lines: Guitar.tabLines(root.voicing, root.vertical ? "vertical" : "horizontal")
   readonly property string chordLabel: root.voicing
     ? Model.chordName(root.voicing.rootPc, root.voicing.quality)
     : ""
