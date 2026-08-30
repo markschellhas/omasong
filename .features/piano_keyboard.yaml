@@ -11,6 +11,7 @@ apps:
 user_flow:
   primary: "User → mouse down on key → noteOn MIDI → play-notes.py"
   highlight: "Playback, preview, or selected slot triad → highlighted MIDI 48–72"
+  preview: "Circle audition ends → keys stay on that triad until a slot is selected or auditioned"
 
 related_features:
   - playback (sounding notes, live notes)
