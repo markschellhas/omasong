@@ -252,10 +252,19 @@ function tabLines(voicing) {
   return lines
 }
 
-function tabBlock(voicing) {
+function tabBlock(voicing, orientation) {
   var lines = tabLines(voicing)
-  var out = []
   var i
+  if (orientation === "vertical") {
+    var names = []
+    var glyphs = []
+    for (i = 0; i < lines.length; i++) {
+      names.push(lines[i].name)
+      glyphs.push(lines[i].glyph)
+    }
+    return names.join(" ") + "\n" + glyphs.join(" ")
+  }
+  var out = []
   for (i = 0; i < lines.length; i++)
     out.push(lines[i].text)
   return out.join("\n")
