@@ -8,6 +8,8 @@ var NATURAL_PC = [0, 2, 4, 5, 7, 9, 11]
 
 var MODE_NAMES = ["Lydian", "Ionian", "Mixolydian", "Dorian", "Aeolian", "Phrygian", "Locrian"]
 
+var MODE_ABBREV = ["Lyd", "Ion", "Mix", "Dor", "Aeo", "Phr", "Loc"]
+
 // Brightness order; each step down flattens degrees 4, 7, 3, 6, 2, 5.
 var MODE_INTERVALS = [
   [0, 2, 4, 6, 7, 9, 11],
@@ -280,6 +282,45 @@ function cellChangedFromAbove(modeIndex, degreeIndex, rootPc, useSevenths, prevM
   var above = cellChord(rootPc, prevModeIndex, degreeIndex, useSevenths)
   var here = cellChord(rootPc, modeIndex, degreeIndex, useSevenths)
   return !chordsEqual(above, here)
+}
+
+function visibleModeIndices(showAll) {
+  return showAll ? [0, 1, 2, 3, 4, 5, 6] : COMMON_MODE_INDICES.slice()
+}
+
+function visibleModeCount(showAll) {
+  return showAll ? 7 : COMMON_MODE_INDICES.length
+}
+
+function visibleModeIndex(rowIndex, showAll) {
+  var ids = visibleModeIndices(showAll)
+  if (rowIndex < 0 || rowIndex >= ids.length)
+    return -1
+  return ids[rowIndex]
+}
+
+function modeName(modeIndex) {
+  return MODE_NAMES[modeIndex] || ""
+}
+
+function modeAbbrev(modeIndex) {
+  return MODE_ABBREV[modeIndex] || ""
+}
+
+function cellInfo(rootPc, modeIndex, degreeIndex, homeModeIndex, useSevenths, prevModeIndex) {
+  var chord = cellChord(rootPc, modeIndex, degreeIndex, useSevenths)
+  return {
+    modeIndex: modeIndex,
+    degreeIndex: degreeIndex,
+    symbol: chord.symbol,
+    numeral: romanNumeral(chord, rootPc, homeModeIndex),
+    diatonic: isDiatonicToHome(chord, rootPc, homeModeIndex, useSevenths),
+    changedFromAbove: cellChangedFromAbove(modeIndex, degreeIndex, rootPc, useSevenths, prevModeIndex),
+    unstableTonic: !!chord.unstableTonic,
+    quality: chord.quality,
+    rootPc: chord.rootPc,
+    seventh: chord.seventh
+  }
 }
 
 function buildGrid(rootPc, homeModeIndex, useSevenths, showAllModes) {
