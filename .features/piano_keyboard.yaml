@@ -18,6 +18,7 @@ related_features:
   - laptop_keys (computer-keyboard toggle)
   - circle_of_fifths (preview highlight)
   - region_focus (Keyboard region)
+  - guitar_tab (right column; piano stays C3–C5, narrower)
 
 core_components:
   - js/Keyboard.js

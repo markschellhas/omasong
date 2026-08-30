@@ -21,6 +21,7 @@ related_features:
   - chord_slots (slot duration, audition)
   - row_repeats (timeline repeatPass)
   - piano_keyboard (soundingNotes highlight)
+  - guitar_tab (playing triad)
   - instruments (timbre)
   - audio_device (PipeWire output)
 

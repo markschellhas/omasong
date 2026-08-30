@@ -19,6 +19,7 @@ related_features:
   - circle_of_fifths (drag source: wedges, chips, parallel-mode grid)
   - song_structure (capacity from time signature)
   - playback (click auditions slot)
+  - guitar_tab (selected slot)
   - music_theory (encode/decode payload)
   - agent_api (placed chords vs rests)
 

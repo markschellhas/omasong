@@ -45,6 +45,7 @@ Item {
   property var activeNotes: []
   property var soundingNotes: []
   property var previewNotes: []
+  property var previewChord: null
   property var heldNotes: ({})
   property string statusText: ""
   property bool persistReady: false
@@ -66,6 +67,21 @@ Item {
   readonly property int headerHeight: Style.space(52)
   readonly property int transportHeight: Style.space(44)
   readonly property int pianoHeight: Style.space(146)
+  readonly property int guitarTabWidth: Style.space(148)
+  readonly property var displayChord: {
+    var playingNow = root.playing
+    var ev = root.playEvent
+    var preview = root.previewChord
+    var s = root.song
+    var sec = root.selectedSection
+    var meas = root.selectedMeasure
+    var slot = root.selectedSlot
+    if (playingNow && ev && ev.chord)
+      return ev.chord
+    if (preview && preview.rootPc !== undefined)
+      return preview
+    return Song.getChord(s, sec, meas, slot)
+  }
   readonly property string playScript: decodeURIComponent(
     Qt.resolvedUrl("play-notes.py").toString().replace(/^file:\/\//, ""))
   readonly property string songPath: Quickshell.env("HOME") + "/.local/state/omarchy/songwriter/song.json"
@@ -661,6 +677,7 @@ Item {
     interval: 700
     onTriggered: {
       root.previewNotes = []
+      root.previewChord = null
       root.refreshPiano()
     }
   }
@@ -980,6 +997,8 @@ Item {
               if (!triad)
                 return
               root.statusText = triad.label
+              if (triad.rootPc !== undefined)
+                root.previewChord = { rootPc: triad.rootPc, quality: triad.quality }
               root.playMidiNotes(triad.notes, 0.7)
             }
           }
@@ -1102,31 +1121,61 @@ Item {
             radius: Math.max(2, Style.cornerRadius / 2)
           }
 
-          Piano {
-            id: piano
+          Item {
             anchors.fill: parent
             anchors.margins: Style.space(2)
-            foreground: root.foreground
-            dim: root.dim
-            octave: root.laptopOctave
-            instrument: root.song.instrument !== undefined ? root.song.instrument : 0
-            layoutName: root.song.layout
-            laptopKeys: root.laptopKeys
-            activeNotes: root.activeNotes
-            onNoteOn: function(midi) {
-              root.focusRegion(2)
-              root.holdLiveNote(midi)
+
+            Piano {
+              id: piano
+              anchors.left: parent.left
+              anchors.top: parent.top
+              anchors.bottom: parent.bottom
+              anchors.right: tabDivider.left
+              anchors.rightMargin: Style.spacing.sm
+              foreground: root.foreground
+              dim: root.dim
+              octave: root.laptopOctave
+              instrument: root.song.instrument !== undefined ? root.song.instrument : 0
+              layoutName: root.song.layout
+              laptopKeys: root.laptopKeys
+              activeNotes: root.activeNotes
+              onNoteOn: function(midi) {
+                root.focusRegion(2)
+                root.holdLiveNote(midi)
+              }
+              onNoteOff: function(midi) { root.releaseLiveNote(midi) }
+              onInstrumentChangedByUser: function(value) {
+                root.focusRegion(2)
+                root.applySongFields({ instrument: KeyMap.wrapInstrument(value) })
+                root.refocusKeys()
+              }
+              onLaptopToggled: {
+                root.focusRegion(2)
+                root.applySongFields({ laptopKeys: !root.laptopKeys })
+                root.refocusKeys()
+              }
             }
-            onNoteOff: function(midi) { root.releaseLiveNote(midi) }
-            onInstrumentChangedByUser: function(value) {
-              root.focusRegion(2)
-              root.applySongFields({ instrument: KeyMap.wrapInstrument(value) })
-              root.refocusKeys()
+
+            Rectangle {
+              id: tabDivider
+              anchors.right: tabPane.left
+              anchors.rightMargin: Style.spacing.sm
+              anchors.verticalCenter: parent.verticalCenter
+              width: 1
+              height: parent.height * 0.82
+              color: root.dim
+              opacity: 0.35
             }
-            onLaptopToggled: {
-              root.focusRegion(2)
-              root.applySongFields({ laptopKeys: !root.laptopKeys })
-              root.refocusKeys()
+
+            GuitarTab {
+              id: tabPane
+              anchors.right: parent.right
+              anchors.top: parent.top
+              anchors.bottom: parent.bottom
+              width: root.guitarTabWidth
+              foreground: root.foreground
+              dim: root.dim
+              chord: root.displayChord
             }
           }
         }
