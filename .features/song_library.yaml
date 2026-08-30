@@ -1,0 +1,30 @@
+feature_name: song_library
+purpose: "Save named song documents to a durable library and load one back into the editor."
+
+entry_points:
+  - Transport.qml
+  - Songwriter.qml
+  - song-library
+  - js/Song.js
+
+apps:
+  - songwriter
+
+user_flow:
+  title: "User → edit title in transport → song.title; autosave session song.json"
+  save: "User → Save → stage document → song-library save → upsert ~/.local/share/songwriter/library.json"
+  open: "User → Open → pick saved title → replace song; stop playback"
+  delete: "User → Open menu → remove entry → song-library delete <id>"
+  error: "User → invalid library file → helper refuses overwrite; UI shows status"
+
+related_features:
+  - song_structure (document body is sections/measures)
+  - playback (BPM/loop ride with loaded song; stop on load)
+  - agent_api (session snapshots still from current song)
+  - instruments (prefs fields travel with saved document)
+
+core_components:
+  - tests/run.py
+  - tests/js_tests.js
+
+notes: "Library is XDG_DATA_HOME/songwriter/library.json (else ~/.local/share/songwriter/). Session autosave stays ~/.local/state/omarchy/songwriter/song.json. Removing the plugin leaves the library. Staging for save/load helpers lives under $XDG_RUNTIME_DIR/omarchy-songwriter/."

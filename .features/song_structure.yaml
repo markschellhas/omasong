@@ -22,6 +22,7 @@ related_features:
   - chord_slots (measures contain slots)
   - row_repeats (one flag per 4-bar row)
   - playback (timeline walks sections)
+  - song_library (named saves; session path unchanged)
   - agent_api (sections in JSON)
   - music_theory (slot capacity from timeSig.numerator)
   - region_focus (Song region)
@@ -29,4 +30,4 @@ related_features:
 core_components:
   - tests/js_tests.js
 
-notes: "Default song is Verse C|G|F|Dm Chorus D|G|C|Em. Overlay has no meter picker; sections stay 4/4 unless a document already has timeSig. Persist ~/.local/state/omarchy/songwriter/song.json. Cannot delete the last section. More menu is rename/delete only. Add/more menus parent to card menuOverlay (z 1000) above piano."
+notes: "Default song is Verse C|G|F|Dm Chorus D|G|C|Em. Overlay has no meter picker; sections stay 4/4 unless a document already has timeSig. Session persist ~/.local/state/omarchy/songwriter/song.json unchanged; named library is separate (song_library). Cannot delete the last section. More menu is rename/delete only. Add/more menus parent to card menuOverlay (z 1000) above piano."

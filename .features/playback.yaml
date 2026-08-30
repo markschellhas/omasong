@@ -18,6 +18,7 @@ user_flow:
 
 related_features:
   - song_structure (Song as source)
+  - song_library (title/library on transport left)
   - chord_slots (slot duration, audition)
   - row_repeats (timeline repeatPass)
   - piano_keyboard (soundingNotes highlight)
@@ -31,4 +32,4 @@ core_components:
   - samples/epiano
   - samples/organ
 
-notes: "Loop defaults on. No tap tempo. Space is play/stop when laptop map is off, not sustain. Slot fill uses wall-clock BPM. Overlay playhead is not in CI."
+notes: "Transport left cluster is title/library; right is play/BPM. Loop defaults on. No tap tempo. Space is play/stop when laptop map is off, not sustain. Slot fill uses wall-clock BPM. Overlay playhead is not in CI."
