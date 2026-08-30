@@ -516,9 +516,42 @@ Item {
     }
 
     Item {
+      id: rightPanel
       anchors.right: parent.right
       width: root.sideWidth
       height: parent.height
+
+      ParallelModeGrid {
+        id: modeGrid
+        anchors.fill: parent
+        anchors.margins: Style.space(2)
+        foreground: root.foreground
+        dim: root.dim
+        faint: root.faint
+        rootPc: Model.tonicPc(root.keyIndex)
+        onChordAuditioned: function(chord, notes, label) {
+          root.soundingIndex = -1
+          root.soundingRing = ""
+          soundingTimer.restart()
+          root.chordPreviewed(-1, "grid", {
+            notes: notes,
+            label: label,
+            rootPc: chord.rootPc,
+            quality: chord.quality
+          })
+        }
+        onChordDragStarted: function(payload) {
+          root.chordDragPayload = payload
+          root.chordDragStarted(payload)
+        }
+      }
+
+      Connections {
+        target: root
+        function onKeyIndexChanged() {
+          modeGrid.rootPc = Model.tonicPc(root.keyIndex)
+        }
+      }
     }
   }
 }

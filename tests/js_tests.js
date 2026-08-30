@@ -429,3 +429,38 @@ assertEq(degreeIndexFromKey(0x31, "1"), 0)
 assertEq(degreeIndexFromKey(0x37, "7"), 6)
 assertEq(degreeIndexFromKey(0x01000033, "3"), 2)
 assertEq(degreeIndexFromKey(0x48, "h"), -1)
+
+// Parallel-mode colour grid.
+var cPhryg2 = scaleNotes(0, 5)[1]
+assertEq(cPhryg2.name, "Db", "C Phrygian 2nd is Db not C#")
+var cLyd4 = scaleNotes(0, 0)[3]
+assertEq(cLyd4.name, "F#", "C Lydian 4th is F#")
+var ionianI = cellChord(0, 1, 0, false)
+assertEq(ionianI.symbol, "C")
+assertEq(romanNumeral(ionianI, 0, 1), "I")
+var mixoI7 = cellChord(0, 2, 0, true)
+assertEq(mixoI7.symbol, "C7", "Mixolydian tonic is dominant 7")
+var ionianI7 = cellChord(0, 1, 0, true)
+assertEq(ionianI7.symbol, "Cmaj7", "Ionian tonic is major 7")
+var aeolian6 = cellChord(0, 4, 5, false)
+assertEq(romanNumeral(aeolian6, 0, 1), "♭VI", "Aeolian vi relative to Ionian home")
+var locTonic = cellChord(0, 6, 0, false)
+assert(locTonic.unstableTonic, "Locrian tonic is diminished")
+var grid4 = buildGrid(0, 1, false, false)
+assertEq(grid4.length, 4, "compact view shows four modes")
+var grid7 = buildGrid(0, 1, false, true)
+assertEq(grid7.length, 7)
+var fCount = 0
+var r, c
+for (r = 0; r < grid7.length; r++) {
+  for (c = 0; c < grid7[r].cells.length; c++) {
+    if (grid7[r].cells[c].chord.symbol === "F")
+      fCount++
+  }
+}
+assertEq(fCount, 3, "F major appears in three mode rows on C root")
+var shifted = shiftProgressionRows(
+  [{ modeIndex: 1, degreeIndex: 0 }, { modeIndex: 1, degreeIndex: 3 }], 1)
+assertEq(shifted[0].modeIndex, 2)
+assertEq(shifted[1].degreeIndex, 3)
+assertEq(sharedToneCount(ionianI, cellChord(0, 1, 3, false)), 1)

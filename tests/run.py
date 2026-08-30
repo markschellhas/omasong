@@ -37,6 +37,7 @@ def run_node(script: str) -> None:
 def test_js() -> None:
     libs = [
         load_pragma_js(ROOT / "js" / "Model.js"),
+        load_pragma_js(ROOT / "js" / "ParallelMode.js"),
         load_pragma_js(ROOT / "js" / "Song.js"),
         load_pragma_js(ROOT / "js" / "Agent.js"),
         load_pragma_js(ROOT / "js" / "Keyboard.js"),

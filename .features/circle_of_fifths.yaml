@@ -1,8 +1,10 @@
 feature_name: circle_of_fifths
-purpose: "Rotate the circle so the active key sits at 12 o'clock and drag diatonic or neighbouring triads into bars."
+purpose: "Rotate the circle so the active key sits at 12 o'clock and drag diatonic or neighbouring triads into bars; parallel-mode colour grid in the right column."
 
 entry_points:
   - CircleOfFifths.qml
+  - ParallelModeGrid.qml
+  - js/ParallelMode.js
   - Songwriter.qml
 
 apps:
@@ -23,4 +25,4 @@ related_features:
 core_components:
   - js/Model.js
 
-notes: "Key change must not transpose placed chords. Circle is ~1.5× prior diameter; host uses original height band; three equal columns, key label + I–vii° chips left, right empty; south clipped."
+notes: "Key change must not transpose placed chords. Circle is ~1.5× prior diameter; host uses original height band; three equal columns — key label + I–vii° chips left, parallel-mode grid right; south clipped. Grid: fixed root, 7×7 modes×degrees, home row, triads/7ths toggle, compact 4-mode default."
