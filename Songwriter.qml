@@ -571,10 +571,16 @@ Item {
       return false
     if (navRegion !== 1)
       return false
-    if (!Song.getChord(song, selectedSection, selectedMeasure, selectedSlot))
-      return false
-    updateSong(Song.setChord(song, selectedSection, selectedMeasure, selectedSlot, null))
-    return true
+    if (Song.getChord(song, selectedSection, selectedMeasure, selectedSlot)) {
+      updateSong(Song.setChord(song, selectedSection, selectedMeasure, selectedSlot, null))
+      return true
+    }
+    var measures = song.sections[selectedSection].measures
+    if (measures && measures[selectedMeasure] && Song.isMeasureEmpty(measures[selectedMeasure])) {
+      updateSong(Song.removeMeasure(song, selectedSection, selectedMeasure))
+      return true
+    }
+    return false
   }
 
   function previewCircleDegree(event) {
@@ -1025,11 +1031,8 @@ Item {
             onSectionRenamed: function(sectionIndex, name) {
               root.updateSong(Song.renameSection(root.song, sectionIndex, name))
             }
-            onTimeSignatureChanged: function(sectionIndex, numerator, denominator) {
-              root.updateSong(Song.setTimeSignature(root.song, sectionIndex, {
-                numerator: numerator,
-                denominator: denominator
-              }))
+            onBarsAdded: function(sectionIndex) {
+              root.updateSong(Song.addBars(root.song, sectionIndex))
             }
             onRowRepeatToggled: function(sectionIndex, rowIndex, shouldRepeat) {
               root.updateSong(Song.setRowRepeat(root.song, sectionIndex, rowIndex, shouldRepeat))

@@ -1,5 +1,5 @@
 feature_name: song_structure
-purpose: "Hold Verse/Chorus (and extra) sections whose bar count follows time signature; add, rename, or delete them."
+purpose: "Hold Verse/Chorus (and extra) sections with four bars by default; add rows of four, rename, or delete them."
 
 entry_points:
   - SongStructure.qml
@@ -10,8 +10,9 @@ apps:
   - songwriter
 
 user_flow:
-  primary: "User → + Append Section → Verse/Chorus/…/Custom → addSection with barsForTimeSignature bars"
-  edit: "User → More (…) → 4/4, 3/4, 2/4, or 6/8 → setTimeSignature resizes measures"
+  primary: "User → + Append Section → Verse/Chorus/…/Custom → addSection with four bars"
+  extend: "User → Add 4 bars → addBars appends four empty measures"
+  trim: "User → select empty bar → Delete/Backspace → removeMeasure (minimum four bars)"
   rename: "User → double-click title or More (…) → Rename → setSectionName"
   tab: "User → Tab or Shift+Tab while Song structure is highlighted → move selected cell across sections"
   error: "User → Delete last section → ignored"
@@ -27,4 +28,4 @@ related_features:
 core_components:
   - tests/js_tests.js
 
-notes: "Default song matches source Verse C|G|F|Dm Chorus D|G|C|Em. Cannot delete the last section. Add/more menus parent to card menuOverlay (z 1000) above piano."
+notes: "Default song matches source Verse C|G|F|Dm Chorus D|G|C|Em. Cannot delete the last section. More menu is rename/delete only. Add/more menus parent to card menuOverlay (z 1000) above piano."

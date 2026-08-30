@@ -45,8 +45,8 @@ Item {
   signal sectionAdded(string name)
   signal sectionRemoved(int sectionIndex)
   signal sectionRenamed(int sectionIndex, string name)
-  signal timeSignatureChanged(int sectionIndex, int numerator, int denominator)
   signal rowRepeatToggled(int sectionIndex, int rowIndex, bool shouldRepeat)
+  signal barsAdded(int sectionIndex)
   signal slotSelected(int sectionIndex, int measureIndex, int slotIndex)
 
   readonly property var appendChoices: [
@@ -58,13 +58,6 @@ Item {
     { label: "Outro", name: "Outro" },
     { label: "Solo", name: "Solo" },
     { label: "Custom", name: "" }
-  ]
-
-  readonly property var meterChoices: [
-    { label: "4/4 (4 bars)", numerator: 4, denominator: 4 },
-    { label: "3/4 (3 bars)", numerator: 3, denominator: 4 },
-    { label: "2/4 (2 bars)", numerator: 2, denominator: 4 },
-    { label: "6/8 (6 bars)", numerator: 6, denominator: 8 }
   ]
 
   function cancelRename() {
@@ -188,8 +181,6 @@ Item {
       return
     if (item.kind === "add")
       root.sectionAdded(item.name)
-    else if (item.kind === "meter")
-      root.timeSignatureChanged(sectionIndex, item.numerator, item.denominator)
     else if (item.kind === "rename")
       root.beginRename(sectionIndex)
     else if (item.kind === "delete" && root.sections.length > 1)
@@ -212,19 +203,6 @@ Item {
       return items
     }
     if (root.menuKind === "more") {
-      var section = root.sections[root.menuSection]
-      var ts = section && section.timeSig ? section.timeSig : {}
-      for (i = 0; i < root.meterChoices.length; i++) {
-        var meter = root.meterChoices[i]
-        items.push({
-          kind: "meter",
-          label: meter.label,
-          numerator: meter.numerator,
-          denominator: meter.denominator,
-          selected: ts.numerator === meter.numerator && ts.denominator === meter.denominator,
-          enabled: true
-        })
-      }
       items.push({ kind: "rename", label: "Rename", selected: false, enabled: true })
       items.push({
         kind: "delete",
@@ -654,6 +632,14 @@ Item {
                 )
               }
             }
+          }
+
+          Button {
+            text: "Add 4 bars"
+            bordered: true
+            foreground: root.foreground
+            tooltipText: "Append four empty bars to this section"
+            onClicked: root.barsAdded(sectionCol.sectionIndex)
           }
         }
       }

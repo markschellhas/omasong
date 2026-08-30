@@ -190,17 +190,23 @@ function syncRowRepeats(section) {
 }
 
 function syncMeasuresToTimeSignature(section) {
-  var n = barsForTimeSignature(section.timeSig)
   if (!section.measures)
     section.measures = []
-  while (section.measures.length > n)
-    section.measures.pop()
-  while (section.measures.length < n)
+  while (section.measures.length < BARS_PER_ROW)
     section.measures.push({ slots: [emptySlot(1)] })
   var cap = barCapacity(section.timeSig)
   for (var i = 0; i < section.measures.length; i++)
     normalizeMeasure(section.measures[i], cap)
   syncRowRepeats(section)
+}
+
+function isMeasureEmpty(measure) {
+  var slots = measure && measure.slots ? measure.slots : []
+  for (var i = 0; i < slots.length; i++) {
+    if (slots[i].chord)
+      return false
+  }
+  return true
 }
 
 function normalizeTimeSig(ts) {
@@ -382,6 +388,37 @@ function setTimeSignature(song, sectionIndex, ts) {
     return next
   next.sections[sectionIndex].timeSig = normalizeTimeSig(ts)
   syncMeasuresToTimeSignature(next.sections[sectionIndex])
+  return next
+}
+
+function addBars(song, sectionIndex, count) {
+  var next = cloneSong(song)
+  if (!validSection(next, sectionIndex))
+    return next
+  var n = Number(count)
+  if (!isFinite(n) || n < 1)
+    n = BARS_PER_ROW
+  else
+    n = Math.floor(n)
+  var section = next.sections[sectionIndex]
+  var cap = barCapacity(section.timeSig)
+  for (var i = 0; i < n; i++)
+    section.measures.push({ slots: [emptySlot(cap)] })
+  syncRowRepeats(section)
+  return next
+}
+
+function removeMeasure(song, sectionIndex, measureIndex) {
+  var next = cloneSong(song)
+  if (!validMeasure(next, sectionIndex, measureIndex))
+    return next
+  var section = next.sections[sectionIndex]
+  if (section.measures.length <= BARS_PER_ROW)
+    return next
+  if (!isMeasureEmpty(section.measures[measureIndex]))
+    return next
+  section.measures.splice(measureIndex, 1)
+  syncRowRepeats(section)
   return next
 }
 
