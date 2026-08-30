@@ -215,7 +215,6 @@ Item {
       anchors.centerIn: parent
       enabled: false
       text: Model.NUMERALS[chip.degreeIndex]
-      bordered: true
       foreground: root.foreground
       fontFamily: Style.font.menuFamily
       fontSize: Style.font.bodySmall

@@ -252,7 +252,6 @@ Item {
             Button {
               id: moreButton
               text: "···"
-              bordered: true
               foreground: root.foreground
               tooltipText: "Section options"
               onClicked: root.openMenu("more", sectionCol.sectionIndex, moreButton)
@@ -637,7 +636,6 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: root.repeatWidth
                 text: ":||"
-                bordered: true
                 selected: !!(sectionCol.rowRepeats[barRow.rowIndex])
                 foreground: root.foreground
                 tooltipText: "Repeat this row once"
