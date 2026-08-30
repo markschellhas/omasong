@@ -13,7 +13,7 @@ apps:
 user_flow:
   primary: "User → click wedge, wheel, h/l, or ←/→ → rotate; tonic at 12 o'clock"
   drag: "User → drag outer/inner wedge, I–vii° chip, or parallel-mode grid cell → encodeChord payload onto a bar slot"
-  preview: "User → click wedge or chip, or press 1–7 with Circle focused → piano and tab show that triad and keep it after the audition; chip click does not insert"
+  preview: "User → click wedge or chip, or press 1–7 with Circle focused → matching chip + I–vi wedge highlight; piano and tab show that triad and keep it after the audition; chip click does not insert"
 
 related_features:
   - music_theory (stations, diatonic, encodeChord)
@@ -25,5 +25,6 @@ related_features:
 
 core_components:
   - js/Model.js
+  - js/Focus.js
 
-notes: "Key change must not transpose placed chords. Circle is ~1.5× prior diameter; host uses original height band; three equal columns — key label + I–vii° chips left, parallel-mode grid right; south clipped. Grid: fixed root, 7×7 modes×degrees, home row, triads/7ths toggle, compact 4-mode default."
+notes: "Key change must not transpose placed chords. 1–7 (Circle focused) highlights the chip and I–vi wedge; vii° is chip-only. Auto-repeat does not re-audition; preview audio is gap-limited. Circle is ~1.5× prior diameter; host uses original height band; three equal columns — key label + I–vii° chips left, parallel-mode grid right; south clipped. Grid: fixed root, 7×7 modes×degrees, home row, triads/7ths toggle, compact 4-mode default."

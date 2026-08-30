@@ -250,6 +250,27 @@ function wedgeChordByDegree(tonic, degree) {
   return list[n - 1]
 }
 
+function previewHighlight(keyIndex, degreeIndex) {
+  var n = Number(degreeIndex)
+  if (!isFinite(n))
+    return { degree: -1, index: -1, ring: "" }
+  n = Math.floor(n)
+  if (n < 0 || n > 6)
+    return { degree: -1, index: -1, ring: "" }
+  var list = wedgeChords(keyIndex)
+  if (n >= list.length)
+    return { degree: n, index: -1, ring: "" }
+  return { degree: n, index: list[n].index, ring: list[n].ring }
+}
+
+function previewHighlightFromWedge(keyIndex, sector, ring) {
+  var ringName = ring === "minor" ? "minor" : "major"
+  var degree = wedgeChordIndex(keyIndex, sector, ringName)
+  if (degree < 0)
+    return { degree: -1, index: wrap(sector), ring: ringName }
+  return previewHighlight(keyIndex, degree)
+}
+
 function wedgeChordIndex(tonic, sector, ring) {
   var list = wedgeChords(tonic)
   var i = wrap(sector)
