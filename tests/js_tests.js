@@ -76,6 +76,8 @@ assertEq(triad(0, "minor").quality, "minor")
 var song = defaultSong()
 assertEq(song.bpm, 120)
 assertEq(song.keyIndex, 0)
+assertEq(song.title, "Untitled")
+assertEq(song.id, "")
 assertEq(song.sections.length, 2)
 assertEq(song.sections[0].name, "Verse")
 assertEq(song.sections[1].name, "Chorus")
@@ -87,6 +89,39 @@ assertEq(song.sections[0].measures[0].slots.length, 1)
 assertEq(song.sections[0].measures[0].slots[0].span, 4)
 assertEq(song.sections[0].rowRepeats.length, 1)
 assertEq(song.sections[0].rowRepeats[0], false)
+
+// title / id normalize + round-trip through cloneSong
+assertEq(normalizeTitle(null), "Untitled")
+assertEq(normalizeTitle("  "), "Untitled")
+assertEq(normalizeTitle("  Demo  "), "Demo")
+assertEq(normalizeId(null), "")
+assertEq(normalizeId(12), "")
+assertEq(normalizeId("  "), "")
+assertEq(normalizeId("  abc-123  "), "abc-123")
+var longTitle = ""
+for (var ti = 0; ti < 100; ti++) longTitle += "x"
+assertEq(normalizeTitle(longTitle).length, MAX_TITLE_LEN)
+var longId = ""
+for (var ii = 0; ii < 65; ii++) longId += "a"
+assertEq(normalizeId(longId), "")
+var maxId = longId.slice(0, MAX_ID_LEN)
+assertEq(normalizeId(maxId), maxId)
+var titled = normalizeSong({
+  title: "  My Song  ",
+  id: "550e8400-e29b-41d4-a716-446655440000",
+  bpm: 120,
+  keyIndex: 0,
+  sections: song.sections
+})
+assertEq(titled.title, "My Song")
+assertEq(titled.id, "550e8400-e29b-41d4-a716-446655440000")
+assertEq(normalizeSong({ title: longTitle, sections: song.sections }).title.length, MAX_TITLE_LEN)
+assertEq(normalizeSong({ id: longId, sections: song.sections }).id, "")
+assertEq(normalizeSong({ title: null, id: null, sections: song.sections }).title, "Untitled")
+assertEq(normalizeSong({ title: null, id: null, sections: song.sections }).id, "")
+var clonedMeta = cloneSong(titled)
+assertEq(clonedMeta.title, "My Song")
+assertEq(clonedMeta.id, "550e8400-e29b-41d4-a716-446655440000")
 assertEq(chordName(song.sections[0].measures[0].slots[0].chord.rootPc, song.sections[0].measures[0].slots[0].chord.quality), "C")
 assertEq(chordName(song.sections[0].measures[1].slots[0].chord.rootPc, song.sections[0].measures[1].slots[0].chord.quality), "G")
 assertEq(chordName(song.sections[0].measures[2].slots[0].chord.rootPc, song.sections[0].measures[2].slots[0].chord.quality), "F")

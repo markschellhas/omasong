@@ -8,6 +8,22 @@ var MAX_SECTIONS = 32
 var MAX_MEASURES_PER_SECTION = 128
 var MAX_TIME_NUMERATOR = 16
 var MAX_SLOTS_PER_MEASURE = 16
+var MAX_TITLE_LEN = 80
+var MAX_ID_LEN = 64
+
+function normalizeTitle(raw) {
+  var t = typeof raw === "string" ? raw.trim() : ""
+  if (!t) return "Untitled"
+  if (t.length > MAX_TITLE_LEN) t = t.slice(0, MAX_TITLE_LEN)
+  return t
+}
+
+function normalizeId(raw) {
+  if (typeof raw !== "string") return ""
+  var id = raw.trim()
+  if (!id || id.length > MAX_ID_LEN) return ""
+  return id
+}
 
 function spanOf(slot) {
   var n = slot && Number(slot.span)
@@ -250,6 +266,8 @@ function defaultSong() {
   chorus.measures[2].slots[0].chord = { rootPc: 0, quality: "major" }
   chorus.measures[3].slots[0].chord = { rootPc: 4, quality: "minor" }
   return {
+    title: "Untitled",
+    id: "",
     bpm: 120,
     keyIndex: 0,
     sections: [verse, chorus]
@@ -309,6 +327,8 @@ function normalizeSong(raw) {
   var song = defaultSong()
   if (!raw || typeof raw !== "object")
     return song
+  song.title = normalizeTitle(raw.title)
+  song.id = normalizeId(raw.id)
   var bpm = Number(raw.bpm)
   if (isFinite(bpm))
     song.bpm = Math.max(40, Math.min(240, bpm))
@@ -321,8 +341,12 @@ function normalizeSong(raw) {
   var sectionLimit = Math.min(raw.sections.length, MAX_SECTIONS)
   for (var i = 0; i < sectionLimit; i++)
     song.sections.push(normalizeSection(raw.sections[i]))
-  if (!song.sections.length)
-    return defaultSong()
+  if (!song.sections.length) {
+    var fallback = defaultSong()
+    fallback.title = song.title
+    fallback.id = song.id
+    return fallback
+  }
   return song
 }
 
