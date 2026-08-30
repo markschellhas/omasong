@@ -26,6 +26,7 @@ Item {
 
   property var song: seedSong(Song.defaultSong())
   property bool playing: false
+  property int playScopeSection: -1
   property var playEvent: null
   property int fillSection: -1
   property int fillMeasure: -1
@@ -48,7 +49,9 @@ Item {
   property string statusText: ""
   property bool persistReady: false
   property int navRegion: 0
-  readonly property var timeline: Song.buildTimeline(song)
+  readonly property var timeline: root.playScopeSection >= 0
+    ? Song.buildSectionTimeline(song, root.playScopeSection)
+    : Song.buildTimeline(song)
   readonly property bool laptopKeys: !!(song && song.laptopKeys)
   readonly property int laptopOctave: KeyMap.clampOctave(song && song.laptopOctave)
   readonly property string headerHint: {
@@ -427,11 +430,12 @@ Item {
   }
 
   function startPlayback() {
-    var tl = timeline
+    var tl = Song.buildTimeline(song)
     if (!tl || !tl.length) {
       statusText = "Add chords to play"
       return
     }
+    playScopeSection = -1
     playing = true
     currentBeat = 0
     currentBar = 1
@@ -440,8 +444,32 @@ Item {
     scheduleBeatTick()
   }
 
+  function startSectionPlayback(sectionIndex) {
+    var tl = Song.buildSectionTimeline(song, sectionIndex)
+    if (!tl || !tl.length) {
+      statusText = "Add chords to play"
+      return
+    }
+    playScopeSection = sectionIndex
+    playing = true
+    currentBeat = 0
+    currentBar = 1
+    playEvent = null
+    applyPlayhead(Song.eventAtBeat(tl, currentBeat))
+    scheduleBeatTick()
+  }
+
+  function toggleSectionPlayback(sectionIndex) {
+    if (playing && playScopeSection === sectionIndex) {
+      stopPlayback()
+      return
+    }
+    startSectionPlayback(sectionIndex)
+  }
+
   function stopPlayback() {
     playing = false
+    playScopeSection = -1
     playEvent = null
     currentBeat = 0
     currentBar = 1
@@ -987,6 +1015,8 @@ Item {
             playSection: root.playing && root.playEvent ? root.playEvent.sectionIndex : -1
             playMeasure: root.playing && root.playEvent ? root.playEvent.measureIndex : -1
             playSlot: root.playing && root.playEvent ? root.playEvent.slotIndex : -1
+            playing: root.playing
+            playScopeSection: root.playScopeSection
             fillSection: root.fillSection
             fillMeasure: root.fillMeasure
             fillSlot: root.fillSlot
@@ -1033,6 +1063,10 @@ Item {
             }
             onRowRepeatToggled: function(sectionIndex, rowIndex, shouldRepeat) {
               root.updateSong(Song.setRowRepeat(root.song, sectionIndex, rowIndex, shouldRepeat))
+            }
+            onSectionPlayToggled: function(sectionIndex) {
+              root.toggleSectionPlayback(sectionIndex)
+              root.refocusKeys()
             }
             onSlotSelected: function(sectionIndex, measureIndex, slotIndex) {
               root.focusRegion(1)

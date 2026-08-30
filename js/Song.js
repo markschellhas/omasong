@@ -603,25 +603,54 @@ function appendMeasure(events, beat, section, si, mi, repeatPass) {
   return beat
 }
 
+function buildSectionTimeline(song, sectionIndex) {
+  var events = []
+  var beat = 0
+  if (!song || !song.sections)
+    return events
+  var si = Number(sectionIndex)
+  if (!isFinite(si) || si < 0 || si >= song.sections.length)
+    return events
+  var section = song.sections[si]
+  var n = section.measures ? section.measures.length : 0
+  var rows = rowCount(n)
+  var flags = section.rowRepeats || []
+  for (var row = 0; row < rows; row++) {
+    var start = row * BARS_PER_ROW
+    var end = Math.min(start + BARS_PER_ROW, n)
+    var repeats = row < flags.length && flags[row]
+    var passes = repeats ? 2 : 1
+    for (var pass = 0; pass < passes; pass++) {
+      for (var mi = start; mi < end; mi++)
+        beat = appendMeasure(events, beat, section, si, mi, pass)
+    }
+  }
+  return events
+}
+
 function buildTimeline(song) {
   var events = []
   var beat = 0
   if (!song || !song.sections)
     return events
   for (var si = 0; si < song.sections.length; si++) {
-    var section = song.sections[si]
-    var n = section.measures ? section.measures.length : 0
-    var rows = rowCount(n)
-    var flags = section.rowRepeats || []
-    for (var row = 0; row < rows; row++) {
-      var start = row * BARS_PER_ROW
-      var end = Math.min(start + BARS_PER_ROW, n)
-      var repeats = row < flags.length && flags[row]
-      var passes = repeats ? 2 : 1
-      for (var pass = 0; pass < passes; pass++) {
-        for (var mi = start; mi < end; mi++)
-          beat = appendMeasure(events, beat, section, si, mi, pass)
-      }
+    var sectionEvents = buildSectionTimeline(song, si)
+    for (var i = 0; i < sectionEvents.length; i++) {
+      var e = sectionEvents[i]
+      events.push({
+        startBeat: beat + e.startBeat,
+        durationBeats: e.durationBeats,
+        chord: e.chord,
+        rest: e.rest,
+        sectionIndex: e.sectionIndex,
+        measureIndex: e.measureIndex,
+        slotIndex: e.slotIndex,
+        repeatPass: e.repeatPass
+      })
+    }
+    if (sectionEvents.length) {
+      var last = sectionEvents[sectionEvents.length - 1]
+      beat += last.startBeat + last.durationBeats
     }
   }
   return events

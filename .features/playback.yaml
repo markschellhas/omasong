@@ -11,6 +11,7 @@ apps:
 
 user_flow:
   primary: "User → Play or Space → walk buildTimeline events"
+  section: "User → section Play → buildSectionTimeline for that section only"
   loop: "User → Loop toggle → wrap currentBeat"
   bpm: "User → BPM 40–240 → Song.setBpm"
   audition: "User → click filled slot → play chord for slotDurationBeats; chip fill follows wall clock at BPM"
