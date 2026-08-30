@@ -85,13 +85,21 @@ Item {
               opacity: 0.4
             }
 
-            Text {
+            Rectangle {
               anchors.centerIn: parent
-              text: modelData.glyph
-              color: modelData.glyph === "-" || modelData.glyph === "x" ? root.dim : root.foreground
-              font.family: Style.font.menuFamily
-              font.pixelSize: Style.font.body
-              font.bold: modelData.glyph !== "-" && modelData.glyph !== "x"
+              width: fretLabel.implicitWidth + Style.space(6)
+              height: fretLabel.implicitHeight
+              color: Color.menu.background
+
+              Text {
+                id: fretLabel
+                anchors.centerIn: parent
+                text: modelData.glyph
+                color: modelData.glyph === "-" || modelData.glyph === "x" ? root.dim : root.foreground
+                font.family: Style.font.menuFamily
+                font.pixelSize: Style.font.body
+                font.bold: modelData.glyph !== "-" && modelData.glyph !== "x"
+              }
             }
           }
         }
