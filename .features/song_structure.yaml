@@ -11,6 +11,7 @@ apps:
 
 user_flow:
   primary: "User → + Append Section → Verse/Chorus/…/Custom → addSection with four bars"
+  play: "User → section Play → sectionPlayToggled → play that section only"
   extend: "User → Add 4 bars → addBars appends four empty measures"
   trim: "User → select empty bar → Delete/Backspace → removeMeasure (minimum four bars)"
   rename: "User → double-click title or More (…) → Rename → setSectionName"

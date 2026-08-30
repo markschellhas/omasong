@@ -16,6 +16,8 @@ Item {
   property int playSection: -1
   property int playMeasure: -1
   property int playSlot: -1
+  property bool playing: false
+  property int playScopeSection: -1
   property int fillSection: -1
   property int fillMeasure: -1
   property int fillSlot: -1
@@ -48,6 +50,7 @@ Item {
   signal rowRepeatToggled(int sectionIndex, int rowIndex, bool shouldRepeat)
   signal barsAdded(int sectionIndex)
   signal slotSelected(int sectionIndex, int measureIndex, int slotIndex)
+  signal sectionPlayToggled(int sectionIndex)
 
   readonly property var appendChoices: [
     { label: "Verse", name: "Verse" },
@@ -252,6 +255,19 @@ Item {
               foreground: root.foreground
               tooltipText: "Section options"
               onClicked: root.openMenu("more", sectionCol.sectionIndex, moreButton)
+            }
+
+            Button {
+              id: playButton
+              iconText: root.playing && root.playScopeSection === sectionCol.sectionIndex ? "\uf04d" : "\uf04b"
+              bordered: true
+              selected: root.playing && root.playScopeSection === sectionCol.sectionIndex
+              foreground: root.foreground
+              accent: Color.accent
+              tooltipText: root.playing && root.playScopeSection === sectionCol.sectionIndex
+                ? "Stop section"
+                : "Play section"
+              onClicked: root.sectionPlayToggled(sectionCol.sectionIndex)
             }
 
             Item {
