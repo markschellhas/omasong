@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+: "${XDG_RUNTIME_DIR:?Songwriter library requires XDG_RUNTIME_DIR}"
+runtime_dir="$XDG_RUNTIME_DIR/omarchy-songwriter"
+data_root=${XDG_DATA_HOME:-$HOME/.local/share}
+library_dir="$data_root/songwriter"
+library_file="$library_dir/library.json"
+library_lock="$library_dir/library.lock"
+selection_file="$runtime_dir/save-selection.json"
+max_json_bytes=4194304
+install -d -m 700 "$runtime_dir" "$library_dir"
+
+exec 9>"$library_lock"
+flock -x 9
+
+file_within_limit() {
+  local path=$1
+  [[ -s $path ]] && (( $(stat -c '%s' -- "$path") <= max_json_bytes ))
+}
+
+valid_library_file() {
+  local path=$1
+  file_within_limit "$path" && jq -e -s '
+    length == 1 and (.[0]
+      | type == "object"
+      and (.songs | type == "array")
+      and (.songs | length <= 100)
+      and all(.songs[];
+        type == "object"
+        and (.id | type == "string")
+        and (.title | type == "string")
+        and (.updatedAt | type == "number")
+        and (.song | type == "object")
+        and (.song.sections | type == "array")))
+  ' "$path" >/dev/null 2>&1
+}
+
+ensure_library() {
+  if [[ ! -e $library_file ]]; then
+    printf '{"songs":[]}\n' > "$library_file"
+    return
+  fi
+  valid_library_file "$library_file" && return
+  echo "Songwriter library is invalid; refusing to overwrite $library_file" >&2
+  exit 4
+}
+
+mint_id() {
+  if command -v uuidgen >/dev/null 2>&1; then
+    uuidgen
+  else
+    tr -d '[:space:]' < /proc/sys/kernel/random/uuid
+  fi
+}
+
+write_library() {
+  local filter=$1
+  shift
+  local temporary
+  temporary=$(mktemp "$library_dir/library.XXXXXX")
+  if ! jq -c "$@" "$filter" "$library_file" > "$temporary"; then
+    rm -f "$temporary"
+    echo 'Songwriter could not update the library safely' >&2
+    return 4
+  fi
+  if ! valid_library_file "$temporary"; then
+    rm -f "$temporary"
+    echo 'Songwriter could not update the library safely' >&2
+    return 4
+  fi
+  mv "$temporary" "$library_file"
+}
+
+ensure_library
+action=${1:-get}
+case "$action" in
+  get)
+    ;;
+  save)
+    if [[ ! -f $selection_file ]]; then
+      echo "Missing save selection: $selection_file" >&2
+      exit 2
+    fi
+    if ! file_within_limit "$selection_file" \
+      || ! jq -e -s '
+        length == 1 and (.[0]
+          | type == "object"
+          and ((.id // "") | type == "string")
+          and ((.title // "Untitled") | type == "string")
+          and (
+            (.song | type == "object" and (.sections | type == "array"))
+            or (.sections | type == "array")
+          ))
+      ' "$selection_file" >/dev/null 2>&1; then
+      echo 'Invalid save selection' >&2
+      exit 2
+    fi
+
+    entry=$(jq -c '
+      if (.song | type) == "object" then .
+      else {id: (.id // ""), title: (.title // "Untitled"), song: .}
+      end
+      | .title = (if ((.title // "") | gsub("^\\s+|\\s+$";"")) == "" then "Untitled" else .title end)
+      | .id = (.id // "")
+    ' "$selection_file")
+
+    id=$(jq -r '.id' <<<"$entry")
+    if [[ -z $id ]]; then
+      id=$(mint_id)
+      entry=$(jq -c --arg id "$id" '.id = $id' <<<"$entry")
+    fi
+
+    updated_at=$(date +%s)
+    write_library '
+      .songs = ([
+        ($entry | .updatedAt = $updatedAt)
+      ] + [.songs[] | select(.id != $entry.id)])[:100]
+    ' --argjson entry "$entry" --argjson updatedAt "$updated_at"
+    ;;
+  delete)
+    id=${2:-}
+    [[ -n $id ]] || { echo 'delete requires an id' >&2; exit 2; }
+    write_library '.songs = [.songs[] | select(.id != $id)]' --arg id "$id"
+    ;;
+  *)
+    echo "Unknown action: $action" >&2
+    exit 2
+    ;;
+esac
+
+cat "$library_file"

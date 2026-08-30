@@ -5,12 +5,34 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SONG_LIBRARY = ROOT / "song-library"
+
+
+def _song_library_env(data: Path, runtime: Path) -> dict[str, str]:
+    return {**os.environ, "XDG_DATA_HOME": str(data), "XDG_RUNTIME_DIR": str(runtime)}
+
+
+def _run_song_library(env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(SONG_LIBRARY), *args],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _stage_save(runtime: Path, payload: dict) -> None:
+    stage_dir = runtime / "omarchy-songwriter"
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    (stage_dir / "save-selection.json").write_text(json.dumps(payload))
 
 
 def load_pragma_js(path: Path) -> str:
@@ -272,12 +294,97 @@ def test_agent() -> None:
         print(proc.stdout, end="")
 
 
+def test_song_library() -> None:
+    if not SONG_LIBRARY.is_file():
+        raise SystemExit("song-library missing")
+    sample_song = {"sections": [{"name": "Verse", "measures": []}]}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        data = Path(tmp) / "data"
+        runtime = Path(tmp) / "runtime"
+        env = _song_library_env(data, runtime)
+
+        got = _run_song_library(env, "get")
+        if got.returncode != 0:
+            sys.stderr.write(got.stdout + got.stderr)
+            raise SystemExit(got.returncode or 1)
+        library = json.loads(got.stdout)
+        if library != {"songs": []}:
+            raise SystemExit("get should create empty library")
+        library_path = data / "songwriter" / "library.json"
+        if not library_path.is_file():
+            raise SystemExit("get did not create library.json")
+
+        _stage_save(
+            runtime,
+            {"id": "song-1", "title": "Demo", "song": sample_song},
+        )
+        saved = _run_song_library(env, "save")
+        if saved.returncode != 0:
+            sys.stderr.write(saved.stdout + saved.stderr)
+            raise SystemExit(saved.returncode or 1)
+        library = json.loads(saved.stdout)
+        if len(library["songs"]) != 1 or library["songs"][0]["id"] != "song-1":
+            raise SystemExit("save did not upsert entry")
+        if library["songs"][0]["title"] != "Demo":
+            raise SystemExit("save title mismatch")
+        if not isinstance(library["songs"][0]["updatedAt"], (int, float)):
+            raise SystemExit("save missing updatedAt")
+
+        _stage_save(
+            runtime,
+            {"id": "song-1", "title": "Demo Updated", "song": sample_song},
+        )
+        updated = _run_song_library(env, "save")
+        if updated.returncode != 0:
+            sys.stderr.write(updated.stdout + updated.stderr)
+            raise SystemExit(updated.returncode or 1)
+        library = json.loads(updated.stdout)
+        if len(library["songs"]) != 1:
+            raise SystemExit("upsert should keep single entry for same id")
+        if library["songs"][0]["title"] != "Demo Updated":
+            raise SystemExit("save did not update title")
+
+        _stage_save(
+            runtime,
+            {"id": "", "title": "Minted", "song": sample_song},
+        )
+        minted = _run_song_library(env, "save")
+        if minted.returncode != 0:
+            sys.stderr.write(minted.stdout + minted.stderr)
+            raise SystemExit(minted.returncode or 1)
+        library = json.loads(minted.stdout)
+        if len(library["songs"]) != 2:
+            raise SystemExit("empty id should mint a new entry")
+        minted_id = library["songs"][0]["id"]
+        if not minted_id or minted_id == "song-1":
+            raise SystemExit("minted id missing or colliding")
+        if library["songs"][0]["title"] != "Minted":
+            raise SystemExit("minted save title mismatch")
+
+        deleted = _run_song_library(env, "delete", minted_id)
+        if deleted.returncode != 0:
+            sys.stderr.write(deleted.stdout + deleted.stderr)
+            raise SystemExit(deleted.returncode or 1)
+        library = json.loads(deleted.stdout)
+        if len(library["songs"]) != 1 or library["songs"][0]["id"] != "song-1":
+            raise SystemExit("delete did not remove minted entry")
+
+        library_path.write_text("not-json")
+        corrupt = _run_song_library(env, "get")
+        if corrupt.returncode != 4:
+            raise SystemExit("corrupt library should exit 4, got " + str(corrupt.returncode))
+
+        print("song-library ok")
+
+
 def main() -> int:
     test_manifest()
     test_write_json()
     test_play_notes()
     test_js()
     test_agent()
+    test_song_library()
     print("all tests passed")
     return 0
 
