@@ -13,6 +13,7 @@ Item {
   property int keyIndex: 0
   property int soundingIndex: -1
   property string soundingRing: ""
+  property int soundingDegreeIndex: -1
   property string chordDragPayload: ""
 
   readonly property var selected: Model.keyAt(keyIndex)
@@ -68,6 +69,7 @@ Item {
     var t = Model.triad(index, ringName)
     root.soundingIndex = index
     root.soundingRing = ringName
+    root.soundingDegreeIndex = Model.wedgeChordIndex(root.keyIndex, index, ringName)
     soundingTimer.restart()
     root.chordPreviewed(index, ringName, t)
   }
@@ -77,8 +79,15 @@ Item {
     if (!chord)
       return
     var t = root.triadFromChord(chord)
-    root.soundingIndex = -1
-    root.soundingRing = ""
+    var wedge = Model.wedgeChordByDegree(root.keyIndex, degreeIndex + 1)
+    root.soundingDegreeIndex = degreeIndex
+    if (wedge) {
+      root.soundingIndex = wedge.index
+      root.soundingRing = wedge.ring
+    } else {
+      root.soundingIndex = -1
+      root.soundingRing = ""
+    }
     soundingTimer.restart()
     root.chordPreviewed(-1, "chip", t)
   }
@@ -110,6 +119,7 @@ Item {
     onTriggered: {
       root.soundingIndex = -1
       root.soundingRing = ""
+      root.soundingDegreeIndex = -1
     }
   }
 
@@ -216,6 +226,7 @@ Item {
       enabled: false
       text: Model.NUMERALS[chip.degreeIndex]
       bordered: true
+      selected: chip.degreeIndex === root.soundingDegreeIndex
       foreground: root.foreground
       fontFamily: Style.font.menuFamily
       fontSize: Style.font.bodySmall
