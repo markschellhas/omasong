@@ -49,10 +49,14 @@ Item {
   property var heldNotes: ({})
   property string statusText: ""
   property bool persistReady: false
+  property var playTimeline: []
   property int navRegion: 0
-  readonly property var timeline: root.playScopeSection >= 0
-    ? Song.buildSectionTimeline(song, root.playScopeSection)
-    : Song.buildTimeline(song)
+  // Freeze the event list for the active play session so edits cannot race the transport.
+  readonly property var timeline: (playing && playTimeline && playTimeline.length)
+    ? playTimeline
+    : (root.playScopeSection >= 0
+      ? Song.buildSectionTimeline(song, root.playScopeSection)
+      : Song.buildTimeline(song))
   readonly property bool laptopKeys: !!(song && song.laptopKeys)
   readonly property int laptopOctave: KeyMap.clampOctave(song && song.laptopOctave)
   readonly property string headerHint: {
@@ -96,7 +100,6 @@ Item {
   }
   readonly property string agentSongPath: agentHome + "/song.json"
   readonly property string agentProgressionsPath: agentHome + "/progressions.json"
-  readonly property string agentApiPath: agentHome + "/agent-api.json"
   function seedSong(raw) {
     var next = Song.normalizeSong(raw)
     if (raw && raw.loop !== undefined)
@@ -219,10 +222,14 @@ Item {
   function persistNow() {
     if (!persistReady)
       return
-    Quickshell.execDetached(["python3", writeScript, songPath, JSON.stringify(song)])
-    Quickshell.execDetached(["python3", writeScript, agentSongPath, JSON.stringify(Agent.songJson(song))])
-    Quickshell.execDetached(["python3", writeScript, agentProgressionsPath, JSON.stringify(Agent.progressionsJson(song))])
-    Quickshell.execDetached(["python3", writeScript, agentApiPath, JSON.stringify({ port: agentPort })])
+    // One process, atomic renames per file — avoids parallel torn writes and
+    // cross-file generations racing each other. agent-api.json is owned by agent-server.
+    Quickshell.execDetached([
+      "python3", writeScript,
+      songPath, JSON.stringify(song),
+      agentSongPath, JSON.stringify(Agent.songJson(song)),
+      agentProgressionsPath, JSON.stringify(Agent.progressionsJson(song))
+    ])
   }
 
   function currentInstrument() {
@@ -435,7 +442,8 @@ Item {
       stopPlayback()
       return
     }
-    transportTimer.interval = Math.max(1, Math.round(Song.beatsToSeconds(delta, song.bpm) * 1000))
+    // Floor at 8ms so float residuals cannot storm the UI thread at ~1ms.
+    transportTimer.interval = Math.max(8, Math.round(Song.beatsToSeconds(delta, song.bpm) * 1000))
     transportTimer.restart()
   }
 
@@ -446,6 +454,7 @@ Item {
       return
     }
     playScopeSection = -1
+    playTimeline = tl
     playing = true
     currentBeat = 0
     currentBar = 1
@@ -461,6 +470,7 @@ Item {
       return
     }
     playScopeSection = sectionIndex
+    playTimeline = tl
     playing = true
     currentBeat = 0
     currentBar = 1
@@ -480,6 +490,7 @@ Item {
   function stopPlayback() {
     playing = false
     playScopeSection = -1
+    playTimeline = []
     playEvent = null
     currentBeat = 0
     currentBar = 1

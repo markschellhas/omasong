@@ -95,6 +95,34 @@ def test_write_json() -> None:
             raise SystemExit(proc.returncode)
         if path.read_text() != payload:
             raise SystemExit("write-json did not persist payload")
+        a = Path(tmp) / "a.json"
+        b = Path(tmp) / "b.json"
+        batch = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "write-json.py"),
+                str(a),
+                '{"a":1}',
+                str(b),
+                '{"b":2}',
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if batch.returncode != 0:
+            sys.stderr.write(batch.stdout + batch.stderr)
+            raise SystemExit(batch.returncode)
+        if a.read_text() != '{"a":1}' or b.read_text() != '{"b":2}':
+            raise SystemExit("write-json batch failed")
+        huge = "x" * 1_600_000
+        over = subprocess.run(
+            [sys.executable, str(ROOT / "write-json.py"), str(Path(tmp) / "big.json")],
+            input=huge,
+            capture_output=True,
+            text=True,
+        )
+        if over.returncode == 0:
+            raise SystemExit("write-json should reject oversized payloads")
         print("write-json ok")
 
 
