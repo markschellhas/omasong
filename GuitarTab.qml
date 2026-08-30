@@ -58,7 +58,7 @@ Item {
         id: orientationButton
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        iconText: root.vertical ? "\uf7a4" : "\uf7a5"
+        text: root.vertical ? "═" : "‖"
         tooltipText: root.vertical ? "Show strings horizontally" : "Show strings vertically"
         selected: root.vertical
         foreground: root.vertical ? root.foreground : root.dim
