@@ -314,7 +314,9 @@ function triad(index, ring) {
     fifth: midiToHz(notes[2]),
     notes: notes,
     label: minor ? s.relativeMinor : s.major,
-    minor: minor
+    minor: minor,
+    rootPc: pc,
+    quality: quality
   }
 }
 

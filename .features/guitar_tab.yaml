@@ -1,0 +1,26 @@
+feature_name: guitar_tab
+purpose: "Show standard-tuning guitar tab for the sounding, previewed, or selected triad in a column beside the piano."
+
+entry_points:
+  - GuitarTab.qml
+  - Songwriter.qml
+
+apps:
+  - songwriter
+
+user_flow:
+  primary: "Selected, previewed, or playing triad → voicing → six-line tab in the Keyboard right column"
+  empty: "No triad → em-dash and blank string lines"
+
+related_features:
+  - piano_keyboard (shares Keyboard region; piano stays C3–C5, narrower)
+  - music_theory (rootPc + quality)
+  - playback (sounding chord)
+  - circle_of_fifths (preview chord)
+  - chord_slots (selected slot)
+
+core_components:
+  - js/Guitar.js
+  - tests/js_tests.js
+
+notes: "Low E → high e frets; muted = x. Open/first-position major and minor shapes."

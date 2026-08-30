@@ -59,6 +59,10 @@ assert(!inKeyWedge(2, 0), "D not in C wedge")
 assertEq(triad(0, "major").label, "C")
 assertEq(triad(0, "minor").label, "Am")
 assertEq(triad(0, "major").notes.length, 3)
+assertEq(triad(0, "major").rootPc, 0)
+assertEq(triad(0, "major").quality, "major")
+assertEq(triad(0, "minor").rootPc, 9)
+assertEq(triad(0, "minor").quality, "minor")
 
 var song = defaultSong()
 assertEq(song.bpm, 120)
@@ -450,6 +454,37 @@ assertEq(degreeIndexFromKey(0x31, "1"), 0)
 assertEq(degreeIndexFromKey(0x37, "7"), 6)
 assertEq(degreeIndexFromKey(0x01000033, "3"), 2)
 assertEq(degreeIndexFromKey(0x48, "h"), -1)
+
+// Guitar tab voicings (standard tuning, low E → high e).
+function assertFrets(rootPc, quality, expected, label) {
+  var v = voicingFor(rootPc, quality)
+  assertEq(v.frets.join(","), expected.join(","), label)
+  assert(coversChord(v.frets, rootPc, quality), label + " covers triad")
+}
+assertFrets(0, "major", [-1, 3, 2, 0, 1, 0], "C")
+assertFrets(7, "major", [3, 2, 0, 0, 0, 3], "G")
+assertFrets(5, "major", [1, 3, 3, 2, 1, 1], "F")
+assertFrets(2, "major", [-1, -1, 0, 2, 3, 2], "D")
+assertFrets(9, "major", [-1, 0, 2, 2, 2, 0], "A")
+assertFrets(4, "major", [0, 2, 2, 1, 0, 0], "E")
+assertFrets(2, "minor", [-1, -1, 0, 2, 3, 1], "Dm")
+assertFrets(4, "minor", [0, 2, 2, 0, 0, 0], "Em")
+assertFrets(9, "minor", [-1, 0, 2, 2, 1, 0], "Am")
+assertEq(tabBlock(voicingFor(0, "major")), "e|--0--\nB|--1--\nG|--0--\nD|--2--\nA|--3--\nE|--x--")
+assertEq(tabBlock(null), "e|-----\nB|-----\nG|-----\nD|-----\nA|-----\nE|-----")
+assertEq(WHITE_KEYS_C3_C5, 15)
+assertEq(pianoKeysC3C5().filter(function (k) { return k.type === "white" }).length, 15)
+assertEq(pianoKeysC3C5().length, 25)
+var qualities = ["major", "minor", "diminished", "augmented"]
+var qi
+var pc
+for (qi = 0; qi < qualities.length; qi++) {
+  for (pc = 0; pc < 12; pc++) {
+    var found = voicingFor(pc, qualities[qi])
+    assert(found.frets.length === 6, qualities[qi] + " " + pc + " has 6 strings")
+    assert(coversChord(found.frets, pc, qualities[qi]), qualities[qi] + " " + pc + " voicing")
+  }
+}
 
 // Parallel-mode colour grid.
 var cPhryg2 = scaleNotes(0, 5)[1]

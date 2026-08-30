@@ -13,13 +13,14 @@ apps:
 user_flow:
   primary: "User → click wedge, wheel, h/l, or ←/→ → rotate; tonic at 12 o'clock"
   drag: "User → drag outer/inner wedge, I–vii° chip, or parallel-mode grid cell → encodeChord payload onto a bar slot"
-  preview: "User → click wedge or chip, or press 1–7 with Circle focused → piano lights the triad; chip click does not insert"
+  preview: "User → click wedge or chip, or press 1–7 with Circle focused → piano lights the triad and tab shows the voicing; chip click does not insert"
 
 related_features:
   - music_theory (stations, diatonic, encodeChord)
   - chord_slots (drop target)
   - region_focus (h/l rotate when Circle focused)
   - piano_keyboard (preview highlight)
+  - guitar_tab (preview chord)
   - agent_api (key index in JSON)
 
 core_components:
