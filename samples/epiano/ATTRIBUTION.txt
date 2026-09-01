@@ -1,0 +1,19 @@
+Wurlitzer EP200 (C3–C5 excerpt)
+===============================
+
+Original recordings: Greg Sullivan
+http://www.sullivang.net/
+
+SFZ mapping: https://github.com/sfzinstruments/GregSullivan.E-Pianos
+Velocity layer: mp
+
+License: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+https://creativecommons.org/licenses/by/3.0/
+Full text: LICENSE in this folder
+
+These files are a C3–C5 excerpt. Source notes were pitch-shifted to
+chromatic targets (including the original SFZ tune offsets) and
+converted to 44.1 kHz 16-bit mono WAV.
+
+If you ship this, keep this ATTRIBUTION file and LICENSE with the
+samples, and credit Greg Sullivan.

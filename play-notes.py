@@ -2,6 +2,7 @@
 """Play notes as a chord or single pitch.
 
 Piano (instrument 0) uses Salamander Grand Piano samples when present.
+Electric Piano (instrument 1) uses Wurlitzer EP200 samples when present.
 Organ (instrument 2) uses Orgue Eglise Full samples when present.
 Other timbres are additive sines.
 
@@ -36,6 +37,7 @@ HZ_MAX = 20000.0
 AMPLITUDE = 0.18
 PAD = 0.02
 PIANO_INSTRUMENT = 0
+ELECTRIC_PIANO_INSTRUMENT = 1
 ORGAN_INSTRUMENT = 2
 PIANO_MIDI_MIN = 48
 PIANO_MIDI_MAX = 72
@@ -84,6 +86,12 @@ SAMPLE_BANKS = {
         "ready": "C4.wav",
         "loop": False,
         "gain": 0.62,
+    },
+    ELECTRIC_PIANO_INSTRUMENT: {
+        "dir": SAMPLE_ROOT / "epiano",
+        "ready": "C4.wav",
+        "loop": False,
+        "gain": 0.70,
     },
     ORGAN_INSTRUMENT: {
         "dir": SAMPLE_ROOT / "organ",
@@ -202,6 +210,10 @@ def synth(freqs: list[float], seconds: float, instrument: int = 0, amplitude: fl
 
 def piano_samples_ready() -> bool:
     return sample_bank_ready(PIANO_INSTRUMENT)
+
+
+def electric_piano_samples_ready() -> bool:
+    return sample_bank_ready(ELECTRIC_PIANO_INSTRUMENT)
 
 
 def organ_samples_ready() -> bool:
@@ -398,7 +410,7 @@ def parse_values(values: list[str]) -> tuple[list[float], float]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Play sampled piano/organ or sine-wave notes")
+    parser = argparse.ArgumentParser(description="Play sampled piano, electric piano, organ, or sine-wave notes")
     parser.add_argument("--midi", action="store_true", help="treat values as MIDI note numbers")
     parser.add_argument("--write", metavar="PATH", help="write WAV instead of playing")
     parser.add_argument("--seconds", type=float, help="override duration in seconds")

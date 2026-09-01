@@ -21,6 +21,7 @@ related_features:
 core_components:
   - tests/run.py
   - samples/piano
+  - samples/epiano
   - samples/organ
 
-notes: "Piano (instrument 0) uses Salamander Grand Piano WAVs in samples/piano (CC BY 3.0). Organ (instrument 2) uses Orgue Eglise Full in samples/organ. Electric Piano, Pad, and Strings stay additive sines. Five named sounds required."
+notes: "Piano uses Salamander Grand Piano (CC BY 3.0). Electric Piano uses Greg Sullivan Wurlitzer EP200 (CC BY 3.0). Organ uses Orgue Eglise Full. Pad and Strings stay additive sines. Five named sounds required."

@@ -127,7 +127,7 @@ def test_play_notes() -> None:
 
         piano = Path(tmp) / "piano-c4.wav"
         sine = Path(tmp) / "sine-c4.wav"
-        for path, instrument in ((piano, "0"), (sine, "1")):
+        for path, instrument in ((piano, "0"), (sine, "3")):
             proc = subprocess.run(
                 [sys.executable, str(ROOT / "play-notes.py"), "--write", str(path), "--midi", "60", "64", "67", "--instrument", instrument, "--seconds", "0.2"],
                 capture_output=True,
@@ -137,8 +137,33 @@ def test_play_notes() -> None:
                 sys.stderr.write(proc.stdout + proc.stderr)
                 raise SystemExit(proc.returncode)
         if piano.read_bytes() == sine.read_bytes():
-            raise SystemExit("piano samples should not match electric-piano sines")
+            raise SystemExit("piano samples should not match pad sines")
         print("play-notes piano samples ok")
+
+        missing_epiano = [
+            midi
+            for midi in range(48, 73)
+            if not (ROOT / "samples" / "epiano" / (play_notes.midi_note_name(midi) + ".wav")).is_file()
+        ]
+        if missing_epiano:
+            raise SystemExit("missing epiano samples: " + ",".join(play_notes.midi_note_name(m) for m in missing_epiano))
+        if not play_notes.electric_piano_samples_ready():
+            raise SystemExit("C4 electric piano sample missing")
+
+        epiano = Path(tmp) / "epiano-c4.wav"
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "play-notes.py"), "--write", str(epiano), "--midi", "60", "64", "67", "--instrument", "1", "--seconds", "0.2"],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            sys.stderr.write(proc.stdout + proc.stderr)
+            raise SystemExit(proc.returncode)
+        if epiano.read_bytes() == sine.read_bytes():
+            raise SystemExit("electric piano samples should not match pad sines")
+        if epiano.read_bytes() == piano.read_bytes():
+            raise SystemExit("electric piano samples should not match piano samples")
+        print("play-notes electric piano samples ok")
 
         missing_organ = [
             midi
@@ -160,9 +185,11 @@ def test_play_notes() -> None:
             sys.stderr.write(proc.stdout + proc.stderr)
             raise SystemExit(proc.returncode)
         if organ.read_bytes() == sine.read_bytes():
-            raise SystemExit("organ samples should not match electric-piano sines")
+            raise SystemExit("organ samples should not match pad sines")
         if organ.read_bytes() == piano.read_bytes():
             raise SystemExit("organ samples should not match piano samples")
+        if organ.read_bytes() == epiano.read_bytes():
+            raise SystemExit("organ samples should not match electric piano samples")
         print("play-notes organ samples ok")
 
 
