@@ -24,5 +24,6 @@ related_features:
 core_components:
   - js/Keyboard.js
   - play-notes.py
+  - samples/piano
 
-notes: "Range is C3–C5 inclusive, not a sliding two-octave window from C4."
+notes: "Range is C3–C5 inclusive, not a sliding two-octave window from C4. Piano timbre plays samples/piano; notes outside 48–72 pitch-shift the nearest sample."

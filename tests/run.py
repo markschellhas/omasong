@@ -115,6 +115,31 @@ def test_play_notes() -> None:
         if bad.returncode == 0:
             raise SystemExit("play-notes accepted invalid MIDI")
 
+        missing = [
+            midi
+            for midi in range(48, 73)
+            if not (ROOT / "samples" / "piano" / (play_notes.midi_note_name(midi) + ".wav")).is_file()
+        ]
+        if missing:
+            raise SystemExit("missing piano samples: " + ",".join(play_notes.midi_note_name(m) for m in missing))
+        if not play_notes.piano_samples_ready():
+            raise SystemExit("C4 piano sample missing")
+
+        piano = Path(tmp) / "piano-c4.wav"
+        sine = Path(tmp) / "sine-c4.wav"
+        for path, instrument in ((piano, "0"), (sine, "1")):
+            proc = subprocess.run(
+                [sys.executable, str(ROOT / "play-notes.py"), "--write", str(path), "--midi", "60", "64", "67", "--instrument", instrument, "--seconds", "0.2"],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode != 0:
+                sys.stderr.write(proc.stdout + proc.stderr)
+                raise SystemExit(proc.returncode)
+        if piano.read_bytes() == sine.read_bytes():
+            raise SystemExit("piano samples should not match electric-piano sines")
+        print("play-notes piano samples ok")
+
 
 def test_write_json() -> None:
     with tempfile.TemporaryDirectory() as tmp:

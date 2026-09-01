@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Play one or more sine tones as a chord or single note.
+"""Play notes as a chord or single pitch.
+
+Piano (instrument 0) uses Salamander Grand Piano samples when present.
+Other timbres are additive sines.
 
 Usage:
   play-notes.py hz1 [hz2 ...] [seconds]
@@ -18,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import wave
+from pathlib import Path
 
 RATE = 44100
 DEFAULT_SECONDS = 0.9
@@ -30,8 +34,14 @@ HZ_MIN = 20.0
 HZ_MAX = 20000.0
 AMPLITUDE = 0.18
 PAD = 0.02
+PIANO_INSTRUMENT = 0
+PIANO_MIDI_MIN = 48
+PIANO_MIDI_MAX = 72
+SAMPLE_DIR = Path(__file__).resolve().parent / "samples" / "piano"
+NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 # Slight harmonic / envelope differences; still additive sines.
+# Instrument 0 is a fallback if piano samples are missing.
 INSTRUMENTS = (
     {  # 0 Piano
         "harmonics": ((1.0, 1.0), (2.0, 0.18), (3.0, 0.07)),
@@ -64,6 +74,8 @@ INSTRUMENTS = (
         "amplitude": 0.15,
     },
 )
+
+_SAMPLE_CACHE: dict[int, list[float]] = {}
 
 
 def clamp_instrument(value: int) -> int:
@@ -116,6 +128,15 @@ def midi_to_hz(midi: float) -> float:
     return 440.0 * (2.0 ** ((float(midi) - 69.0) / 12.0))
 
 
+def hz_to_midi(hz: float) -> float:
+    return 69.0 + 12.0 * math.log2(float(hz) / 440.0)
+
+
+def midi_note_name(midi: int) -> str:
+    n = int(midi)
+    return f"{NOTE_NAMES[n % 12]}{n // 12 - 1}"
+
+
 def cosine_ramp(x: float) -> float:
     x = max(0.0, min(1.0, x))
     return 0.5 - 0.5 * math.cos(math.pi * x)
@@ -163,6 +184,118 @@ def synth(freqs: list[float], seconds: float, instrument: int = 0, amplitude: fl
     return frames
 
 
+def piano_samples_ready() -> bool:
+    return (SAMPLE_DIR / "C4.wav").is_file()
+
+
+def sample_path(midi: int) -> Path:
+    return SAMPLE_DIR / f"{midi_note_name(midi)}.wav"
+
+
+def load_sample_mono(midi: int, max_source_frames: int) -> list[float]:
+    cached = _SAMPLE_CACHE.get(midi)
+    if cached is not None and len(cached) >= max_source_frames:
+        return cached
+    path = sample_path(midi)
+    with wave.open(str(path), "rb") as wav:
+        channels = wav.getnchannels()
+        width = wav.getsampwidth()
+        rate = wav.getframerate()
+        nframes = wav.getnframes()
+        need = min(nframes, max(1, max_source_frames))
+        if rate != RATE and rate > 0:
+            need = min(nframes, int(need * rate / float(RATE)) + 2)
+        raw = wav.readframes(need)
+    if width != 2 or channels < 1:
+        raise ValueError("piano samples must be 16-bit PCM")
+    count = len(raw) // 2
+    samples = struct.unpack("<" + "h" * count, raw)
+    if channels == 1:
+        mono = [s / 32768.0 for s in samples]
+    else:
+        frames = count // channels
+        mono = [0.0] * frames
+        for i in range(frames):
+            acc = 0.0
+            base = i * channels
+            for c in range(channels):
+                acc += samples[base + c]
+            mono[i] = acc / channels / 32768.0
+    if rate != RATE and rate > 0:
+        mono = resample(mono, rate / float(RATE))
+    _SAMPLE_CACHE[midi] = mono
+    return mono
+
+
+def resample(samples: list[float], ratio: float) -> list[float]:
+    if ratio <= 0 or not samples:
+        return []
+    if abs(ratio - 1.0) < 1e-9:
+        return list(samples)
+    n = max(1, int(round(len(samples) / ratio)))
+    last = len(samples) - 1
+    out = [0.0] * n
+    for i in range(n):
+        src = i * ratio
+        j = int(src)
+        frac = src - j
+        a = samples[j] if j <= last else 0.0
+        b = samples[j + 1] if j + 1 <= last else 0.0
+        out[i] = a + (b - a) * frac
+    return out
+
+
+def nearest_piano_midi(midi: float) -> int:
+    n = int(round(float(midi)))
+    if n < PIANO_MIDI_MIN:
+        return PIANO_MIDI_MIN
+    if n > PIANO_MIDI_MAX:
+        return PIANO_MIDI_MAX
+    return n
+
+
+def sample_for_midi(midi: float, max_output: int) -> list[float]:
+    source = nearest_piano_midi(midi)
+    semitones = float(midi) - source
+    ratio = 2.0 ** (semitones / 12.0) if abs(semitones) >= 1e-6 else 1.0
+    source_needed = int(max_output * ratio) + 2
+    buf = load_sample_mono(source, source_needed)
+    if abs(ratio - 1.0) < 1e-9:
+        return buf
+    return resample(buf, ratio)
+
+
+def render_piano(midis: list[float], seconds: float) -> list[int]:
+    n = max(1, int(RATE * seconds))
+    pad = max(0, int(RATE * PAD))
+    voices = [sample_for_midi(m, n) for m in midis if math.isfinite(m)]
+    if not voices:
+        return synth([midi_to_hz(60)], seconds, instrument=PIANO_INSTRUMENT)
+    mix = [0.0] * n
+    gain = 0.62 / math.sqrt(len(voices))
+    for buf in voices:
+        length = min(n, len(buf))
+        release = max(1, min(int(RATE * 0.12), length // 4))
+        for i in range(length):
+            env = 1.0
+            tail = length - 1 - i
+            if tail < release:
+                env = cosine_ramp(tail / release)
+            mix[i] += buf[i] * gain * env
+    peak = max((abs(x) for x in mix), default=0.0)
+    if peak > 0.95:
+        scale = 0.95 / peak
+        mix = [x * scale for x in mix]
+    frames = [0] * pad
+    for sample in mix:
+        val = max(-1.0, min(1.0, sample))
+        frames.append(int(val * 32767))
+    frames.extend([0] * pad)
+    frames[0] = 0
+    frames[-1] = 0
+    return frames
+
+
 def write_wav(path: str, frames: list[int]) -> None:
     with wave.open(path, "w") as wav:
         wav.setnchannels(1)
@@ -199,13 +332,38 @@ def parse_values(values: list[str]) -> tuple[list[float], float]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Play sine-wave notes or chords")
+    parser = argparse.ArgumentParser(description="Play sampled piano or sine-wave notes")
     parser.add_argument("--midi", action="store_true", help="treat values as MIDI note numbers")
     parser.add_argument("--write", metavar="PATH", help="write WAV instead of playing")
     parser.add_argument("--seconds", type=float, help="override duration in seconds")
     parser.add_argument("--instrument", type=int, default=0, help="timbre 0–4")
     parser.add_argument("values", nargs="+", help="Hz values, or MIDI notes with --midi")
     return parser
+
+
+def render(args: argparse.Namespace, nums: list[float], seconds: float) -> list[int]:
+    instrument = clamp_instrument(args.instrument)
+    use_piano = instrument == PIANO_INSTRUMENT and piano_samples_ready()
+    if args.midi:
+        midis = [n for n in nums if clamp_midi(n) is not None][:MAX_VOICES]
+        if not midis:
+            return []
+        freqs = [midi_to_hz(n) for n in midis]
+        if use_piano:
+            try:
+                return render_piano(midis, seconds)
+            except OSError:
+                pass
+        return synth(freqs, seconds, instrument=instrument)
+    freqs = [hz for hz in (clamp_hz(n) for n in nums) if hz is not None][:MAX_VOICES]
+    if not freqs:
+        return []
+    if use_piano:
+        try:
+            return render_piano([hz_to_midi(hz) for hz in freqs], seconds)
+        except OSError:
+            pass
+    return synth(freqs, seconds, instrument=instrument)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -219,15 +377,10 @@ def main(argv: list[str] | None = None) -> int:
         seconds = clamp_seconds(args.seconds)
     else:
         seconds = clamp_seconds(seconds)
-    if args.midi:
-        freqs = [midi_to_hz(n) for n in nums if clamp_midi(n) is not None]
-    else:
-        freqs = [hz for hz in (clamp_hz(n) for n in nums) if hz is not None]
-    freqs = freqs[:MAX_VOICES]
-    if not freqs:
+    frames = render(args, nums, seconds)
+    if not frames:
         sys.stderr.write("play-notes: no valid pitches\n")
         return 2
-    frames = synth(freqs, seconds, instrument=args.instrument)
     if args.write:
         write_wav(args.write, frames)
         return 0

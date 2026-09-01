@@ -1,0 +1,19 @@
+Salamander Grand Piano (C3–C5 excerpt)
+======================================
+
+Original recordings: Alexander Holm — Salamander Grand Piano V3
+Yamaha C5, 48 kHz / 24-bit, two AKG C414
+Source: https://archive.org/details/SalamanderGrandPianoV3
+SFZ mapping: https://github.com/sfzinstruments/SalamanderGrandPiano
+
+License: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+https://creativecommons.org/licenses/by/3.0/
+Full text: LICENSE in this folder
+
+These files are a one-velocity (layer v8) excerpt covering C3–C5.
+Notes that were not originally sampled (Salamander is sampled every
+minor third) were pitch-shifted by at most one semitone and converted
+to 44.1 kHz 16-bit stereo WAV.
+
+If you ship this, keep this ATTRIBUTION file and LICENSE with the
+samples, and credit Alexander Holm.

@@ -20,5 +20,6 @@ related_features:
 
 core_components:
   - tests/run.py
+  - samples/piano
 
-notes: "Sine stand-ins are fine until a richer synth exists. Five named sounds required."
+notes: "Piano (instrument 0) uses Salamander Grand Piano WAVs in samples/piano (CC BY 3.0). Electric Piano, Organ, Pad, and Strings stay additive sines. Five named sounds required."
