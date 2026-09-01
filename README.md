@@ -67,3 +67,5 @@ omarchy-shell shell rescanPlugins
 Code is MIT. See [LICENSE](LICENSE).
 
 Piano samples in `samples/piano/` are [Salamander Grand Piano](https://archive.org/details/SalamanderGrandPianoV3) by Alexander Holm, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). See `samples/piano/ATTRIBUTION.txt`.
+
+Organ samples in `samples/organ/` are [Orgue Eglise](https://github.com/sfzinstruments/OrgueEglise) (Full stop), converted from S. Christian Collins' GigaSampler library. See `samples/organ/ATTRIBUTION.txt`.

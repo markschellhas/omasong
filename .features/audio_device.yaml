@@ -13,10 +13,11 @@ user_flow:
 
 related_features:
   - playback (engine output)
-  - instruments (Piano samples; other timbres are sines)
+  - instruments (Piano and Organ samples; other timbres are sines)
 
 core_components:
   - tests/run.py
   - samples/piano
+  - samples/organ
 
-notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano mixes samples/piano; other timbres synthesize. PipeWire and omarchy plugin validate are not in CI."
+notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano and Organ mix sample banks; other timbres synthesize. PipeWire and omarchy plugin validate are not in CI."

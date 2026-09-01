@@ -1,0 +1,15 @@
+Orgue Eglise (C3–C5 excerpt, Full stop)
+=======================================
+
+Original GigaSampler library: S. Christian Collins
+https://www.schristiancollins.com
+
+SFZ conversion: https://github.com/sfzinstruments/OrgueEglise
+Preset used: Orgue Eglise Full
+
+These files are a C3–C5 excerpt of the Full stop. Notes that were not
+originally sampled (C, E, G per octave) were pitch-shifted by at most
+two semitones and converted to 44.1 kHz 16-bit mono WAV.
+
+The upstream GitHub conversion does not include a license file. Credit
+S. Christian Collins if you ship this excerpt.

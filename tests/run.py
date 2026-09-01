@@ -140,6 +140,31 @@ def test_play_notes() -> None:
             raise SystemExit("piano samples should not match electric-piano sines")
         print("play-notes piano samples ok")
 
+        missing_organ = [
+            midi
+            for midi in range(48, 73)
+            if not (ROOT / "samples" / "organ" / (play_notes.midi_note_name(midi) + ".wav")).is_file()
+        ]
+        if missing_organ:
+            raise SystemExit("missing organ samples: " + ",".join(play_notes.midi_note_name(m) for m in missing_organ))
+        if not play_notes.organ_samples_ready():
+            raise SystemExit("C4 organ sample missing")
+
+        organ = Path(tmp) / "organ-c4.wav"
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "play-notes.py"), "--write", str(organ), "--midi", "60", "64", "67", "--instrument", "2", "--seconds", "0.2"],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            sys.stderr.write(proc.stdout + proc.stderr)
+            raise SystemExit(proc.returncode)
+        if organ.read_bytes() == sine.read_bytes():
+            raise SystemExit("organ samples should not match electric-piano sines")
+        if organ.read_bytes() == piano.read_bytes():
+            raise SystemExit("organ samples should not match piano samples")
+        print("play-notes organ samples ok")
+
 
 def test_write_json() -> None:
     with tempfile.TemporaryDirectory() as tmp:

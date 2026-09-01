@@ -28,5 +28,6 @@ related_features:
 core_components:
   - play-notes.py
   - samples/piano
+  - samples/organ
 
 notes: "Loop defaults on. No tap tempo. Space is play/stop when laptop map is off, not sustain. Slot fill uses wall-clock BPM. Overlay playhead is not in CI."

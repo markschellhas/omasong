@@ -21,5 +21,6 @@ related_features:
 core_components:
   - tests/run.py
   - samples/piano
+  - samples/organ
 
-notes: "Piano (instrument 0) uses Salamander Grand Piano WAVs in samples/piano (CC BY 3.0). Electric Piano, Organ, Pad, and Strings stay additive sines. Five named sounds required."
+notes: "Piano (instrument 0) uses Salamander Grand Piano WAVs in samples/piano (CC BY 3.0). Organ (instrument 2) uses Orgue Eglise Full in samples/organ. Electric Piano, Pad, and Strings stay additive sines. Five named sounds required."

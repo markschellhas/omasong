@@ -2,6 +2,7 @@
 """Play notes as a chord or single pitch.
 
 Piano (instrument 0) uses Salamander Grand Piano samples when present.
+Organ (instrument 2) uses Orgue Eglise Full samples when present.
 Other timbres are additive sines.
 
 Usage:
@@ -35,13 +36,14 @@ HZ_MAX = 20000.0
 AMPLITUDE = 0.18
 PAD = 0.02
 PIANO_INSTRUMENT = 0
+ORGAN_INSTRUMENT = 2
 PIANO_MIDI_MIN = 48
 PIANO_MIDI_MAX = 72
-SAMPLE_DIR = Path(__file__).resolve().parent / "samples" / "piano"
+SAMPLE_ROOT = Path(__file__).resolve().parent / "samples"
+SAMPLE_DIR = SAMPLE_ROOT / "piano"
 NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
-# Slight harmonic / envelope differences; still additive sines.
-# Instrument 0 is a fallback if piano samples are missing.
+# Additive sines used when a sampled bank is missing.
 INSTRUMENTS = (
     {  # 0 Piano
         "harmonics": ((1.0, 1.0), (2.0, 0.18), (3.0, 0.07)),
@@ -75,7 +77,21 @@ INSTRUMENTS = (
     },
 )
 
-_SAMPLE_CACHE: dict[int, list[float]] = {}
+_SAMPLE_CACHE: dict[tuple[str, int], list[float]] = {}
+SAMPLE_BANKS = {
+    PIANO_INSTRUMENT: {
+        "dir": SAMPLE_ROOT / "piano",
+        "ready": "C4.wav",
+        "loop": False,
+        "gain": 0.62,
+    },
+    ORGAN_INSTRUMENT: {
+        "dir": SAMPLE_ROOT / "organ",
+        "ready": "C4.wav",
+        "loop": True,
+        "gain": 0.48,
+    },
+}
 
 
 def clamp_instrument(value: int) -> int:
@@ -185,29 +201,50 @@ def synth(freqs: list[float], seconds: float, instrument: int = 0, amplitude: fl
 
 
 def piano_samples_ready() -> bool:
-    return (SAMPLE_DIR / "C4.wav").is_file()
+    return sample_bank_ready(PIANO_INSTRUMENT)
 
 
-def sample_path(midi: int) -> Path:
-    return SAMPLE_DIR / f"{midi_note_name(midi)}.wav"
+def organ_samples_ready() -> bool:
+    return sample_bank_ready(ORGAN_INSTRUMENT)
 
 
-def load_sample_mono(midi: int, max_source_frames: int) -> list[float]:
-    cached = _SAMPLE_CACHE.get(midi)
-    if cached is not None and len(cached) >= max_source_frames:
+def sample_bank(instrument: int) -> dict | None:
+    return SAMPLE_BANKS.get(clamp_instrument(instrument))
+
+
+def sample_bank_ready(instrument: int) -> bool:
+    bank = sample_bank(instrument)
+    if not bank:
+        return False
+    return (bank["dir"] / bank["ready"]).is_file()
+
+
+def sample_path(midi: int, bank: dict | None = None) -> Path:
+    folder = SAMPLE_DIR if bank is None else bank["dir"]
+    return folder / f"{midi_note_name(midi)}.wav"
+
+
+def load_sample_mono(midi: int, max_source_frames: int | None, bank: dict | None = None) -> list[float]:
+    folder = str(SAMPLE_DIR if bank is None else bank["dir"])
+    cache_key = (folder, midi)
+    cached = _SAMPLE_CACHE.get(cache_key)
+    if cached is not None and (max_source_frames is None or len(cached) >= max_source_frames):
         return cached
-    path = sample_path(midi)
+    path = sample_path(midi, bank)
     with wave.open(str(path), "rb") as wav:
         channels = wav.getnchannels()
         width = wav.getsampwidth()
         rate = wav.getframerate()
         nframes = wav.getnframes()
-        need = min(nframes, max(1, max_source_frames))
-        if rate != RATE and rate > 0:
+        if max_source_frames is None:
+            need = nframes
+        else:
+            need = min(nframes, max(1, max_source_frames))
+        if rate != RATE and rate > 0 and max_source_frames is not None:
             need = min(nframes, int(need * rate / float(RATE)) + 2)
         raw = wav.readframes(need)
     if width != 2 or channels < 1:
-        raise ValueError("piano samples must be 16-bit PCM")
+        raise ValueError("samples must be 16-bit PCM")
     count = len(raw) // 2
     samples = struct.unpack("<" + "h" * count, raw)
     if channels == 1:
@@ -223,7 +260,7 @@ def load_sample_mono(midi: int, max_source_frames: int) -> list[float]:
             mono[i] = acc / channels / 32768.0
     if rate != RATE and rate > 0:
         mono = resample(mono, rate / float(RATE))
-    _SAMPLE_CACHE[midi] = mono
+    _SAMPLE_CACHE[cache_key] = mono
     return mono
 
 
@@ -254,34 +291,63 @@ def nearest_piano_midi(midi: float) -> int:
     return n
 
 
-def sample_for_midi(midi: float, max_output: int) -> list[float]:
+def looped_sample(buf: list[float], index: int) -> float:
+    if not buf:
+        return 0.0
+    if index < len(buf):
+        return buf[index]
+    start = min(int(RATE * 0.35), max(0, len(buf) // 5))
+    loop_len = len(buf) - start
+    if loop_len < 1:
+        return buf[-1]
+    return buf[start + (index - start) % loop_len]
+
+
+def sample_for_midi(midi: float, max_output: int | None, bank: dict | None = None) -> list[float]:
     source = nearest_piano_midi(midi)
     semitones = float(midi) - source
     ratio = 2.0 ** (semitones / 12.0) if abs(semitones) >= 1e-6 else 1.0
-    source_needed = int(max_output * ratio) + 2
-    buf = load_sample_mono(source, source_needed)
+    loop = bool(bank and bank.get("loop"))
+    if loop or max_output is None:
+        source_needed = None
+    else:
+        source_needed = int(max_output * ratio) + 2
+    buf = load_sample_mono(source, source_needed, bank)
     if abs(ratio - 1.0) < 1e-9:
         return buf
     return resample(buf, ratio)
 
 
 def render_piano(midis: list[float], seconds: float) -> list[int]:
+    return render_samples(midis, seconds, PIANO_INSTRUMENT)
+
+
+def render_samples(midis: list[float], seconds: float, instrument: int) -> list[int]:
+    bank = sample_bank(instrument)
+    if not bank:
+        return synth([midi_to_hz(m) for m in midis], seconds, instrument=instrument)
     n = max(1, int(RATE * seconds))
     pad = max(0, int(RATE * PAD))
-    voices = [sample_for_midi(m, n) for m in midis if math.isfinite(m)]
+    loop = bool(bank.get("loop"))
+    voices = [sample_for_midi(m, None if loop else n, bank) for m in midis if math.isfinite(m)]
     if not voices:
-        return synth([midi_to_hz(60)], seconds, instrument=PIANO_INSTRUMENT)
+        return synth([midi_to_hz(60)], seconds, instrument=instrument)
     mix = [0.0] * n
-    gain = 0.62 / math.sqrt(len(voices))
+    gain = float(bank.get("gain", 0.62)) / math.sqrt(len(voices))
+    release = max(1, min(int(RATE * 0.12), n // 4))
     for buf in voices:
-        length = min(n, len(buf))
-        release = max(1, min(int(RATE * 0.12), length // 4))
-        for i in range(length):
+        for i in range(n):
             env = 1.0
-            tail = length - 1 - i
+            tail = n - 1 - i
             if tail < release:
                 env = cosine_ramp(tail / release)
-            mix[i] += buf[i] * gain * env
+            if loop:
+                val = looped_sample(buf, i)
+            elif i < len(buf):
+                val = buf[i]
+            else:
+                val = 0.0
+            mix[i] += val * gain * env
     peak = max((abs(x) for x in mix), default=0.0)
     if peak > 0.95:
         scale = 0.95 / peak
@@ -332,7 +398,7 @@ def parse_values(values: list[str]) -> tuple[list[float], float]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Play sampled piano or sine-wave notes")
+    parser = argparse.ArgumentParser(description="Play sampled piano/organ or sine-wave notes")
     parser.add_argument("--midi", action="store_true", help="treat values as MIDI note numbers")
     parser.add_argument("--write", metavar="PATH", help="write WAV instead of playing")
     parser.add_argument("--seconds", type=float, help="override duration in seconds")
@@ -343,24 +409,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 def render(args: argparse.Namespace, nums: list[float], seconds: float) -> list[int]:
     instrument = clamp_instrument(args.instrument)
-    use_piano = instrument == PIANO_INSTRUMENT and piano_samples_ready()
+    use_samples = sample_bank_ready(instrument)
     if args.midi:
         midis = [n for n in nums if clamp_midi(n) is not None][:MAX_VOICES]
         if not midis:
             return []
         freqs = [midi_to_hz(n) for n in midis]
-        if use_piano:
+        if use_samples:
             try:
-                return render_piano(midis, seconds)
+                return render_samples(midis, seconds, instrument)
             except OSError:
                 pass
         return synth(freqs, seconds, instrument=instrument)
     freqs = [hz for hz in (clamp_hz(n) for n in nums) if hz is not None][:MAX_VOICES]
     if not freqs:
         return []
-    if use_piano:
+    if use_samples:
         try:
-            return render_piano([hz_to_midi(hz) for hz in freqs], seconds)
+            return render_samples([hz_to_midi(hz) for hz in freqs], seconds, instrument)
         except OSError:
             pass
     return synth(freqs, seconds, instrument=instrument)
