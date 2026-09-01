@@ -144,7 +144,7 @@ Item {
           x: (Keys.blackKeyLeftPercent(modelData.keyIndex, octaveOffset) / 100) * board.width - width / 2
           y: 0
           z: 2
-          color: root.isActive(modelData.midi) ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.85) : "#161513"
+          color: root.isActive(modelData.midi) ? Color.accent : "#161513"
           border.width: 1
           border.color: "#2c2a27"
           radius: 2
