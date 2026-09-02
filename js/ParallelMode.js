@@ -421,6 +421,37 @@ function shiftProgressionRows(entries, delta) {
   return out
 }
 
+function nextHomeMode(homeModeIndex, delta, showAllModes) {
+  var next = homeModeIndex + delta
+  if (next < 0 || next >= MODE_NAMES.length)
+    return null
+  var expand = false
+  if (!showAllModes) {
+    var ids = visibleModeIndices(false)
+    expand = ids.indexOf(next) < 0
+  }
+  return { homeModeIndex: next, showAllModes: !!(showAllModes || expand) }
+}
+
+function clampHomeToVisible(homeModeIndex, showAllModes) {
+  if (showAllModes)
+    return homeModeIndex
+  var ids = visibleModeIndices(false)
+  if (ids.indexOf(homeModeIndex) >= 0)
+    return homeModeIndex
+  var best = ids[0]
+  var bestDist = Math.abs(homeModeIndex - best)
+  var i
+  for (i = 1; i < ids.length; i++) {
+    var d = Math.abs(homeModeIndex - ids[i])
+    if (d < bestDist) {
+      best = ids[i]
+      bestDist = d
+    }
+  }
+  return best
+}
+
 function transposeProgressionRoot(entries, oldRootPc, newRootPc) {
   if (!entries.length)
     return entries

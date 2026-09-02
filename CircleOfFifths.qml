@@ -561,12 +561,8 @@ Item {
           root.chordDragPayload = payload
           root.chordDragStarted(payload)
         }
-      }
-
-      Connections {
-        target: root
-        function onKeyIndexChanged() {
-          modeGrid.rootPc = Model.tonicPc(root.keyIndex)
+        onRootRequested: function(pc) {
+          root.tonicPicked(Model.keyIndexFromPc(pc), "major")
         }
       }
     }

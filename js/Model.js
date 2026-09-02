@@ -59,6 +59,10 @@ function tonicPc(index) {
   return wrapPitchClass(7 * wrap(index))
 }
 
+function keyIndexFromPc(pc) {
+  return wrap(7 * wrapPitchClass(pc))
+}
+
 function station(index) {
   var k = FIFTHS[wrap(index)]
   return { major: k.major, relativeMinor: k.minor, accidentals: k.accidentals }

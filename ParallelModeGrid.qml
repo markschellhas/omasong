@@ -14,7 +14,6 @@ Item {
   property int homeModeIndex: 1
   property bool useSevenths: false
   property bool showAllModes: false
-  property var progression: []
   property int hoverMode: -1
   property int hoverDegree: -1
   property int selectedMode: -1
@@ -26,8 +25,8 @@ Item {
     : null
 
   signal chordAuditioned(var chord, var notes, string label)
-  signal chordAdded(var chord)
   signal chordDragStarted(string payload)
+  signal rootRequested(int pc)
 
   function modeAt(rowIndex) {
     return ParallelMode.visibleModeIndex(rowIndex, showAllModes)
@@ -56,39 +55,27 @@ Item {
     return false
   }
 
-  function isInProgression(modeIndex, degreeIndex) {
-    var i
-    for (i = 0; i < progression.length; i++) {
-      if (progression[i].modeIndex === modeIndex && progression[i].degreeIndex === degreeIndex)
-        return true
-    }
-    return false
-  }
-
   function auditionCell(modeIndex, degreeIndex) {
     var chord = ParallelMode.cellChord(rootPc, modeIndex, degreeIndex, useSevenths)
     root.chordAuditioned(chord, ParallelMode.chordMidiNotes(chord), chord.symbol)
   }
 
-  function addCell(modeIndex, degreeIndex) {
-    var next = progression.slice()
-    next.push(ParallelMode.progressionEntry(modeIndex, degreeIndex))
-    progression = next
-    root.chordAdded(ParallelMode.cellChord(rootPc, modeIndex, degreeIndex, useSevenths))
+  function shiftHome(delta) {
+    var next = ParallelMode.nextHomeMode(root.homeModeIndex, delta, root.showAllModes)
+    if (!next)
+      return
+    root.homeModeIndex = next.homeModeIndex
+    root.showAllModes = next.showAllModes
   }
 
-  function shiftProgression(delta) {
-    var shifted = ParallelMode.shiftProgressionRows(progression, delta)
-    if (shifted)
-      progression = shifted
-  }
-
-  function clearProgression() {
-    progression = []
+  function setShowAllModes(all) {
+    root.showAllModes = all
+    if (!all)
+      root.homeModeIndex = ParallelMode.clampHomeToVisible(root.homeModeIndex, false)
   }
 
   function stepRoot(delta) {
-    rootPc = Model.wrapPitchClass(rootPc + delta)
+    root.rootRequested(Model.wrapPitchClass(root.rootPc + delta))
   }
 
   function cellPayload(modeIndex, degreeIndex) {
@@ -205,7 +192,6 @@ Item {
               required property int index
               readonly property var info: root.infoAt(modeRow.index, index)
               readonly property bool dup: root.isDuplicateHit(info.modeIndex, info.degreeIndex)
-              readonly property bool inProg: root.isInProgression(info.modeIndex, info.degreeIndex)
               readonly property bool selected: root.selectedMode === info.modeIndex
                 && root.selectedDegree === info.degreeIndex
               readonly property bool showNumeral: gridHost.cellH >= 28 && gridHost.cellW >= 24
@@ -218,8 +204,6 @@ Item {
                   return Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.28)
                 if (dup)
                   return Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.18)
-                if (inProg)
-                  return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.22)
                 if (info.changedFromAbove)
                   return Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
                 return Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.04 * modeRow.distance)
@@ -228,7 +212,7 @@ Item {
               border.width: info.unstableTonic ? 1 : (modeRow.isHome ? 1 : 1)
               border.color: info.unstableTonic
                 ? root.dim
-                : (inProg ? Color.accent : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.22))
+                : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.22)
 
               Column {
                 anchors.centerIn: parent
@@ -323,7 +307,6 @@ Item {
                 onReleased: function() {
                   dragging = false
                 }
-                onDoubleClicked: root.addCell(chordCell.info.modeIndex, chordCell.info.degreeIndex)
               }
             }
           }
@@ -388,86 +371,31 @@ Item {
         foreground: root.foreground
         fontSize: Style.font.caption
         tooltipText: root.showAllModes ? "Seven modes" : "Common four modes"
-        onClicked: root.showAllModes = !root.showAllModes
+        onClicked: root.setShowAllModes(!root.showAllModes)
       }
     }
 
-    Item {
-      width: parent.width
-      height: Style.space(28)
+    Row {
+      spacing: Style.space(2)
 
       Button {
-        id: shiftUp
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
         text: "▲"
         bordered: true
         foreground: root.foreground
         fontSize: Style.font.caption
-        tooltipText: "Brighten progression (up a row)"
-        enabled: root.progression.length > 0
-        onClicked: root.shiftProgression(-1)
+        tooltipText: "Brighten (up a mode)"
+        enabled: root.homeModeIndex > 0
+        onClicked: root.shiftHome(-1)
       }
 
       Button {
-        id: shiftDown
-        anchors.left: shiftUp.right
-        anchors.leftMargin: Style.space(2)
-        anchors.verticalCenter: parent.verticalCenter
         text: "▼"
         bordered: true
         foreground: root.foreground
         fontSize: Style.font.caption
-        tooltipText: "Darken progression (down a row)"
-        enabled: root.progression.length > 0
-        onClicked: root.shiftProgression(1)
-      }
-
-      Button {
-        id: clearProg
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        text: "×"
-        bordered: true
-        foreground: root.foreground
-        fontSize: Style.font.caption
-        tooltipText: "Clear progression"
-        enabled: root.progression.length > 0
-        onClicked: root.clearProgression()
-      }
-
-      Rectangle {
-        anchors.left: shiftDown.right
-        anchors.right: clearProg.left
-        anchors.leftMargin: Style.space(2)
-        anchors.rightMargin: Style.space(2)
-        anchors.verticalCenter: parent.verticalCenter
-        height: parent.height
-        color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.06)
-        radius: 2
-        clip: true
-
-        Row {
-          anchors.fill: parent
-          anchors.margins: Style.space(2)
-          spacing: Style.space(4)
-
-          Repeater {
-            model: root.progression
-            delegate: Text {
-              required property int index
-              required property var modelData
-              readonly property var chord: ParallelMode.cellChord(
-                root.rootPc, modelData.modeIndex, modelData.degreeIndex, root.useSevenths)
-              text: chord.symbol
-              color: root.foreground
-              font.family: Style.font.menuFamily
-              font.pixelSize: Style.font.caption
-              anchors.verticalCenter: parent.verticalCenter
-              wrapMode: Text.NoWrap
-            }
-          }
-        }
+        tooltipText: "Darken (down a mode)"
+        enabled: root.homeModeIndex < 6
+        onClicked: root.shiftHome(1)
       }
     }
   }
