@@ -70,4 +70,4 @@ Piano samples in `samples/piano/` are [Salamander Grand Piano](https://archive.o
 
 Electric piano samples in `samples/epiano/` are [Wurlitzer EP200](https://github.com/sfzinstruments/GregSullivan.E-Pianos) by Greg Sullivan, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). See `samples/epiano/ATTRIBUTION.txt`.
 
-Organ samples in `samples/organ/` are [Orgue Eglise](https://github.com/sfzinstruments/OrgueEglise) (Full stop), converted from S. Christian Collins' GigaSampler library. See `samples/organ/ATTRIBUTION.txt`.
+Organ samples in `samples/organ/` are the chapel organ from [VSCO 2 CE](https://github.com/sgossner/VSCO-2-CE) by Simon Dalzell / Versilian Studios, [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). See `samples/organ/ATTRIBUTION.txt`.

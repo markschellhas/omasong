@@ -1,15 +1,18 @@
-Orgue Eglise (C3–C5 excerpt, Full stop)
-=======================================
+VSCO 2 CE chapel organ (C3–C5 excerpt, loud/open)
+================================================
 
-Original GigaSampler library: S. Christian Collins
-https://www.schristiancollins.com
+Original recordings: Simon Dalzell (Ivy Audio), winter 2015–16
+Library: Versilian Studios Chamber Orchestra 2 Community Edition
+https://github.com/sgossner/VSCO-2-CE
+SFZ mapping: OrganLoud.sfz (Rode NT5 spaced pair, manual 3 open)
 
-SFZ conversion: https://github.com/sfzinstruments/OrgueEglise
-Preset used: Orgue Eglise Full
+License: Creative Commons CC0 1.0 Universal
+https://creativecommons.org/publicdomain/zero/1.0/
+Full text: LICENSE in this folder
 
-These files are a C3–C5 excerpt of the Full stop. Notes that were not
-originally sampled (C, E, G per octave) were pitch-shifted by at most
-two semitones and converted to 44.1 kHz 16-bit mono WAV.
+These files are a C3–C5 excerpt of the loud/open layer. Notes that
+were not originally sampled (every minor third) were pitch-shifted
+by at most one semitone and converted to 44.1 kHz 16-bit mono WAV.
 
-The upstream GitHub conversion does not include a license file. Credit
-S. Christian Collins if you ship this excerpt.
+CC0 does not require credit. If you mention a source, credit Simon
+Dalzell / Ivy Audio and Versilian Studios.

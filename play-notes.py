@@ -3,7 +3,7 @@
 
 Piano (instrument 0) uses Salamander Grand Piano samples when present.
 Electric Piano (instrument 1) uses Wurlitzer EP200 samples when present.
-Organ (instrument 2) uses Orgue Eglise Full samples when present.
+Organ (instrument 2) uses VSCO 2 CE chapel organ samples when present.
 If a sample bank is missing, that timbre falls back to additive sines.
 
 Usage:

@@ -24,4 +24,4 @@ core_components:
   - samples/epiano
   - samples/organ
 
-notes: "Piano uses Salamander Grand Piano (CC BY 3.0). Electric Piano uses Greg Sullivan Wurlitzer EP200 (CC BY 3.0). Organ uses Orgue Eglise Full. Saved Pad/Strings indices clamp to Organ."
+notes: "Piano uses Salamander Grand Piano (CC BY 3.0). Electric Piano uses Greg Sullivan Wurlitzer EP200 (CC BY 3.0). Organ uses VSCO 2 CE chapel organ (CC0). Saved Pad/Strings indices clamp to Organ."
