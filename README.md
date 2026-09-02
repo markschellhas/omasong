@@ -15,7 +15,7 @@ Plugin id: `markschellhas.songwriter`
 | `row_repeats` | `:||` at the end of each 4-bar row plays that row twice |
 | `playback` | Play / Stop / Loop / BPM 40–240 / Space; playhead and sounding-note highlight |
 | `piano_keyboard` | C3–C5; click keys; light triads from play, preview, or selection |
-| `instruments` | Piano, Electric Piano, Organ, Pad, Strings |
+| `instruments` | Piano, Electric Piano, Organ |
 | `laptop_keys` | Off by default; A=C, W=C♯, …; Z/X octave; steals H/J/K/L when on |
 | `region_focus` | j/k or ↑/↓ cycle Circle / Song / Keyboard; h/l or ←/→ act on the highlighted region; Tab moves Song cells |
 | `agent_api` | `chords-agent progressions \| song \| health` on 127.0.0.1:17891 |

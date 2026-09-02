@@ -204,7 +204,7 @@ function blackKeyLeftPercent(keyIndex, octaveOffset) {
   return (n + octaveOffset) * (100 / WHITE_KEYS_C3_C5)
 }
 
-var INSTRUMENT_NAMES = ["Piano", "Electric Piano", "Organ", "Pad", "Strings"]
+var INSTRUMENT_NAMES = ["Piano", "Electric Piano", "Organ"]
 
 function clampInstrument(index) {
   var n = Number(index)

@@ -4,7 +4,7 @@
 Piano (instrument 0) uses Salamander Grand Piano samples when present.
 Electric Piano (instrument 1) uses Wurlitzer EP200 samples when present.
 Organ (instrument 2) uses Orgue Eglise Full samples when present.
-Other timbres are additive sines.
+If a sample bank is missing, that timbre falls back to additive sines.
 
 Usage:
   play-notes.py hz1 [hz2 ...] [seconds]
@@ -65,18 +65,6 @@ INSTRUMENTS = (
         "release": 0.08,
         "amplitude": 0.14,
     },
-    {  # 3 Pad
-        "harmonics": ((1.0, 1.0), (2.0, 0.22), (3.0, 0.12), (5.0, 0.08)),
-        "attack": 0.18,
-        "release": 0.40,
-        "amplitude": 0.16,
-    },
-    {  # 4 Strings
-        "harmonics": ((1.0, 1.0), (2.0, 0.4), (3.0, 0.25), (4.0, 0.15), (5.0, 0.1)),
-        "attack": 0.14,
-        "release": 0.36,
-        "amplitude": 0.15,
-    },
 )
 
 _SAMPLE_CACHE: dict[tuple[str, int], list[float]] = {}
@@ -109,8 +97,9 @@ def clamp_instrument(value: int) -> int:
         return 0
     if n < 0:
         return 0
-    if n > 4:
-        return 4
+    last = len(INSTRUMENTS) - 1
+    if n > last:
+        return last
     return n
 
 
@@ -410,11 +399,11 @@ def parse_values(values: list[str]) -> tuple[list[float], float]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Play sampled piano, electric piano, organ, or sine-wave notes")
+    parser = argparse.ArgumentParser(description="Play sampled piano, electric piano, or organ notes")
     parser.add_argument("--midi", action="store_true", help="treat values as MIDI note numbers")
     parser.add_argument("--write", metavar="PATH", help="write WAV instead of playing")
     parser.add_argument("--seconds", type=float, help="override duration in seconds")
-    parser.add_argument("--instrument", type=int, default=0, help="timbre 0–4")
+    parser.add_argument("--instrument", type=int, default=0, help="timbre 0–2 (Piano, Electric Piano, Organ)")
     parser.add_argument("values", nargs="+", help="Hz values, or MIDI notes with --midi")
     return parser
 

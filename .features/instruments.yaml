@@ -1,5 +1,5 @@
 feature_name: instruments
-purpose: "Cycle synth timbre among Piano, Electric Piano, Organ, Pad, and Strings."
+purpose: "Cycle synth timbre among Piano, Electric Piano, and Organ."
 
 entry_points:
   - Piano.qml
@@ -24,4 +24,4 @@ core_components:
   - samples/epiano
   - samples/organ
 
-notes: "Piano uses Salamander Grand Piano (CC BY 3.0). Electric Piano uses Greg Sullivan Wurlitzer EP200 (CC BY 3.0). Organ uses Orgue Eglise Full. Pad and Strings stay additive sines. Five named sounds required."
+notes: "Piano uses Salamander Grand Piano (CC BY 3.0). Electric Piano uses Greg Sullivan Wurlitzer EP200 (CC BY 3.0). Organ uses Orgue Eglise Full. Saved Pad/Strings indices clamp to Organ."
