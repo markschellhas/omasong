@@ -10,7 +10,7 @@ Item {
   property color foreground
   property color dim
   property var chord: null
-  property bool vertical: false
+  property bool vertical: true
 
   readonly property var voicing: root.chord && root.chord.rootPc !== undefined
     ? Guitar.voicingFor(root.chord.rootPc, root.chord.quality)
