@@ -20,6 +20,7 @@ related_features:
   - laptop_keys (steals hjkl when on)
   - song_structure (Song region)
   - piano_keyboard (Keyboard region)
+  - beats (sequencer interaction retains Song region)
 
 core_components:
   - CircleOfFifths.qml

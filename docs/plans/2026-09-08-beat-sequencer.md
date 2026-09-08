@@ -18,21 +18,21 @@
 
 ## Progress
 
-**Status:** `░░░░░░░░░░░░░░░░░░░░` 0/3 done (0%) · 1 in flight
+**Status:** `█████████████░░░░░░░` 2/3 done (67%) · 1 in flight
 
 | # | Task | Status | Next |
 |---|------|--------|------|
-| 1 | Beat data model and serialization | `implementing` | implement and test |
-| 2 | Percussion renderer and transport | `todo` | implement |
-| 3 | Beat lane, sequencer UI, and maps | `todo` | implement |
+| 1 | Beat data model and serialization | `done` | complete |
+| 2 | Percussion renderer and transport | `done` | complete |
+| 3 | Beat lane, sequencer UI, and maps | `implementing` | implement and validate |
 
 ---
 
-### [~] Task 1: Beat data model and serialization
+### [x] Task 1: Beat data model and serialization
 
-**Status:** `implementing`
-**Resume:** Implementer working on model, serialization, and tests.
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete.
+**Commits:** e76d663eb120ec4ef0cda665e0887c14f7fc5ad5
 
 **Files:**
 - Modify: `js/Song.js`
@@ -64,11 +64,11 @@ git add js/Song.js js/Agent.js tests/js_tests.js docs/prds/prd-beat-sequencer.md
 git commit -m "feat(beats): add beat pattern model"
 ```
 
-### [ ] Task 2: Percussion renderer and transport
+### [x] Task 2: Percussion renderer and transport
 
-**Status:** `todo`
-**Resume:** —
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete.
+**Commits:** f19d0eb12893f78983949ea38097b4d92b1b3fb5, 09dd9cd, bf2b8a7
 
 **Files:**
 - Modify: `play-notes.py`
@@ -101,10 +101,10 @@ git add play-notes.py Songwriter.qml tests/run.py tests/js_tests.js
 git commit -m "feat(beats): sync drums with transport"
 ```
 
-### [ ] Task 3: Beat lane, sequencer UI, and maps
+### [~] Task 3: Beat lane, sequencer UI, and maps
 
-**Status:** `todo`
-**Resume:** —
+**Status:** `implementing`
+**Resume:** Implementer working on the toggle, per-bar lane, sequencer overlay, maps, and docs.
 **Commits:** —
 
 **Files:**

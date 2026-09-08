@@ -16,6 +16,7 @@ apps:
 user_flow:
   primary: "Agent → chords-agent progressions → GET /progressions or snapshot progressions.json"
   song: "Agent → chords-agent song → full document; empty slots null"
+  beats: "Agent → chords-agent song → per-measure beat patterns; progressions stays chord-only"
   health: "Agent → chords-agent health → exit 0 if live else 2"
   error: "chords-agent --live with app down → exit 2"
 
@@ -25,6 +26,7 @@ related_features:
   - circle_of_fifths (key in JSON)
   - row_repeats (rowRepeats array)
   - music_theory (numerals when diatonic)
+  - beats (full song JSON includes patterns)
 
 core_components:
   - tests/run.py

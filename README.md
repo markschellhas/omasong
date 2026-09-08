@@ -12,6 +12,7 @@ Plugin id: `markschellhas.songwriter`
 | `music_theory` | Triads, diatonic sets, `chord\|name\|rootPc\|quality` payloads |
 | `song_structure` | Verse/Chorus (and extra) sections; four 4/4 bars by default, add or trim rows of four |
 | `chord_slots` | Place, split (drop on a filled chord), edge-resize, clear |
+| `beats` | Optional beat lane per bar; edit meter-aware kick, snare, and hi-hat sixteenth-note patterns |
 | `row_repeats` | `:||` at the end of each 4-bar row plays that row twice |
 | `playback` | Play / Stop / Loop / BPM 40–240 / Space; playhead and sounding-note highlight |
 | `piano_keyboard` | C3–C5; click keys; light triads from play, preview, or selection |
@@ -44,7 +45,7 @@ o.bind("SUPER + CTRL + ALT + S", "Songwriter", "omarchy-shell shell toggle marks
 
 ## Status
 
-The overlay’s capabilities are mapped in `.features/` (circle, slots, timeline, piano, guitar tab, laptop keys, region focus, `chords-agent`).
+The overlay’s capabilities are mapped in `.features/` (circle, slots, beats, timeline, piano, guitar tab, laptop keys, region focus, `chords-agent`).
 
 Automated check: `python3 tests/run.py`. Full overlay and `omarchy plugin validate` need an Omarchy host.
 

@@ -22,6 +22,7 @@ related_features:
   - guitar_tab (selected slot)
   - music_theory (encode/decode payload)
   - agent_api (placed chords vs rests)
+  - beats (shares measure identity and layout width)
 
 core_components:
   - tests/js_tests.js

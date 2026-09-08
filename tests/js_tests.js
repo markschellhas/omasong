@@ -157,6 +157,22 @@ assertEq(hasBeat(toggleBeat(song, 99, 0, "kick", 0), 0, 0, "kick", 0), false)
 assertEq(hasBeat(toggleBeat(song, 0, 0, "tom", 0), 0, 0, "kick", 0), false)
 assertEq(hasBeat(toggleBeat(song, 0, 0, "kick", 999), 0, 0, "kick", 0), false)
 
+// Clear is immutable and empties only the requested bar at its meter-aware size.
+var beatsToClear = toggleBeat(toggleBeat(song, 0, 1, "kick", 0), 0, 1, "hihat", 15)
+beatsToClear = toggleBeat(beatsToClear, 0, 2, "snare", 4)
+var beatsCleared = clearBeats(beatsToClear, 0, 1)
+assert(isBeatPatternEmpty(getBeats(beatsCleared, 0, 1)), "clearBeats empties requested bar")
+assertEq(getBeats(beatsCleared, 0, 1).kick.length, 16)
+assertEq(hasBeat(beatsCleared, 0, 2, "snare", 4), true)
+assertEq(hasBeat(beatsToClear, 0, 1, "kick", 0), true)
+assert(beatsCleared.sections[0].measures[1].beats !== beatsToClear.sections[0].measures[1].beats,
+       "clearBeats owns its beat pattern")
+assertEq(hasBeat(clearBeats(beatsToClear, 99, 0), 0, 1, "kick", 0), true)
+var threeFourClear = toggleBeat(legacyBeats, 0, 0, "snare", 11)
+threeFourClear = clearBeats(threeFourClear, 0, 0)
+assertEq(getBeats(threeFourClear, 0, 0).snare.length, 12)
+assert(isBeatPatternEmpty(getBeats(threeFourClear, 0, 0)), "clearBeats keeps meter size")
+
 // Clone, bar creation, trimming, and meter resizing retain beat content.
 var beatClone = cloneSong(beatToggled)
 assertEq(hasBeat(beatClone, 0, 1, "snare", 4), true)

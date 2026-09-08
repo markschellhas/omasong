@@ -22,6 +22,7 @@ related_features:
   - playback (BPM/loop ride with loaded song; stop on load)
   - agent_api (session snapshots still from current song)
   - instruments (prefs fields travel with saved document)
+  - beats (patterns and beatsVisible travel with saved document)
 
 core_components:
   - tests/run.py

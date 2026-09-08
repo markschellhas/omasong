@@ -42,6 +42,8 @@ Item {
   property int selectedSection: 0
   property int selectedMeasure: 0
   property int selectedSlot: 0
+  property int beatEditorSection: -1
+  property int beatEditorMeasure: -1
   property var activeNotes: []
   property var soundingNotes: []
   property var previewNotes: []
@@ -59,6 +61,16 @@ Item {
       ? Song.buildSectionTimeline(song, root.playScopeSection)
       : Song.buildTimeline(song))
   readonly property bool laptopKeys: !!(song && song.laptopKeys)
+  readonly property bool beatEditorOpen: beatEditorSection >= 0 && beatEditorMeasure >= 0
+  readonly property var beatEditorSectionData: beatEditorOpen && song && song.sections
+    && beatEditorSection < song.sections.length ? song.sections[beatEditorSection] : null
+  readonly property string beatEditorSectionName: beatEditorSectionData && beatEditorSectionData.name
+    ? beatEditorSectionData.name : "Section"
+  readonly property var beatEditorPattern: beatEditorOpen
+    ? Song.getBeats(song, beatEditorSection, beatEditorMeasure)
+    : ({ kick: [], snare: [], hihat: [] })
+  readonly property int beatEditorStepCount: beatEditorSectionData
+    ? Song.beatStepCount(beatEditorSectionData.timeSig) : 16
   readonly property int laptopOctave: KeyMap.clampOctave(song && song.laptopOctave)
   readonly property string headerHint: {
     var name = Focus.regionName(navRegion)
@@ -146,6 +158,7 @@ Item {
   function close() {
     stopPlayback()
     closeLibraryMenu()
+    closeBeatEditor()
     opened = false
     stopAgentServer()
   }
@@ -190,6 +203,58 @@ Item {
       selectedSlot = 0
   }
 
+  function clampBeatEditor() {
+    if (!beatEditorOpen)
+      return
+    var sections = song && song.sections ? song.sections : []
+    if (beatEditorSection >= sections.length || beatEditorSection < 0) {
+      closeBeatEditor()
+      return
+    }
+    var measures = sections[beatEditorSection] && sections[beatEditorSection].measures
+      ? sections[beatEditorSection].measures : []
+    if (beatEditorMeasure >= measures.length || beatEditorMeasure < 0)
+      closeBeatEditor()
+  }
+
+  function openBeatEditor(sectionIndex, measureIndex) {
+    var sections = song && song.sections ? song.sections : []
+    if (sectionIndex < 0 || sectionIndex >= sections.length)
+      return
+    var measures = sections[sectionIndex] && sections[sectionIndex].measures
+      ? sections[sectionIndex].measures : []
+    if (measureIndex < 0 || measureIndex >= measures.length)
+      return
+    closeLibraryMenu()
+    structure.closeMenu()
+    focusRegion(1)
+    clearCirclePreview()
+    selectedSection = sectionIndex
+    selectedMeasure = measureIndex
+    selectedSlot = 0
+    beatEditorSection = sectionIndex
+    beatEditorMeasure = measureIndex
+    refreshPiano()
+    Qt.callLater(function() { beatSequencer.focusPanel() })
+  }
+
+  function closeBeatEditor() {
+    beatEditorSection = -1
+    beatEditorMeasure = -1
+  }
+
+  function toggleBeatStep(lane, step) {
+    if (!beatEditorOpen)
+      return
+    updateSong(Song.toggleBeat(song, beatEditorSection, beatEditorMeasure, lane, step))
+  }
+
+  function clearBeatEditor() {
+    if (!beatEditorOpen)
+      return
+    updateSong(Song.clearBeats(song, beatEditorSection, beatEditorMeasure))
+  }
+
   function textFieldHasFocus() {
     var item = keyCatcher.activeFocusItem
     if (!item)
@@ -228,6 +293,7 @@ Item {
     if (fillSection >= 0 && prevBpm !== undefined && normalized.bpm !== prevBpm)
       retimeFillForBpm()
     clampSelection()
+    clampBeatEditor()
     persistSoon()
     refreshPiano()
   }
@@ -561,6 +627,7 @@ Item {
     if (!entry || !entry.song)
       return
     stopPlayback()
+    closeBeatEditor()
     var next = seedSong(entry.song)
     next.id = entry.id || ""
     next.title = entry.title || "Untitled"
@@ -922,6 +989,8 @@ Item {
     }
     var measures = song.sections[selectedSection].measures
     if (measures && measures[selectedMeasure] && Song.isMeasureEmpty(measures[selectedMeasure])) {
+      if (beatEditorSection === selectedSection && beatEditorMeasure === selectedMeasure)
+        closeBeatEditor()
       updateSong(Song.removeMeasure(song, selectedSection, selectedMeasure))
       return true
     }
@@ -1177,6 +1246,12 @@ Item {
         Keys.priority: Keys.AfterItem
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
+            if (root.beatEditorOpen) {
+              root.closeBeatEditor()
+              root.refocusKeys()
+              event.accepted = true
+              return
+            }
             if (structure.renaming) {
               structure.cancelRename()
               event.accepted = true
@@ -1186,6 +1261,8 @@ Item {
             event.accepted = true
             return
           }
+          if (root.beatEditorOpen)
+            return
           if (event.key === Qt.Key_Left) {
             root.applyHorizontalNav(-1)
             event.accepted = true
@@ -1242,6 +1319,8 @@ Item {
             root.handleNavKey(event)
         }
         Keys.onReleased: function(event) {
+          if (root.beatEditorOpen)
+            return
           root.handleComputerKeyUp(event)
         }
 
@@ -1319,6 +1398,7 @@ Item {
           bpm: root.song.bpm
           playing: root.playing
           looping: root.song.loop
+          beatsVisible: !!root.song.beatsVisible
           currentBar: root.currentBar
           currentBeat: root.displayBeat
           statusText: root.statusText
@@ -1327,6 +1407,13 @@ Item {
           onStopRequested: { root.stopPlayback(); root.refocusKeys() }
           onLoopToggled: {
             root.applySongFields({ loop: !root.song.loop })
+            root.refocusKeys()
+          }
+          onBeatsToggled: {
+            var nextVisible = !root.song.beatsVisible
+            if (!nextVisible)
+              root.closeBeatEditor()
+            root.applySongFields({ beatsVisible: nextVisible })
             root.refocusKeys()
           }
           onBpmChangedByUser: function(value) {
@@ -1417,6 +1504,7 @@ Item {
             dim: root.dim
             faint: root.faint
             sections: root.song.sections
+            beatsVisible: !!root.song.beatsVisible
             selectedSection: root.selectedSection
             selectedMeasure: root.selectedMeasure
             selectedSlot: root.selectedSlot
@@ -1458,6 +1546,7 @@ Item {
               root.updateSong(Song.addSection(root.song, name))
             }
             onSectionRemoved: function(sectionIndex) {
+              root.closeBeatEditor()
               root.updateSong(Song.removeSection(root.song, sectionIndex))
             }
             onSectionRenamed: function(sectionIndex, name) {
@@ -1480,6 +1569,9 @@ Item {
               root.selectedMeasure = measureIndex
               root.selectedSlot = slotIndex
               root.refreshPiano()
+            }
+            onBeatEditorRequested: function(sectionIndex, measureIndex) {
+              root.openBeatEditor(sectionIndex, measureIndex)
             }
           }
         }
@@ -1568,6 +1660,29 @@ Item {
           id: menuOverlay
           anchors.fill: parent
           z: 1000
+        }
+
+        BeatSequencer {
+          id: beatSequencer
+          parent: menuOverlay
+          anchors.fill: parent
+          z: 1100
+          visible: root.beatEditorOpen && !!root.song.beatsVisible
+          foreground: root.foreground
+          dim: root.dim
+          faint: root.faint
+          sectionName: root.beatEditorSectionName
+          measureIndex: root.beatEditorMeasure
+          stepCount: root.beatEditorStepCount
+          pattern: root.beatEditorPattern
+          onStepToggled: function(lane, step) {
+            root.toggleBeatStep(lane, step)
+          }
+          onClearRequested: root.clearBeatEditor()
+          onCloseRequested: {
+            root.closeBeatEditor()
+            root.refocusKeys()
+          }
         }
 
         MouseArea {

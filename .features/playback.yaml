@@ -15,6 +15,7 @@ user_flow:
   loop: "User → Loop toggle → wrap currentBeat"
   bpm: "User → BPM 40–240 → Song.setBpm"
   audition: "User → click filled slot → play chord for slotDurationBeats; chip fill follows wall clock at BPM"
+  beats: "First event of each measure/pass → launch one frozen chord-and-drum measure render at song BPM"
 
 related_features:
   - song_structure (Song as source)
@@ -25,6 +26,7 @@ related_features:
   - guitar_tab (playing triad)
   - instruments (timbre)
   - audio_device (PipeWire output)
+  - beats (per-measure patterns share timeline and transport)
 
 core_components:
   - play-notes.py
@@ -32,4 +34,4 @@ core_components:
   - samples/epiano
   - samples/organ
 
-notes: "Transport left cluster is title/library; right is play/BPM. Loop defaults on. No tap tempo. Space is play/stop when laptop map is off, not sustain. Slot fill uses wall-clock BPM. Overlay playhead is not in CI."
+notes: "Transport left cluster is title/library; right is play/Loop/Beats/BPM. Loop defaults on. No tap tempo. Space is play/stop when laptop map is off and the beat editor is closed, not sustain. Slot fill uses wall-clock BPM. Overlay playhead is not in CI."

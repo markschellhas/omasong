@@ -458,6 +458,15 @@ function toggleBeat(song, sectionIndex, measureIndex, lane, step) {
   return next
 }
 
+function clearBeats(song, sectionIndex, measureIndex) {
+  var next = cloneSong(song)
+  if (!validMeasure(next, sectionIndex, measureIndex))
+    return next
+  var section = next.sections[sectionIndex]
+  section.measures[measureIndex].beats = emptyBeatPattern(beatStepCount(section.timeSig))
+  return next
+}
+
 function setBpm(song, bpm) {
   var next = cloneSong(song)
   var n = Number(bpm)

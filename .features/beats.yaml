@@ -1,0 +1,35 @@
+feature_name: beats
+purpose: "Show, edit, persist, and play meter-sized kick, snare, and hi-hat patterns for each measure."
+
+entry_points:
+  - Transport.qml
+  - SongStructure.qml
+  - BeatSequencer.qml
+  - Songwriter.qml
+  - js/Song.js
+  - play-notes.py
+
+apps:
+  - songwriter
+
+user_flow:
+  visibility: "User → Beats toggle → show or hide one beat lane beneath every chord measure"
+  edit: "User → click measure beat lane → toggle sixteenth-note Kick/Snare/Hi-hat steps"
+  clear: "User → Clear → Song.clearBeats empties that measure only"
+  play: "Transport → first event of each measure/pass → render frozen chord and drum measure at song BPM"
+
+related_features:
+  - song_structure (beat lane shares section and measure identity)
+  - playback (measure-start scheduling, BPM, loops, and section playback)
+  - row_repeats (pattern launches once for each repeat pass)
+  - song_library (patterns and beatsVisible persist in named songs)
+  - agent_api (full song JSON includes patterns)
+  - chord_slots (chords and beats share a measure)
+  - region_focus (editor interaction stays in Song region)
+  - audio_device (rendered measure uses system audio output)
+
+core_components:
+  - tests/js_tests.js
+  - tests/run.py
+
+notes: "Steps are sixteenths from numerator*16/denominator: 4/4=16, 3/4=12, 6/8=12. Patterns are on/off only; percussion is synthesized by the existing detached audio helper."

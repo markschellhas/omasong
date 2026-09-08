@@ -10,6 +10,7 @@ Item {
   property int bpm: 120
   property bool playing: false
   property bool looping: true
+  property bool beatsVisible: false
   property int currentBar: 1
   property int currentBeat: 1
   property string statusText: ""
@@ -18,6 +19,7 @@ Item {
   signal playRequested
   signal stopRequested
   signal loopToggled
+  signal beatsToggled
   signal bpmChangedByUser(int value)
   signal titleEdited(string value)
   signal saveRequested
@@ -115,6 +117,18 @@ Item {
       foreground: root.foreground
       accent: Color.accent
       onClicked: root.loopToggled()
+    }
+
+    Button {
+      anchors.verticalCenter: parent.verticalCenter
+      text: root.beatsVisible ? "Beats on" : "Beats"
+      selected: root.beatsVisible
+      bordered: true
+      tooltipText: root.beatsVisible ? "Hide beat lanes" : "Show beat lanes"
+      focusable: true
+      foreground: root.foreground
+      accent: Color.accent
+      onClicked: root.beatsToggled()
     }
 
     Rectangle {

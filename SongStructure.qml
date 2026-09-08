@@ -17,6 +17,7 @@ Item {
   property int playMeasure: -1
   property int playSlot: -1
   property bool playing: false
+  property bool beatsVisible: false
   property int playScopeSection: -1
   property int fillSection: -1
   property int fillMeasure: -1
@@ -27,6 +28,7 @@ Item {
 
   readonly property int barsPerRow: 4
   readonly property int slotHeight: Style.space(40)
+  readonly property int beatLaneHeight: Style.space(34)
   readonly property int repeatWidth: Style.space(36)
   readonly property int measureGap: Style.space(6)
   readonly property bool renaming: renamingSection >= 0
@@ -51,6 +53,7 @@ Item {
   signal barsAdded(int sectionIndex)
   signal slotSelected(int sectionIndex, int measureIndex, int slotIndex)
   signal sectionPlayToggled(int sectionIndex)
+  signal beatEditorRequested(int sectionIndex, int measureIndex)
 
   readonly property var appendChoices: [
     { label: "Verse", name: "Verse" },
@@ -328,12 +331,12 @@ Item {
                 return Math.max(Style.space(56), Math.floor(usable / root.barsPerRow))
               }
               width: list.width
-              height: root.slotHeight
+              height: root.slotHeight + (root.beatsVisible ? root.measureGap + root.beatLaneHeight : 0)
 
               Repeater {
                 model: barRow.rowEnd - barRow.rowStart
 
-                delegate: Rectangle {
+                delegate: Item {
                   id: measureBox
                   required property int index
                   readonly property int measureIndex: barRow.rowStart + index
@@ -346,11 +349,18 @@ Item {
                   }
                   x: index * (barRow.boxW + root.measureGap)
                   width: barRow.boxW
-                  height: root.slotHeight
-                  radius: Math.max(2, Style.cornerRadius / 2)
-                  color: "transparent"
-                  border.width: 1
-                  border.color: root.faint
+                  height: barRow.height
+
+                  Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: root.slotHeight
+                    radius: Math.max(2, Style.cornerRadius / 2)
+                    color: "transparent"
+                    border.width: 1
+                    border.color: root.faint
+                  }
 
                   function slotX(slotIndex) {
                     var acc = 0
@@ -393,7 +403,7 @@ Item {
                       x: measureBox.slotX(slotIndex)
                       y: 0
                       width: measureBox.slotW(slotIndex)
-                      height: measureBox.height
+                      height: root.slotHeight
                       opacity: slotMouse.dragging ? 0.45 : 1
 
                       Rectangle {
@@ -625,6 +635,102 @@ Item {
                           pressEdge = ""
                         }
                       }
+                    }
+                  }
+
+                  Rectangle {
+                    id: beatLane
+                    readonly property var pattern: measureBox.measure && measureBox.measure.beats
+                      ? measureBox.measure.beats
+                      : ({ kick: [], snare: [], hihat: [] })
+                    readonly property bool measurePlaying: root.playing
+                      && root.playSection === sectionCol.sectionIndex
+                      && root.playMeasure === measureBox.measureIndex
+                    readonly property var laneModels: [
+                      { key: "kick", label: "K" },
+                      { key: "snare", label: "S" },
+                      { key: "hihat", label: "H" }
+                    ]
+                    visible: root.beatsVisible
+                    x: 0
+                    y: root.slotHeight + root.measureGap
+                    width: measureBox.width
+                    height: root.beatLaneHeight
+                    radius: Math.max(2, Style.cornerRadius / 2)
+                    color: measurePlaying
+                      ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.16)
+                      : "transparent"
+                    border.width: 1
+                    border.color: measurePlaying ? Color.accent
+                      : beatMouse.containsMouse ? root.foreground
+                      : root.faint
+                    clip: true
+
+                    Repeater {
+                      model: beatLane.laneModels
+
+                      delegate: Item {
+                        id: beatSummaryRow
+                        required property var modelData
+                        required property int index
+                        readonly property var values: beatLane.pattern
+                          && Array.isArray(beatLane.pattern[modelData.key])
+                          ? beatLane.pattern[modelData.key]
+                          : []
+                        x: Style.space(3)
+                        y: index * beatLane.height / beatLane.laneModels.length
+                        width: beatLane.width - Style.space(6)
+                        height: beatLane.height / beatLane.laneModels.length
+
+                        Text {
+                          anchors.left: parent.left
+                          anchors.top: parent.top
+                          anchors.bottom: parent.bottom
+                          width: Style.space(12)
+                          text: beatSummaryRow.modelData.label
+                          color: root.dim
+                          font.family: Style.font.menuFamily
+                          font.pixelSize: Math.max(7, Style.font.caption - 2)
+                          horizontalAlignment: Text.AlignHCenter
+                          verticalAlignment: Text.AlignVCenter
+                        }
+
+                        Item {
+                          id: summarySteps
+                          anchors.left: parent.left
+                          anchors.leftMargin: Style.space(14)
+                          anchors.right: parent.right
+                          anchors.top: parent.top
+                          anchors.bottom: parent.bottom
+
+                          Repeater {
+                            model: beatSummaryRow.values.length
+
+                            delegate: Rectangle {
+                              required property int index
+                              readonly property bool active: !!beatSummaryRow.values[index]
+                              x: index * summarySteps.width / Math.max(1, beatSummaryRow.values.length)
+                              width: Math.max(1, (index + 1) * summarySteps.width
+                                / Math.max(1, beatSummaryRow.values.length) - x - 1)
+                              height: active ? Math.max(3, summarySteps.height - Style.space(4)) : 1
+                              anchors.verticalCenter: parent.verticalCenter
+                              radius: 1
+                              color: active ? Color.accent : root.faint
+                            }
+                          }
+                        }
+                      }
+                    }
+
+                    MouseArea {
+                      id: beatMouse
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: root.beatEditorRequested(
+                        sectionCol.sectionIndex,
+                        measureBox.measureIndex
+                      )
                     }
                   }
                 }

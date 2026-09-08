@@ -14,6 +14,7 @@ user_flow:
 related_features:
   - playback (engine output)
   - instruments (Piano, Electric Piano, Organ samples)
+  - beats (synthesized percussion measure output)
 
 core_components:
   - tests/run.py
