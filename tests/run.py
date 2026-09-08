@@ -68,6 +68,7 @@ def test_js() -> None:
         load_pragma_js(ROOT / "js" / "Keyboard.js"),
         load_pragma_js(ROOT / "js" / "Focus.js"),
         load_pragma_js(ROOT / "js" / "Guitar.js"),
+        load_pragma_js(ROOT / "js" / "BeatUi.js"),
     ]
     harness = r"""
 function assert(cond, msg) {

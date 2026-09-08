@@ -29,6 +29,7 @@ related_features:
   - audio_device (rendered measure uses system audio output)
 
 core_components:
+  - js/BeatUi.js
   - tests/js_tests.js
   - tests/run.py
 

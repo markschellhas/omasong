@@ -18,13 +18,13 @@
 
 ## Progress
 
-**Status:** `█████████████░░░░░░░` 2/3 done (67%) · 1 in flight
+**Status:** `█████████████████████` 3/3 done (100%) · 0 in flight
 
 | # | Task | Status | Next |
 |---|------|--------|------|
 | 1 | Beat data model and serialization | `done` | complete |
 | 2 | Percussion renderer and transport | `done` | complete |
-| 3 | Beat lane, sequencer UI, and maps | `implementing` | implement and validate |
+| 3 | Beat lane, sequencer UI, and maps | `done` | complete |
 
 ---
 
@@ -101,11 +101,11 @@ git add play-notes.py Songwriter.qml tests/run.py tests/js_tests.js
 git commit -m "feat(beats): sync drums with transport"
 ```
 
-### [~] Task 3: Beat lane, sequencer UI, and maps
+### [x] Task 3: Beat lane, sequencer UI, and maps
 
-**Status:** `implementing`
-**Resume:** Implementer working on the toggle, per-bar lane, sequencer overlay, maps, and docs.
-**Commits:** —
+**Status:** `done`
+**Resume:** Complete.
+**Commits:** 153a31d, PENDING_SHA
 
 **Files:**
 - Create: `BeatSequencer.qml`

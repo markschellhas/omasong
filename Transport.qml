@@ -26,6 +26,18 @@ Item {
   signal openRequested
 
   readonly property int beatPulseMs: Math.max(200, Math.round(60000 / Math.max(40, bpm)))
+  readonly property bool compactTransport: width < Style.space(1040)
+  readonly property bool tightTransport: width < Style.space(800)
+  readonly property bool veryTightTransport: width < Style.space(620)
+  readonly property int controlSpacing: compactTransport ? Style.space(4) : Style.spacing.sm
+  readonly property int titleFieldWidth: compactTransport
+    ? Math.max(Style.space(110), Math.min(Style.space(180), Math.floor(width * 0.18)))
+    : Style.space(220)
+  readonly property int statusAvailableWidth: Math.max(0, Math.min(
+    Style.space(150),
+    width - leftCluster.implicitWidth - transportControls.implicitWidth
+      - rightCluster.spacing - Style.space(16)
+  ))
 
   function commitTitle() {
     var next = titleInput.text.trim()
@@ -39,11 +51,12 @@ Item {
     id: leftCluster
     anchors.left: parent.left
     anchors.verticalCenter: parent.verticalCenter
-    spacing: Style.spacing.sm
+    spacing: root.controlSpacing
 
     Rectangle {
       anchors.verticalCenter: parent.verticalCenter
-      width: Style.space(220)
+      visible: !root.veryTightTransport
+      width: root.titleFieldWidth
       height: Style.space(28)
       radius: Math.max(2, Style.cornerRadius / 2)
       color: "transparent"
@@ -66,7 +79,8 @@ Item {
 
     Button {
       anchors.verticalCenter: parent.verticalCenter
-      text: "Save"
+      text: root.veryTightTransport ? "" : "Save"
+      iconText: root.veryTightTransport ? "\uf0c7" : ""
       tooltipText: "Save song to library"
       focusable: true
       foreground: root.foreground
@@ -76,7 +90,8 @@ Item {
 
     Button {
       anchors.verticalCenter: parent.verticalCenter
-      text: "Open"
+      text: root.veryTightTransport ? "" : "Open"
+      iconText: root.veryTightTransport ? "\uf07c" : ""
       tooltipText: "Open a saved song"
       focusable: true
       foreground: root.foreground
@@ -89,11 +104,16 @@ Item {
     id: rightCluster
     anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
-    spacing: Style.spacing.sm
+    spacing: root.controlSpacing
+
+    Row {
+      id: transportControls
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: root.controlSpacing
 
     Button {
       anchors.verticalCenter: parent.verticalCenter
-      text: root.playing ? "Stop" : "Play"
+      text: root.tightTransport ? "" : (root.playing ? "Stop" : "Play")
       iconText: root.playing ? "\uf04d" : "\uf04b"
       tooltipText: root.playing ? "Stop" : "Play the song"
       focusable: true
@@ -109,7 +129,7 @@ Item {
 
     Button {
       anchors.verticalCenter: parent.verticalCenter
-      text: root.looping ? "Loop on" : "Loop"
+      text: root.compactTransport ? "Loop" : (root.looping ? "Loop on" : "Loop")
       selected: root.looping
       bordered: true
       tooltipText: "Repeat the song"
@@ -121,7 +141,7 @@ Item {
 
     Button {
       anchors.verticalCenter: parent.verticalCenter
-      text: root.beatsVisible ? "Beats on" : "Beats"
+      text: root.compactTransport ? "Beats" : (root.beatsVisible ? "Beats on" : "Beats")
       selected: root.beatsVisible
       bordered: true
       tooltipText: root.beatsVisible ? "Hide beat lanes" : "Show beat lanes"
@@ -133,6 +153,7 @@ Item {
 
     Rectangle {
       anchors.verticalCenter: parent.verticalCenter
+      visible: !root.veryTightTransport
       width: 1
       height: parent.height * 0.55
       color: root.dim
@@ -141,6 +162,7 @@ Item {
 
     Text {
       anchors.verticalCenter: parent.verticalCenter
+      visible: !root.tightTransport
       text: "BPM"
       color: root.dim
       font.family: Style.font.menuFamily
@@ -149,6 +171,7 @@ Item {
 
     Button {
       anchors.verticalCenter: parent.verticalCenter
+      visible: !root.veryTightTransport
       text: "−"
       tooltipText: "Slower"
       focusable: true
@@ -186,6 +209,7 @@ Item {
 
     Button {
       anchors.verticalCenter: parent.verticalCenter
+      visible: !root.veryTightTransport
       text: "+"
       tooltipText: "Faster"
       focusable: true
@@ -193,10 +217,15 @@ Item {
       onClicked: root.bpmChangedByUser(root.bpm + 1)
     }
 
-    Item { width: Style.spacing.md; height: 1 }
+    Item {
+      visible: !root.compactTransport
+      width: Style.spacing.md
+      height: 1
+    }
 
     Rectangle {
       id: beatDot
+      visible: !root.compactTransport
       anchors.verticalCenter: parent.verticalCenter
       width: Style.space(14)
       height: Style.space(14)
@@ -223,9 +252,12 @@ Item {
       font.bold: true
     }
 
+    }
+
     Text {
       anchors.verticalCenter: parent.verticalCenter
-      visible: root.statusText !== ""
+      visible: root.statusText !== "" && root.statusAvailableWidth >= Style.space(48)
+      width: root.statusAvailableWidth
       text: root.statusText
       color: root.dim
       font.family: Style.font.menuFamily

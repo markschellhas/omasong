@@ -32,6 +32,11 @@ Item {
   readonly property int repeatWidth: Style.space(36)
   readonly property int measureGap: Style.space(6)
   readonly property bool renaming: renamingSection >= 0
+  readonly property var beatLaneModels: [
+    { key: "kick", label: "K" },
+    { key: "snare", label: "S" },
+    { key: "hihat", label: "H" }
+  ]
 
   property int renamingSection: -1
   property string menuKind: ""
@@ -640,17 +645,13 @@ Item {
 
                   Rectangle {
                     id: beatLane
-                    readonly property var pattern: measureBox.measure && measureBox.measure.beats
+                    readonly property var pattern: root.beatsVisible
+                      && measureBox.measure && measureBox.measure.beats
                       ? measureBox.measure.beats
-                      : ({ kick: [], snare: [], hihat: [] })
+                      : null
                     readonly property bool measurePlaying: root.playing
                       && root.playSection === sectionCol.sectionIndex
                       && root.playMeasure === measureBox.measureIndex
-                    readonly property var laneModels: [
-                      { key: "kick", label: "K" },
-                      { key: "snare", label: "S" },
-                      { key: "hihat", label: "H" }
-                    ]
                     visible: root.beatsVisible
                     x: 0
                     y: root.slotHeight + root.measureGap
@@ -667,7 +668,8 @@ Item {
                     clip: true
 
                     Repeater {
-                      model: beatLane.laneModels
+                      // No lane or step delegates exist while Beats is hidden.
+                      model: root.beatsVisible ? root.beatLaneModels : []
 
                       delegate: Item {
                         id: beatSummaryRow
@@ -678,9 +680,9 @@ Item {
                           ? beatLane.pattern[modelData.key]
                           : []
                         x: Style.space(3)
-                        y: index * beatLane.height / beatLane.laneModels.length
+                        y: index * beatLane.height / root.beatLaneModels.length
                         width: beatLane.width - Style.space(6)
-                        height: beatLane.height / beatLane.laneModels.length
+                        height: beatLane.height / root.beatLaneModels.length
 
                         Text {
                           anchors.left: parent.left
@@ -704,7 +706,7 @@ Item {
                           anchors.bottom: parent.bottom
 
                           Repeater {
-                            model: beatSummaryRow.values.length
+                            model: root.beatsVisible ? beatSummaryRow.values.length : 0
 
                             delegate: Rectangle {
                               required property int index
