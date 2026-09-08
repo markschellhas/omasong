@@ -10,6 +10,7 @@ Usage:
   play-notes.py hz1 [hz2 ...] [seconds]
   play-notes.py --midi n1 [n2 ...] [seconds]
   play-notes.py --write out.wav --midi 60 64 67 --instrument 1 --seconds 0.4
+  play-notes.py --drums 1000 0010 1111 --steps 4 --bpm 120
 """
 
 from __future__ import annotations
@@ -30,6 +31,9 @@ DEFAULT_SECONDS = 0.9
 MAX_SECONDS = 30.0
 MIN_SECONDS = 0.05
 MAX_VOICES = 8
+MIN_BPM = 40.0
+MAX_BPM = 240.0
+MAX_DRUM_STEPS = 128
 MIDI_MIN = 0
 MIDI_MAX = 127
 HZ_MIN = 20.0
@@ -115,6 +119,30 @@ def clamp_seconds(value: float) -> float:
     if n > MAX_SECONDS:
         return MAX_SECONDS
     return n
+
+
+def clamp_bpm(value: float) -> float:
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return 120.0
+    if not math.isfinite(n):
+        return 120.0
+    return max(MIN_BPM, min(MAX_BPM, n))
+
+
+def clamp_drum_steps(value: int) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return 16
+    return max(1, min(MAX_DRUM_STEPS, n))
+
+
+def parse_drum_pattern(value: str, steps: int) -> list[bool]:
+    count = clamp_drum_steps(steps)
+    text = value if isinstance(value, str) else ""
+    return [i < len(text) and text[i] == "1" for i in range(count)]
 
 
 def clamp_midi(value: float) -> float | None:
@@ -363,6 +391,76 @@ def render_samples(midis: list[float], seconds: float, instrument: int) -> list[
     return frames
 
 
+def _noise(seed: int):
+    """Yield deterministic white noise in [-1, 1]."""
+    state = seed & 0xFFFFFFFF
+    while True:
+        state = (1664525 * state + 1013904223) & 0xFFFFFFFF
+        yield state / 2147483647.5 - 1.0
+
+
+def _mix_kick(mix: list[float], start: int) -> None:
+    length = min(int(RATE * 0.30), len(mix) - start)
+    phase = 0.0
+    for i in range(max(0, length)):
+        t = i / RATE
+        frequency = 45.0 + 115.0 * math.exp(-t * 26.0)
+        phase += 2.0 * math.pi * frequency / RATE
+        env = math.exp(-t * 15.0)
+        mix[start + i] += math.sin(phase) * env * 0.78
+
+
+def _mix_snare(mix: list[float], start: int, seed: int) -> None:
+    length = min(int(RATE * 0.20), len(mix) - start)
+    noise = _noise(seed)
+    previous = 0.0
+    for i in range(max(0, length)):
+        t = i / RATE
+        raw = next(noise)
+        high = raw - previous * 0.65
+        previous = raw
+        env = math.exp(-t * 24.0)
+        body = math.sin(2.0 * math.pi * 185.0 * t) * 0.22
+        mix[start + i] += (high * 0.52 + body) * env
+
+
+def _mix_hihat(mix: list[float], start: int, seed: int) -> None:
+    length = min(int(RATE * 0.075), len(mix) - start)
+    noise = _noise(seed)
+    previous = 0.0
+    for i in range(max(0, length)):
+        t = i / RATE
+        raw = next(noise)
+        high = raw - previous
+        previous = raw
+        mix[start + i] += high * math.exp(-t * 65.0) * 0.28
+
+
+def render_drums(kick: str, snare: str, hihat: str, steps: int, bpm: float) -> list[int]:
+    """Render one measure of sixteenth-note drum steps without timing padding."""
+    count = clamp_drum_steps(steps)
+    tempo = clamp_bpm(bpm)
+    step_seconds = 60.0 / tempo / 4.0
+    frame_count = max(1, int(round(RATE * count * step_seconds)))
+    patterns = (
+        parse_drum_pattern(kick, count),
+        parse_drum_pattern(snare, count),
+        parse_drum_pattern(hihat, count),
+    )
+    mix = [0.0] * frame_count
+    for step in range(count):
+        start = int(round(RATE * step * step_seconds))
+        if patterns[0][step]:
+            _mix_kick(mix, start)
+        if patterns[1][step]:
+            _mix_snare(mix, start, 0x534E0000 + step)
+        if patterns[2][step]:
+            _mix_hihat(mix, start, 0x48480000 + step)
+    peak = max((abs(sample) for sample in mix), default=0.0)
+    scale = 0.94 / peak if peak > 0.94 else 1.0
+    return [int(max(-1.0, min(1.0, sample * scale)) * 32767) for sample in mix]
+
+
 def write_wav(path: str, frames: list[int]) -> None:
     with wave.open(path, "w") as wav:
         wav.setnchannels(1)
@@ -400,11 +498,15 @@ def parse_values(values: list[str]) -> tuple[list[float], float]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Play sampled piano, electric piano, or organ notes")
-    parser.add_argument("--midi", action="store_true", help="treat values as MIDI note numbers")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--midi", action="store_true", help="treat values as MIDI note numbers")
+    mode.add_argument("--drums", nargs=3, metavar=("KICK", "SNARE", "HIHAT"), help="binary sixteenth-note lane patterns")
     parser.add_argument("--write", metavar="PATH", help="write WAV instead of playing")
     parser.add_argument("--seconds", type=float, help="override duration in seconds")
     parser.add_argument("--instrument", type=int, default=0, help="timbre 0–2 (Piano, Electric Piano, Organ)")
-    parser.add_argument("values", nargs="+", help="Hz values, or MIDI notes with --midi")
+    parser.add_argument("--steps", type=int, default=16, help="drum-pattern length in sixteenth notes")
+    parser.add_argument("--bpm", type=float, default=120, help="drum-pattern tempo")
+    parser.add_argument("values", nargs="*", help="Hz values, or MIDI notes with --midi")
     return parser
 
 
@@ -435,6 +537,25 @@ def render(args: argparse.Namespace, nums: list[float], seconds: float) -> list[
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.drums is not None:
+        if args.values or args.seconds is not None:
+            sys.stderr.write("play-notes: drum mode does not accept pitches or --seconds\n")
+            return 2
+        frames = render_drums(args.drums[0], args.drums[1], args.drums[2], args.steps, args.bpm)
+        if args.write:
+            write_wav(args.write, frames)
+            return 0
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            path = tmp.name
+        try:
+            write_wav(path, frames)
+            play(path)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        return 0
     try:
         nums, seconds = parse_values(args.values)
     except ValueError as exc:

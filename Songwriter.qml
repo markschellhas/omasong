@@ -116,6 +116,7 @@ Item {
 
   function seedSong(raw) {
     var next = Song.normalizeSong(raw)
+    next.beatsVisible = !!(raw && raw.beatsVisible)
     if (raw && raw.loop !== undefined)
       next.loop = !!raw.loop
     else
@@ -210,6 +211,7 @@ Item {
     var instrument = next && next.instrument !== undefined ? next.instrument : (song && song.instrument)
     var laptopKeys = next && next.laptopKeys !== undefined ? next.laptopKeys : (song && song.laptopKeys)
     var laptopOctave = next && next.laptopOctave !== undefined ? next.laptopOctave : (song && song.laptopOctave)
+    var beatsVisible = next && next.beatsVisible !== undefined ? next.beatsVisible : (song && song.beatsVisible)
     var normalized = Song.normalizeSong(next)
     if (loop !== undefined)
       normalized.loop = loop
@@ -221,6 +223,7 @@ Item {
       normalized.instrument = KeyMap.clampInstrument(instrument)
     normalized.laptopKeys = !!laptopKeys
     normalized.laptopOctave = KeyMap.clampOctave(laptopOctave)
+    normalized.beatsVisible = !!beatsVisible
     song = normalized
     if (fillSection >= 0 && prevBpm !== undefined && normalized.bpm !== prevBpm)
       retimeFillForBpm()
@@ -284,6 +287,34 @@ Item {
     noteClear.restart()
   }
 
+  function encodedBeatLane(values, steps) {
+    var encoded = ""
+    for (var i = 0; i < steps; i++)
+      encoded += values && i < values.length && values[i] ? "1" : "0"
+    return encoded
+  }
+
+  function playMeasureDrums(event) {
+    if (!event || !Song.isMeasureStartEvent(timeline, event))
+      return
+    var section = song.sections[event.sectionIndex]
+    if (!section)
+      return
+    var pattern = Song.getBeats(song, event.sectionIndex, event.measureIndex)
+    if (Song.isBeatPatternEmpty(pattern))
+      return
+    var steps = Song.beatStepCount(section.timeSig)
+    Quickshell.execDetached([
+      "python3", playScript,
+      "--drums",
+      encodedBeatLane(pattern.kick, steps),
+      encodedBeatLane(pattern.snare, steps),
+      encodedBeatLane(pattern.hihat, steps),
+      "--steps", String(steps),
+      "--bpm", String(song.bpm)
+    ])
+  }
+
   function playCirclePreview(notes) {
     var now = Date.now()
     var audio = Focus.shouldSpawnPreviewAudio(root.lastPreviewAudioMs, now)
@@ -302,6 +333,7 @@ Item {
     next.instrument = fields.instrument !== undefined ? fields.instrument : (song && song.instrument)
     next.laptopKeys = fields.laptopKeys !== undefined ? !!fields.laptopKeys : !!(song && song.laptopKeys)
     next.laptopOctave = fields.laptopOctave !== undefined ? fields.laptopOctave : (song && song.laptopOctave)
+    next.beatsVisible = fields.beatsVisible !== undefined ? !!fields.beatsVisible : !!(song && song.beatsVisible)
     if (fields.keyIndex !== undefined)
       next.keyIndex = fields.keyIndex
     if (fields.title !== undefined)
@@ -324,7 +356,8 @@ Item {
       layout: s.layout,
       instrument: s.instrument,
       laptopKeys: !!s.laptopKeys,
-      laptopOctave: s.laptopOctave
+      laptopOctave: s.laptopOctave,
+      beatsVisible: !!s.beatsVisible
     }
   }
 
@@ -668,6 +701,7 @@ Item {
         beginSlotFill(event.sectionIndex, event.measureIndex, event.slotIndex, event.durationBeats, false)
       }
       applySounding(event)
+      playMeasureDrums(event)
     } else if (playing && !event.rest && event.chord) {
       updateFillProgress()
     }

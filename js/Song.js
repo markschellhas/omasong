@@ -829,6 +829,20 @@ function timelineDurationBeats(events) {
   return last.startBeat + last.durationBeats
 }
 
+function isMeasureStartEvent(events, event) {
+  if (!events || !events.length || !event)
+    return false
+  for (var i = 0; i < events.length; i++) {
+    var candidate = events[i]
+    if (candidate.sectionIndex === event.sectionIndex
+        && candidate.measureIndex === event.measureIndex
+        && candidate.repeatPass === event.repeatPass)
+      return candidate.startBeat === event.startBeat
+        && candidate.slotIndex === event.slotIndex
+  }
+  return false
+}
+
 function eventAtBeat(events, beat) {
   if (!events || !events.length)
     return null

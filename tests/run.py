@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import wave
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,8 +106,50 @@ def test_play_notes() -> None:
         raise SystemExit("play-notes must clamp retired Pad/Strings to Organ")
     if play_notes.clamp_instrument(2) != 2:
         raise SystemExit("play-notes must keep Organ")
+    if play_notes.clamp_drum_steps(0) != 1 or play_notes.clamp_drum_steps(999) != play_notes.MAX_DRUM_STEPS:
+        raise SystemExit("play-notes must bound drum step counts")
+    if play_notes.clamp_bpm(1) != play_notes.MIN_BPM or play_notes.clamp_bpm(999) != play_notes.MAX_BPM:
+        raise SystemExit("play-notes must bound drum BPM")
+    if play_notes.parse_drum_pattern("10x1" + "1" * 200, 4) != [True, False, False, True]:
+        raise SystemExit("play-notes must safely parse and bound drum patterns")
+
+    steps = 8
+    bpm = 120
+    expected_frames = round(play_notes.RATE * steps * 60 / bpm / 4)
+    lane_patterns = (
+        ("kick", "10000000", "00000000", "00000000"),
+        ("snare", "00000000", "00100000", "00000000"),
+        ("hihat", "00000000", "00000000", "00001000"),
+    )
+    for lane, kick, snare, hihat in lane_patterns:
+        frames = play_notes.render_drums(kick, snare, hihat, steps, bpm)
+        if len(frames) != expected_frames:
+            raise SystemExit(f"{lane} drum measure duration is not transport-aligned")
+        hit_step = {"kick": 0, "snare": 2, "hihat": 4}[lane]
+        offset = round(play_notes.RATE * hit_step * 60 / bpm / 4)
+        window = frames[offset : min(len(frames), offset + int(play_notes.RATE * 0.04))]
+        if not window or max(abs(sample) for sample in window) < 100:
+            raise SystemExit(f"{lane} drum transient is silent")
+        if frames != play_notes.render_drums(kick, snare, hihat, steps, bpm):
+            raise SystemExit(f"{lane} drum rendering is not deterministic")
 
     with tempfile.TemporaryDirectory() as tmp:
+        drums = Path(tmp) / "drums.wav"
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "play-notes.py"), "--write", str(drums), "--drums", "10000000", "00100000", "00001000", "--steps", "8", "--bpm", "120"],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            sys.stderr.write(proc.stdout + proc.stderr)
+            raise SystemExit(proc.returncode)
+        with wave.open(str(drums), "rb") as drum_wav:
+            if drum_wav.getnchannels() != 1 or drum_wav.getframerate() != play_notes.RATE:
+                raise SystemExit("drum mode must write a mono transport-rate WAV")
+            if drum_wav.getnframes() != expected_frames:
+                raise SystemExit("drum CLI wrote the wrong measure duration")
+        print("play-notes drums ok")
+
         wav = Path(tmp) / "cmaj.wav"
         proc = subprocess.run(
             [sys.executable, str(ROOT / "play-notes.py"), "--write", str(wav), "--midi", "60", "64", "67", "--instrument", "1", "--seconds", "0.12"],
