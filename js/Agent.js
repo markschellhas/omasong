@@ -105,6 +105,35 @@ function rowRepeatsJson(section) {
   return out
 }
 
+function agentBeatStepCount(ts) {
+  var n = ts && Number(ts.numerator)
+  var d = ts && Number(ts.denominator)
+  if (!isFinite(n) || n < 1)
+    n = 4
+  else
+    n = Math.min(16, Math.floor(n))
+  if (d !== 2 && d !== 4 && d !== 8)
+    d = 4
+  return Math.max(1, Math.min(128, Math.floor(n * 16 / d)))
+}
+
+function beatsJson(measure, ts) {
+  var lanes = ["kick", "snare", "hihat"]
+  var source = measure && measure.beats && typeof measure.beats === "object"
+    ? measure.beats : {}
+  var steps = agentBeatStepCount(ts)
+  var out = {}
+  for (var li = 0; li < lanes.length; li++) {
+    var lane = lanes[li]
+    var values = Array.isArray(source[lane]) ? source[lane] : []
+    var normalized = []
+    for (var step = 0; step < steps; step++)
+      normalized.push(step < values.length && !!values[step])
+    out[lane] = normalized
+  }
+  return out
+}
+
 function chordObject(chord, keyIndex, loc) {
   var obj = {
     name: nameOfChord(chord),
@@ -197,7 +226,7 @@ function songJson(song) {
           ? chordObject(srcSlots[sl].chord, keyIndex, null)
           : null)
       }
-      measures.push({ slots: slots })
+      measures.push({ slots: slots, beats: beatsJson(srcMeasures[mi], section.timeSig) })
     }
     out.sections.push({
       name: section.name,

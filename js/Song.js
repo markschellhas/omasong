@@ -8,8 +8,10 @@ var MAX_SECTIONS = 32
 var MAX_MEASURES_PER_SECTION = 128
 var MAX_TIME_NUMERATOR = 16
 var MAX_SLOTS_PER_MEASURE = 16
+var MAX_BEAT_STEPS = MAX_TIME_NUMERATOR * 8
 var MAX_TITLE_LEN = 80
 var MAX_ID_LEN = 64
+var BEAT_LANES = ["kick", "snare", "hihat"]
 
 function normalizeTitle(raw) {
   var t = typeof raw === "string" ? raw.trim() : ""
@@ -56,6 +58,42 @@ function cloneChord(chord) {
 
 function emptySlot(span) {
   return { chord: null, span: span > 0 ? span : 1 }
+}
+
+function beatStepCount(ts) {
+  var normalized = normalizeTimeSig(ts)
+  var count = Math.floor(normalized.numerator * 16 / normalized.denominator)
+  return Math.max(1, Math.min(MAX_BEAT_STEPS, count))
+}
+
+function beatLaneValid(lane) {
+  for (var i = 0; i < BEAT_LANES.length; i++) {
+    if (BEAT_LANES[i] === lane)
+      return true
+  }
+  return false
+}
+
+function normalizeBeatPattern(src, steps) {
+  var pattern = {}
+  var source = src && typeof src === "object" ? src : {}
+  var count = Number(steps)
+  if (!isFinite(count) || count < 1)
+    count = 1
+  count = Math.min(MAX_BEAT_STEPS, Math.floor(count))
+  for (var li = 0; li < BEAT_LANES.length; li++) {
+    var lane = BEAT_LANES[li]
+    var values = Array.isArray(source[lane]) ? source[lane] : []
+    var normalized = []
+    for (var step = 0; step < count; step++)
+      normalized.push(step < values.length && !!values[step])
+    pattern[lane] = normalized
+  }
+  return pattern
+}
+
+function emptyBeatPattern(steps) {
+  return normalizeBeatPattern(null, steps)
 }
 
 function emptyRun(slots, index, left) {
@@ -126,8 +164,9 @@ function applyGrow(slots, sl, amount, fromLeft) {
   }
 }
 
-function normalizeMeasure(measure, capacity) {
+function normalizeMeasure(measure, capacity, beatSteps) {
   capacity = Math.max(1, capacity)
+  measure.beats = normalizeBeatPattern(measure.beats, beatSteps)
   if (!measure.slots || !measure.slots.length) {
     measure.slots = [emptySlot(capacity)]
     return
@@ -210,8 +249,9 @@ function syncMeasuresToTimeSignature(section) {
   while (section.measures.length < BARS_PER_ROW)
     section.measures.push({ slots: [emptySlot(1)] })
   var cap = barCapacity(section.timeSig)
+  var steps = beatStepCount(section.timeSig)
   for (var i = 0; i < section.measures.length; i++)
-    normalizeMeasure(section.measures[i], cap)
+    normalizeMeasure(section.measures[i], cap, steps)
   syncRowRepeats(section)
 }
 
@@ -220,6 +260,19 @@ function isMeasureEmpty(measure) {
   for (var i = 0; i < slots.length; i++) {
     if (slots[i].chord)
       return false
+  }
+  return isBeatPatternEmpty(measure)
+}
+
+function isBeatPatternEmpty(value) {
+  var pattern = value && value.beats ? value.beats : value
+  pattern = pattern && typeof pattern === "object" ? pattern : {}
+  for (var li = 0; li < BEAT_LANES.length; li++) {
+    var values = Array.isArray(pattern[BEAT_LANES[li]]) ? pattern[BEAT_LANES[li]] : []
+    for (var step = 0; step < values.length; step++) {
+      if (values[step])
+        return false
+    }
   }
   return true
 }
@@ -270,12 +323,13 @@ function defaultSong() {
     id: "",
     bpm: 120,
     keyIndex: 0,
+    beatsVisible: false,
     sections: [verse, chorus]
   }
 }
 
-function copyMeasure(src, cap) {
-  var measure = { slots: [] }
+function copyMeasure(src, cap, beatSteps) {
+  var measure = { slots: [], beats: normalizeBeatPattern(src && src.beats, beatSteps) }
   var slots = src && Array.isArray(src.slots) ? src.slots : []
   for (var i = 0; i < slots.length; i++) {
     var sl = slots[i] || {}
@@ -298,15 +352,16 @@ function normalizeSection(src) {
     rowRepeats: []
   }
   var cap = barCapacity(section.timeSig)
+  var steps = beatStepCount(section.timeSig)
   var list = Array.isArray(src.measures) ? src.measures : []
   if (!list.length) {
     syncMeasuresToTimeSignature(section)
   } else {
     var measureLimit = Math.min(list.length, MAX_MEASURES_PER_SECTION)
     for (var i = 0; i < measureLimit; i++)
-      section.measures.push(copyMeasure(list[i], cap))
+      section.measures.push(copyMeasure(list[i], cap, steps))
     for (var m = 0; m < section.measures.length; m++)
-      normalizeMeasure(section.measures[m], cap)
+      normalizeMeasure(section.measures[m], cap, steps)
     syncRowRepeats(section)
   }
   if (Array.isArray(src.rowRepeats)) {
@@ -329,6 +384,7 @@ function normalizeSong(raw) {
     return song
   song.title = normalizeTitle(raw.title)
   song.id = normalizeId(raw.id)
+  song.beatsVisible = !!raw.beatsVisible
   var bpm = Number(raw.bpm)
   if (isFinite(bpm))
     song.bpm = Math.max(40, Math.min(240, bpm))
@@ -345,6 +401,7 @@ function normalizeSong(raw) {
     var fallback = defaultSong()
     fallback.title = song.title
     fallback.id = song.id
+    fallback.beatsVisible = song.beatsVisible
     return fallback
   }
   return song
@@ -370,6 +427,35 @@ function validSlot(song, sectionIndex, measureIndex, slotIndex) {
     return false
   var slots = song.sections[sectionIndex].measures[measureIndex].slots
   return slotIndex >= 0 && slotIndex < slots.length
+}
+
+function getBeats(song, sectionIndex, measureIndex) {
+  if (!validMeasure(song, sectionIndex, measureIndex))
+    return { kick: [], snare: [], hihat: [] }
+  var section = song.sections[sectionIndex]
+  return normalizeBeatPattern(section.measures[measureIndex].beats, beatStepCount(section.timeSig))
+}
+
+function hasBeat(song, sectionIndex, measureIndex, lane, step) {
+  if (!validMeasure(song, sectionIndex, measureIndex) || !beatLaneValid(lane))
+    return false
+  var index = Number(step)
+  if (!isFinite(index) || index < 0 || Math.floor(index) !== index)
+    return false
+  var pattern = song.sections[sectionIndex].measures[measureIndex].beats
+  return !!(pattern && Array.isArray(pattern[lane]) && index < pattern[lane].length && pattern[lane][index])
+}
+
+function toggleBeat(song, sectionIndex, measureIndex, lane, step) {
+  var next = cloneSong(song)
+  if (!validMeasure(next, sectionIndex, measureIndex) || !beatLaneValid(lane))
+    return next
+  var index = Number(step)
+  var pattern = next.sections[sectionIndex].measures[measureIndex].beats
+  if (!isFinite(index) || index < 0 || Math.floor(index) !== index || index >= pattern[lane].length)
+    return next
+  pattern[lane][index] = !pattern[lane][index]
+  return next
 }
 
 function setBpm(song, bpm) {
@@ -434,8 +520,9 @@ function addBars(song, sectionIndex, count) {
   if (n > room)
     n = room
   var cap = barCapacity(section.timeSig)
+  var steps = beatStepCount(section.timeSig)
   for (var i = 0; i < n; i++)
-    section.measures.push({ slots: [emptySlot(cap)] })
+    section.measures.push({ slots: [emptySlot(cap)], beats: emptyBeatPattern(steps) })
   syncRowRepeats(section)
   return next
 }

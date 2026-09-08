@@ -102,6 +102,82 @@ assertEq(song.sections[0].measures[0].slots.length, 1)
 assertEq(song.sections[0].measures[0].slots[0].span, 4)
 assertEq(song.sections[0].rowRepeats.length, 1)
 assertEq(song.sections[0].rowRepeats[0], false)
+assertEq(BEAT_LANES.join(","), "kick,snare,hihat")
+assertEq(beatStepCount({ numerator: 4, denominator: 4 }), 16)
+assertEq(beatStepCount({ numerator: 3, denominator: 4 }), 12)
+assertEq(beatStepCount({ numerator: 6, denominator: 8 }), 12)
+assertEq(song.beatsVisible, false)
+assertEq(getBeats(song, 0, 0).kick.length, 16)
+assertEq(getBeats(song, 0, 0).snare.length, 16)
+assertEq(getBeats(song, 0, 0).hihat.length, 16)
+assert(isBeatPatternEmpty(getBeats(song, 0, 0)), "default beat pattern is empty")
+
+// Legacy and malformed beat patterns normalize to meter-sized booleans.
+var legacyBeats = normalizeSong({
+  beatsVisible: true,
+  sections: [{
+    name: "Legacy",
+    timeSig: { numerator: 3, denominator: 4 },
+    measures: [{ slots: [{ chord: null, span: 3 }] }]
+  }]
+})
+assertEq(legacyBeats.beatsVisible, true)
+assertEq(getBeats(legacyBeats, 0, 0).kick.length, 12)
+assert(isBeatPatternEmpty(getBeats(legacyBeats, 0, 0)), "legacy beat pattern is empty")
+var malformedBeats = []
+for (var mbi = 0; mbi < 300; mbi++) malformedBeats.push(mbi === 1 ? 1 : 0)
+var normalizedBeats = normalizeSong({
+  sections: [{
+    name: "Odd meter",
+    timeSig: { numerator: 99, denominator: 2 },
+    measures: [{
+      slots: [{ chord: null, span: 16 }],
+      beats: { kick: malformedBeats, snare: "invalid", hihat: [null, "hit"] }
+    }]
+  }]
+})
+var safeBeats = getBeats(normalizedBeats, 0, 0)
+assertEq(safeBeats.kick.length, MAX_BEAT_STEPS)
+assertEq(safeBeats.snare.length, MAX_BEAT_STEPS)
+assertEq(safeBeats.hihat.length, MAX_BEAT_STEPS)
+assertEq(safeBeats.kick[0], false)
+assertEq(safeBeats.kick[1], true)
+assertEq(safeBeats.snare[0], false)
+assertEq(safeBeats.hihat[1], true)
+
+// Toggling is immutable and affects only the requested bar, lane, and step.
+var beatToggled = toggleBeat(song, 0, 1, "snare", 4)
+assertEq(hasBeat(beatToggled, 0, 1, "snare", 4), true)
+assertEq(hasBeat(song, 0, 1, "snare", 4), false)
+assertEq(hasBeat(beatToggled, 0, 0, "snare", 4), false)
+assertEq(hasBeat(beatToggled, 0, 1, "kick", 4), false)
+assertEq(hasBeat(beatToggled, 0, 1, "snare", 5), false)
+assertEq(hasBeat(toggleBeat(beatToggled, 0, 1, "snare", 4), 0, 1, "snare", 4), false)
+assertEq(hasBeat(toggleBeat(song, 99, 0, "kick", 0), 0, 0, "kick", 0), false)
+assertEq(hasBeat(toggleBeat(song, 0, 0, "tom", 0), 0, 0, "kick", 0), false)
+assertEq(hasBeat(toggleBeat(song, 0, 0, "kick", 999), 0, 0, "kick", 0), false)
+
+// Clone, bar creation, trimming, and meter resizing retain beat content.
+var beatClone = cloneSong(beatToggled)
+assertEq(hasBeat(beatClone, 0, 1, "snare", 4), true)
+assert(beatClone.sections[0].measures[1].beats !== beatToggled.sections[0].measures[1].beats,
+       "clone owns its beat pattern")
+var beatEight = addBars(toggleBeat(song, 0, 0, "kick", 0), 0)
+assertEq(getBeats(beatEight, 0, 7).kick.length, 16)
+assert(isBeatPatternEmpty(getBeats(beatEight, 0, 7)), "new bar beat pattern is empty")
+var beatOnLast = toggleBeat(beatEight, 0, 7, "hihat", 15)
+assertEq(removeMeasure(beatOnLast, 0, 7).sections[0].measures.length, 8)
+var resizedBeats = toggleBeat(toggleBeat(song, 0, 0, "kick", 2), 0, 0, "kick", 14)
+resizedBeats = setTimeSignature(resizedBeats, 0, { numerator: 3, denominator: 4 })
+assertEq(getBeats(resizedBeats, 0, 0).kick.length, 12)
+assertEq(hasBeat(resizedBeats, 0, 0, "kick", 2), true)
+resizedBeats = setTimeSignature(resizedBeats, 0, { numerator: 6, denominator: 8 })
+assertEq(getBeats(resizedBeats, 0, 0).kick.length, 12)
+resizedBeats = setTimeSignature(resizedBeats, 0, { numerator: 4, denominator: 4 })
+assertEq(getBeats(resizedBeats, 0, 0).kick.length, 16)
+assertEq(hasBeat(resizedBeats, 0, 0, "kick", 2), true)
+assertEq(hasBeat(resizedBeats, 0, 0, "kick", 14), false)
+assertEq(cloneSong(legacyBeats).beatsVisible, true)
 
 // title / id normalize + round-trip through cloneSong
 assertEq(normalizeTitle(null), "Untitled")
@@ -448,6 +524,13 @@ assertEq(p.sections[0].chords[0].numeral, "I")
 var doc = songJson(song)
 assertEq(doc.sections[0].measures[0].slots[0].rootPc, 0)
 assertEq(songJson(setChord(cloneSong(song), 0, 0, 0, null)).sections[0].measures[0].slots[0], null)
+assertEq(doc.sections[0].measures[0].beats.kick.length, 16)
+assertEq(doc.sections[0].measures[0].beats.snare.length, 16)
+assertEq(doc.sections[0].measures[0].beats.hihat.length, 16)
+var beatDocSong = toggleBeat(song, 0, 0, "kick", 3)
+assertEq(songJson(beatDocSong).sections[0].measures[0].beats.kick[3], true)
+assertEq(progressionsJson(beatDocSong).sections[0].beats, undefined)
+assertEq(progressionsJson(beatDocSong).sections[0].chords[0].beats, undefined)
 
 // Progressions and song JSON shapes.
 assertEq(p.key.index, 0)
