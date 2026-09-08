@@ -411,25 +411,30 @@ assertEq(beats, 32)
 var restTl = buildTimeline(setChord(cloneSong(song), 0, 0, 0, null))
 assertEq(restTl[0].rest, true)
 assertEq(restTl[0].durationBeats, 4)
-assert(isMeasureStartEvent(restTl, restTl[0]), "rest measure has a launch point")
+assert(restTl[0].measureStart, "rest measure has a launch point")
 var splitMeasure = resizeSlot(cloneSong(song), 0, 0, 0, 2, "right")
 var splitMeasureTl = buildTimeline(splitMeasure)
 var measureLaunches = 0
 for (var launchIndex = 0; launchIndex < splitMeasureTl.length; launchIndex++) {
-  if (isMeasureStartEvent(splitMeasureTl, splitMeasureTl[launchIndex]))
+  if (splitMeasureTl[launchIndex].measureStart)
     measureLaunches++
 }
 assertEq(measureLaunches, 8, "whole-song playback launches once per measure")
+assertEq(splitMeasureTl[0].patternedMeasure, false)
+var patternedTimeline = buildTimeline(toggleBeat(splitMeasure, 0, 0, "kick", 0))
+assertEq(patternedTimeline[0].patternedMeasure, true)
+assertEq(patternedTimeline[1].patternedMeasure, true, "all events suppress separate audio in patterned measure")
+assertEq(patternedTimeline[3].patternedMeasure, false, "unpatterned measure keeps per-chord audio")
 var sectionLaunches = 0
 var splitSectionTl = buildSectionTimeline(splitMeasure, 0)
 for (launchIndex = 0; launchIndex < splitSectionTl.length; launchIndex++) {
-  if (isMeasureStartEvent(splitSectionTl, splitSectionTl[launchIndex]))
+  if (splitSectionTl[launchIndex].measureStart)
     sectionLaunches++
 }
 assertEq(sectionLaunches, 4, "section playback launches once per measure")
 var loopLaunches = 0
 for (var loopPass = 0; loopPass < 2; loopPass++) {
-  if (isMeasureStartEvent(splitMeasureTl, eventAtBeat(splitMeasureTl, 0)))
+  if (eventAtBeat(splitMeasureTl, 0).measureStart)
     loopLaunches++
 }
 assertEq(loopLaunches, 2, "loop reset relaunches the first measure")
@@ -452,16 +457,18 @@ beats = 0
 for (i = 0; i < tl2.length; i++) beats += tl2[i].durationBeats
 assertEq(beats, 48)
 assertEq(tl2[4].repeatPass, 1)
-assert(isMeasureStartEvent(tl2, tl2[4]), "row-repeat pass has its own launch point")
+assert(tl2[4].measureStart, "row-repeat pass has its own launch point")
 var repeatedLaunches = 0
 for (launchIndex = 0; launchIndex < tl2.length; launchIndex++) {
-  if (isMeasureStartEvent(tl2, tl2[launchIndex]))
+  if (tl2[launchIndex].measureStart)
     repeatedLaunches++
 }
 assertEq(repeatedLaunches, 12, "each row-repeat pass launches each measure once")
 var repeatedSplitTl = buildTimeline(setRowRepeat(cloneSong(splitMeasure), 0, 0, true))
-assert(isMeasureStartEvent(repeatedSplitTl, repeatedSplitTl[6]), "split measure launches on repeat pass")
-assertEq(isMeasureStartEvent(repeatedSplitTl, repeatedSplitTl[7]), false, "later slot does not relaunch repeated measure")
+assert(repeatedSplitTl[6].measureStart, "split measure launches on repeat pass")
+assertEq(repeatedSplitTl[7].measureStart, false, "later slot does not relaunch repeated measure")
+assertEq(repeatedSplitTl[6].measureOffsetBeats, 0)
+assert(repeatedSplitTl[7].measureOffsetBeats > 0, "later slot has a measure-relative offset")
 var six = setTimeSignature(cloneSong(song), 0, { numerator: 6, denominator: 8 })
 assertEq(six.sections[0].rowRepeats.length, 1)
 assertEq(slotDurationBeats(4, 4), 4)

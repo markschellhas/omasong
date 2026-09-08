@@ -294,8 +294,8 @@ Item {
     return encoded
   }
 
-  function playMeasureDrums(event) {
-    if (!event || !Song.isMeasureStartEvent(timeline, event))
+  function playMeasureAudio(event) {
+    if (!event || !event.measureStart || !event.patternedMeasure)
       return
     var section = song.sections[event.sectionIndex]
     if (!section)
@@ -304,14 +304,37 @@ Item {
     if (Song.isBeatPatternEmpty(pattern))
       return
     var steps = Song.beatStepCount(section.timeSig)
+    var measure = section.measures[event.measureIndex]
+    var slots = measure && measure.slots ? measure.slots : []
+    var denominator = section.timeSig && section.timeSig.denominator
+    var offsetBeats = 0
+    var chords = []
+    for (var slotIndex = 0; slotIndex < slots.length; slotIndex++) {
+      var slot = slots[slotIndex]
+      var durationBeats = Song.slotDurationBeats(slot.span, denominator)
+      if (slot.chord) {
+        chords.push({
+          offsetBeats: offsetBeats,
+          durationBeats: durationBeats,
+          midis: Model.triadMidi(slot.chord)
+        })
+      }
+      offsetBeats += durationBeats
+    }
+    var spec = {
+      steps: steps,
+      bpm: song.bpm,
+      instrument: currentInstrument(),
+      drums: {
+        kick: encodedBeatLane(pattern.kick, steps),
+        snare: encodedBeatLane(pattern.snare, steps),
+        hihat: encodedBeatLane(pattern.hihat, steps)
+      },
+      chords: chords
+    }
     Quickshell.execDetached([
       "python3", playScript,
-      "--drums",
-      encodedBeatLane(pattern.kick, steps),
-      encodedBeatLane(pattern.snare, steps),
-      encodedBeatLane(pattern.hihat, steps),
-      "--steps", String(steps),
-      "--bpm", String(song.bpm)
+      "--measure", JSON.stringify(spec)
     ])
   }
 
@@ -666,14 +689,14 @@ Item {
     fillSegmentStartedMs = Date.now()
   }
 
-  function applySounding(event) {
+  function applySounding(event, withAudio) {
     if (!event || event.rest || !event.chord) {
       soundingNotes = []
       refreshPiano()
       return
     }
     soundingNotes = Model.triadMidi(event.chord)
-    playMidiNotes(soundingNotes, Song.beatsToSeconds(event.durationBeats, song.bpm))
+    playMidiNotes(soundingNotes, Song.beatsToSeconds(event.durationBeats, song.bpm), withAudio)
   }
 
   function applyPlayhead(event) {
@@ -700,8 +723,12 @@ Item {
         statusText = name + " · " + Model.chordName(event.chord.rootPc, event.chord.quality)
         beginSlotFill(event.sectionIndex, event.measureIndex, event.slotIndex, event.durationBeats, false)
       }
-      applySounding(event)
-      playMeasureDrums(event)
+      if (event.patternedMeasure) {
+        applySounding(event, false)
+        playMeasureAudio(event)
+      } else {
+        applySounding(event, true)
+      }
     } else if (playing && !event.rest && event.chord) {
       updateFillProgress()
     }

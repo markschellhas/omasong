@@ -11,11 +11,13 @@ Usage:
   play-notes.py --midi n1 [n2 ...] [seconds]
   play-notes.py --write out.wav --midi 60 64 67 --instrument 1 --seconds 0.4
   play-notes.py --drums 1000 0010 1111 --steps 4 --bpm 120
+  play-notes.py --measure '{"steps":4,"bpm":120,"drums":{},"chords":[]}'
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import shutil
@@ -24,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 import wave
+from array import array
 from pathlib import Path
 
 RATE = 44100
@@ -34,6 +37,9 @@ MAX_VOICES = 8
 MIN_BPM = 40.0
 MAX_BPM = 240.0
 MAX_DRUM_STEPS = 128
+DRUM_TAIL_SECONDS = 0.32
+MAX_MEASURE_JSON = 16384
+MAX_MEASURE_CHORDS = 16
 MIDI_MIN = 0
 MIDI_MAX = 127
 HZ_MIN = 20.0
@@ -436,18 +442,31 @@ def _mix_hihat(mix: list[float], start: int, seed: int) -> None:
         mix[start + i] += high * math.exp(-t * 65.0) * 0.28
 
 
-def render_drums(kick: str, snare: str, hihat: str, steps: int, bpm: float) -> list[int]:
-    """Render one measure of sixteenth-note drum steps without timing padding."""
+def measure_frame_counts(steps: int, bpm: float) -> tuple[int, int]:
     count = clamp_drum_steps(steps)
     tempo = clamp_bpm(bpm)
     step_seconds = 60.0 / tempo / 4.0
-    frame_count = max(1, int(round(RATE * count * step_seconds)))
+    nominal_seconds = count * step_seconds
+    if nominal_seconds + DRUM_TAIL_SECONDS > MAX_SECONDS:
+        raise ValueError("measure duration exceeds limit")
+    return (
+        max(1, int(round(RATE * nominal_seconds))),
+        int(round(RATE * DRUM_TAIL_SECONDS)),
+    )
+
+
+def _drum_mix(kick: str, snare: str, hihat: str, steps: int, bpm: float) -> tuple[array, int]:
+    count = clamp_drum_steps(steps)
+    tempo = clamp_bpm(bpm)
+    step_seconds = 60.0 / tempo / 4.0
+    nominal_frames, tail_frames = measure_frame_counts(count, tempo)
+    frame_count = nominal_frames + tail_frames
     patterns = (
         parse_drum_pattern(kick, count),
         parse_drum_pattern(snare, count),
         parse_drum_pattern(hihat, count),
     )
-    mix = [0.0] * frame_count
+    mix = array("f", [0.0]) * frame_count
     for step in range(count):
         start = int(round(RATE * step * step_seconds))
         if patterns[0][step]:
@@ -456,9 +475,106 @@ def render_drums(kick: str, snare: str, hihat: str, steps: int, bpm: float) -> l
             _mix_snare(mix, start, 0x534E0000 + step)
         if patterns[2][step]:
             _mix_hihat(mix, start, 0x48480000 + step)
+    return mix, nominal_frames
+
+
+def _finish_mix(mix: array) -> array:
+    fade_frames = min(len(mix), max(1, int(RATE * 0.01)))
+    fade_start = len(mix) - fade_frames
+    for i in range(fade_start, len(mix)):
+        mix[i] *= (len(mix) - 1 - i) / fade_frames
+    if mix:
+        mix[-1] = 0.0
     peak = max((abs(sample) for sample in mix), default=0.0)
     scale = 0.94 / peak if peak > 0.94 else 1.0
-    return [int(max(-1.0, min(1.0, sample * scale)) * 32767) for sample in mix]
+    return array("h", (int(max(-1.0, min(1.0, sample * scale)) * 32767) for sample in mix))
+
+
+def render_drums(kick: str, snare: str, hihat: str, steps: int, bpm: float) -> array:
+    """Render one measure plus a bounded natural-decay tail."""
+    mix, _ = _drum_mix(kick, snare, hihat, steps, bpm)
+    return _finish_mix(mix)
+
+
+def _canonical_pattern(value: object, steps: int) -> str:
+    return "".join("1" if hit else "0" for hit in parse_drum_pattern(value, steps))
+
+
+def normalize_measure_spec(value: object) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError("measure must be an object")
+    steps = clamp_drum_steps(value.get("steps", 16))
+    bpm = clamp_bpm(value.get("bpm", 120))
+    measure_frame_counts(steps, bpm)
+    raw_drums = value.get("drums") if isinstance(value.get("drums"), dict) else {}
+    drums = {
+        "kick": _canonical_pattern(raw_drums.get("kick", ""), steps),
+        "snare": _canonical_pattern(raw_drums.get("snare", ""), steps),
+        "hihat": _canonical_pattern(raw_drums.get("hihat", ""), steps),
+    }
+    measure_beats = steps / 4.0
+    chords = []
+    raw_chords = value.get("chords") if isinstance(value.get("chords"), list) else []
+    for raw in raw_chords[:MAX_MEASURE_CHORDS]:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            offset = float(raw.get("offsetBeats", 0))
+            duration = float(raw.get("durationBeats", 0))
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(offset) or not math.isfinite(duration) or offset < 0 or duration <= 0 or offset >= measure_beats:
+            continue
+        duration = min(duration, measure_beats - offset)
+        raw_midis = raw.get("midis") if isinstance(raw.get("midis"), list) else []
+        midis = [note for note in (clamp_midi(item) for item in raw_midis) if note is not None][:MAX_VOICES]
+        if midis:
+            chords.append({"offsetBeats": offset, "durationBeats": duration, "midis": midis})
+    return {
+        "steps": steps,
+        "bpm": bpm,
+        "instrument": clamp_instrument(value.get("instrument", 0)),
+        "drums": drums,
+        "chords": chords,
+    }
+
+
+def parse_measure_spec(raw: str) -> dict:
+    if not isinstance(raw, str) or len(raw) > MAX_MEASURE_JSON or len(raw.encode("utf-8")) > MAX_MEASURE_JSON:
+        raise ValueError("measure JSON exceeds limit")
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("invalid measure JSON") from exc
+    return normalize_measure_spec(value)
+
+
+def render_midi_notes(midis: list[float], seconds: float, instrument: int) -> list[int]:
+    instrument = clamp_instrument(instrument)
+    use_samples = sample_bank_ready(instrument)
+    freqs = [midi_to_hz(note) for note in midis]
+    if use_samples:
+        try:
+            return render_samples(midis, seconds, instrument)
+        except OSError:
+            pass
+    return synth(freqs, seconds, instrument=instrument)
+
+
+def render_measure(value: object) -> array:
+    spec = normalize_measure_spec(value)
+    drums = spec["drums"]
+    mix, _ = _drum_mix(drums["kick"], drums["snare"], drums["hihat"], spec["steps"], spec["bpm"])
+    pad_frames = int(RATE * PAD)
+    for chord in spec["chords"]:
+        start = int(round(RATE * chord["offsetBeats"] * 60.0 / spec["bpm"]))
+        seconds = chord["durationBeats"] * 60.0 / spec["bpm"]
+        rendered = render_midi_notes(chord["midis"], seconds, spec["instrument"])
+        audio = rendered[pad_frames : max(pad_frames, len(rendered) - pad_frames)]
+        available = min(len(audio), len(mix) - start)
+        for i in range(max(0, available)):
+            mix[start + i] += audio[i] / 32767.0
+    return _finish_mix(mix)
 
 
 def write_wav(path: str, frames: list[int]) -> None:
@@ -466,7 +582,10 @@ def write_wav(path: str, frames: list[int]) -> None:
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(RATE)
-        wav.writeframes(b"".join(struct.pack("<h", sample) for sample in frames))
+        if isinstance(frames, array) and frames.typecode == "h" and sys.byteorder == "little":
+            wav.writeframes(frames.tobytes())
+        else:
+            wav.writeframes(b"".join(struct.pack("<h", sample) for sample in frames))
 
 
 def play(path: str) -> None:
@@ -501,6 +620,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--midi", action="store_true", help="treat values as MIDI note numbers")
     mode.add_argument("--drums", nargs=3, metavar=("KICK", "SNARE", "HIHAT"), help="binary sixteenth-note lane patterns")
+    mode.add_argument("--measure", metavar="JSON", help="bounded combined chord and drum measure")
     parser.add_argument("--write", metavar="PATH", help="write WAV instead of playing")
     parser.add_argument("--seconds", type=float, help="override duration in seconds")
     parser.add_argument("--instrument", type=int, default=0, help="timbre 0–2 (Piano, Electric Piano, Organ)")
@@ -537,11 +657,38 @@ def render(args: argparse.Namespace, nums: list[float], seconds: float) -> list[
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.measure is not None:
+        if args.values or args.seconds is not None:
+            sys.stderr.write("play-notes: measure mode does not accept pitches or --seconds\n")
+            return 2
+        try:
+            frames = render_measure(parse_measure_spec(args.measure))
+        except ValueError as exc:
+            sys.stderr.write("play-notes: %s\n" % exc)
+            return 2
+        if args.write:
+            write_wav(args.write, frames)
+            return 0
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            path = tmp.name
+        try:
+            write_wav(path, frames)
+            play(path)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        return 0
     if args.drums is not None:
         if args.values or args.seconds is not None:
             sys.stderr.write("play-notes: drum mode does not accept pitches or --seconds\n")
             return 2
-        frames = render_drums(args.drums[0], args.drums[1], args.drums[2], args.steps, args.bpm)
+        try:
+            frames = render_drums(args.drums[0], args.drums[1], args.drums[2], args.steps, args.bpm)
+        except ValueError as exc:
+            sys.stderr.write("play-notes: %s\n" % exc)
+            return 2
         if args.write:
             write_wav(args.write, frames)
             return 0

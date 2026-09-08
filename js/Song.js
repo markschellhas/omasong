@@ -740,6 +740,11 @@ function appendMeasure(events, beat, section, si, mi, repeatPass) {
   var measure = section.measures[mi]
   var slots = measure && measure.slots ? measure.slots : []
   var denom = section.timeSig && section.timeSig.denominator
+  var measureStartBeat = beat
+  var measureDurationBeats = 0
+  for (var index = 0; index < slots.length; index++)
+    measureDurationBeats += slotDurationBeats(spanOf(slots[index]), denom)
+  var patternedMeasure = !isBeatPatternEmpty(measure)
   for (var sl = 0; sl < slots.length; sl++) {
     var slot = slots[sl]
     var dur = slotDurationBeats(spanOf(slot), denom)
@@ -752,7 +757,11 @@ function appendMeasure(events, beat, section, si, mi, repeatPass) {
       sectionIndex: si,
       measureIndex: mi,
       slotIndex: sl,
-      repeatPass: repeatPass
+      repeatPass: repeatPass,
+      measureStart: sl === 0,
+      measureOffsetBeats: beat - measureStartBeat,
+      measureDurationBeats: measureDurationBeats,
+      patternedMeasure: patternedMeasure
     })
     beat += dur
   }
@@ -801,7 +810,11 @@ function buildTimeline(song) {
         sectionIndex: e.sectionIndex,
         measureIndex: e.measureIndex,
         slotIndex: e.slotIndex,
-        repeatPass: e.repeatPass
+        repeatPass: e.repeatPass,
+        measureStart: e.measureStart,
+        measureOffsetBeats: e.measureOffsetBeats,
+        measureDurationBeats: e.measureDurationBeats,
+        patternedMeasure: e.patternedMeasure
       })
     }
     if (sectionEvents.length) {
@@ -830,17 +843,8 @@ function timelineDurationBeats(events) {
 }
 
 function isMeasureStartEvent(events, event) {
-  if (!events || !events.length || !event)
-    return false
-  for (var i = 0; i < events.length; i++) {
-    var candidate = events[i]
-    if (candidate.sectionIndex === event.sectionIndex
-        && candidate.measureIndex === event.measureIndex
-        && candidate.repeatPass === event.repeatPass)
-      return candidate.startBeat === event.startBeat
-        && candidate.slotIndex === event.slotIndex
-  }
-  return false
+  var candidate = event || events
+  return !!(candidate && candidate.measureStart)
 }
 
 function eventAtBeat(events, beat) {

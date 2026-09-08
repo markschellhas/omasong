@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import wave
+from array import array
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -115,7 +116,8 @@ def test_play_notes() -> None:
 
     steps = 8
     bpm = 120
-    expected_frames = round(play_notes.RATE * steps * 60 / bpm / 4)
+    nominal_frames = round(play_notes.RATE * steps * 60 / bpm / 4)
+    expected_frames = nominal_frames + round(play_notes.RATE * play_notes.DRUM_TAIL_SECONDS)
     lane_patterns = (
         ("kick", "10000000", "00000000", "00000000"),
         ("snare", "00000000", "00100000", "00000000"),
@@ -132,6 +134,37 @@ def test_play_notes() -> None:
             raise SystemExit(f"{lane} drum transient is silent")
         if frames != play_notes.render_drums(kick, snare, hihat, steps, bpm):
             raise SystemExit(f"{lane} drum rendering is not deterministic")
+        if frames[-1] != 0:
+            raise SystemExit(f"{lane} drum render must end at zero")
+
+    late_kick = play_notes.render_drums("00000001", "00000000", "00000000", steps, bpm)
+    tail = late_kick[nominal_frames : nominal_frames + int(play_notes.RATE * 0.08)]
+    if not tail or max(abs(sample) for sample in tail) < 100:
+        raise SystemExit("last-step kick tail was cut at the measure boundary")
+    try:
+        play_notes.render_drums("1" * 128, "0" * 128, "0" * 128, 128, 40)
+    except ValueError:
+        pass
+    else:
+        raise SystemExit("oversized drum duration must be rejected before rendering")
+
+    measure_spec = {
+        "steps": 8,
+        "bpm": 120,
+        "instrument": 0,
+        "drums": {"kick": "00001000", "snare": "00000000", "hihat": "00000000"},
+        "chords": [{"offsetBeats": 0, "durationBeats": 0.5, "midis": [60, 64, 67]}],
+    }
+    combined = play_notes.render_measure(measure_spec)
+    if len(combined) != expected_frames or combined[-1] != 0:
+        raise SystemExit("combined measure render has wrong bounded tail duration")
+    chord_window = combined[: int(play_notes.RATE * 0.20)]
+    drum_offset = round(play_notes.RATE * 4 * 60 / bpm / 4)
+    drum_window = combined[drum_offset : drum_offset + int(play_notes.RATE * 0.08)]
+    if max(abs(sample) for sample in chord_window) < 100:
+        raise SystemExit("combined measure omitted chord audio")
+    if max(abs(sample) for sample in drum_window) < 100:
+        raise SystemExit("combined measure omitted drum audio")
 
     with tempfile.TemporaryDirectory() as tmp:
         drums = Path(tmp) / "drums.wav"
@@ -149,6 +182,37 @@ def test_play_notes() -> None:
             if drum_wav.getnframes() != expected_frames:
                 raise SystemExit("drum CLI wrote the wrong measure duration")
         print("play-notes drums ok")
+
+        combined_wav = Path(tmp) / "combined.wav"
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "play-notes.py"), "--write", str(combined_wav), "--measure", json.dumps(measure_spec, separators=(",", ":"))],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            sys.stderr.write(proc.stdout + proc.stderr)
+            raise SystemExit(proc.returncode)
+        with wave.open(str(combined_wav), "rb") as measure_wav:
+            if measure_wav.getnframes() != expected_frames:
+                raise SystemExit("combined CLI did not use the shared measure renderer")
+            cli_samples = array("h")
+            cli_samples.frombytes(measure_wav.readframes(measure_wav.getnframes()))
+            if sys.byteorder != "little":
+                cli_samples.byteswap()
+        if max(abs(sample) for sample in cli_samples[: int(play_notes.RATE * 0.20)]) < 100:
+            raise SystemExit("combined CLI WAV omitted chord audio")
+        if max(abs(sample) for sample in cli_samples[drum_offset : drum_offset + int(play_notes.RATE * 0.08)]) < 100:
+            raise SystemExit("combined CLI WAV omitted drum audio")
+        print("play-notes combined measure ok")
+
+        oversized = Path(tmp) / "oversized.wav"
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "play-notes.py"), "--write", str(oversized), "--drums", "1" * 128, "0" * 128, "0" * 128, "--steps", "128", "--bpm", "40"],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode == 0 or oversized.exists():
+            raise SystemExit("oversized drum CLI request must fail before writing")
 
         wav = Path(tmp) / "cmaj.wav"
         proc = subprocess.run(
