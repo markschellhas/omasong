@@ -38,6 +38,16 @@ Item {
     { key: "snare", label: "S" },
     { key: "hihat", label: "H" }
   ]
+  readonly property int beatLaneFontPx: Math.max(7, Style.font.caption - 2)
+
+  // One step glyph measured off-screen, so a lane can space its characters
+  // out to its own width without reading back its own contentWidth.
+  TextMetrics {
+    id: beatStepMetrics
+    font.family: Style.font.menuFamily
+    font.pixelSize: root.beatLaneFontPx
+    text: "-"
+  }
 
   property int renamingSection: -1
   property string menuKind: ""
@@ -695,13 +705,19 @@ Item {
                           text: beatSummaryRow.modelData.label
                           color: root.dim
                           font.family: Style.font.menuFamily
-                          font.pixelSize: Math.max(7, Style.font.caption - 2)
+                          font.pixelSize: root.beatLaneFontPx
                           horizontalAlignment: Text.AlignHCenter
                           verticalAlignment: Text.AlignVCenter
                         }
 
                         Text {
                           id: summarySteps
+                          // Each character sits at its own step position, so
+                          // the row spans the measure at any width.
+                          readonly property int stepCount: BeatUi.beatRowLength(beatSummaryRow.values)
+                          readonly property real cellWidth: stepCount > 0
+                            ? width / stepCount
+                            : 0
                           anchors.left: parent.left
                           anchors.leftMargin: Style.space(14)
                           anchors.right: parent.right
@@ -714,7 +730,8 @@ Item {
                           textFormat: Text.PlainText
                           color: root.dim
                           font.family: Style.font.menuFamily
-                          font.pixelSize: Math.max(7, Style.font.caption - 2)
+                          font.pixelSize: root.beatLaneFontPx
+                          font.letterSpacing: Math.max(0, cellWidth - beatStepMetrics.advanceWidth)
                           horizontalAlignment: Text.AlignLeft
                           verticalAlignment: Text.AlignVCenter
                         }
