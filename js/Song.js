@@ -495,6 +495,19 @@ function copyBeatsToNext(song, sectionIndex, measureIndex) {
   return next
 }
 
+function copyBeatsToRest(song, sectionIndex, measureIndex) {
+  var next = cloneSong(song)
+  if (!validMeasure(next, sectionIndex, measureIndex))
+    return next
+  var section = next.sections[sectionIndex]
+  var steps = beatStepCount(section.timeSig)
+  var source = section.measures[measureIndex].beats
+  // Normalize per target so no two bars share a pattern.
+  for (var i = measureIndex + 1; i < section.measures.length; i++)
+    section.measures[i].beats = normalizeBeatPattern(source, steps)
+  return next
+}
+
 function setBpm(song, bpm) {
   var next = cloneSong(song)
   var n = Number(bpm)

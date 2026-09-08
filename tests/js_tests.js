@@ -159,6 +159,29 @@ assertEq(copiedThenToggled.sections[0].measures[1].beats.kick[4], true)
 assertEq(copiedThenToggled.sections[0].measures[0].beats.kick[4], false)
 // copying from the last bar is a no-op
 assertEq(isBeatPatternEmpty(copyBeatsToNext(copySrc, 0, 2).sections[0].measures[2].beats), true)
+
+// copyBeatsToRest: fills every later bar in the section
+var filled = copyBeatsToRest(copySrc, 0, 0)
+assertEq(filled.sections[0].measures[1].beats.kick[0], true)
+assertEq(filled.sections[0].measures[2].beats.kick[0], true)
+assertEq(filled.sections[0].measures[1].beats.hihat[0], true)
+assertEq(filled.sections[0].measures[2].beats.hihat[0], true)
+assertEq(filled.sections[0].measures[1].beats.snare[0], false)
+assertEq(filled.sections[0].measures[2].beats.kick.length, 16)
+// source untouched and no two bars share a pattern
+assertEq(copySrc.sections[0].measures[2].beats.kick.length, 16)
+assertEq(isBeatPatternEmpty(copySrc.sections[0].measures[2].beats), true)
+var filledThenToggled = toggleBeat(filled, 0, 1, "kick", 7)
+assertEq(filledThenToggled.sections[0].measures[1].beats.kick[7], true)
+assertEq(filledThenToggled.sections[0].measures[2].beats.kick[7], false)
+assertEq(filledThenToggled.sections[0].measures[0].beats.kick[7], false)
+// filling from the last bar, or out of range, changes nothing
+assertEq(isBeatPatternEmpty(copyBeatsToRest(copySrc, 0, 2).sections[0].measures[2].beats), true)
+assertEq(copyBeatsToRest(copySrc, 0, 9).sections[0].measures[1].beats.snare[0], true)
+// filling from the middle leaves earlier bars alone
+var midFilled = copyBeatsToRest(copyBeatsToNext(copySrc, 0, 0), 0, 1)
+assertEq(midFilled.sections[0].measures[2].beats.kick[0], true)
+assertEq(midFilled.sections[0].measures[0].beats.kick[0], true)
 assertEq(BEAT_LANES.join(","), "kick,snare,hihat")
 assertEq(beatStepCount({ numerator: 4, denominator: 4 }), 16)
 assertEq(beatStepCount({ numerator: 3, denominator: 4 }), 12)

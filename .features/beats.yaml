@@ -17,6 +17,7 @@ user_flow:
   edit: "User → click measure beat lane → toggle sixteenth-note Kick/Snare/Hi-hat steps"
   clear: "User → Clear → Song.clearBeats empties that measure only"
   copy: "User → hover beat lane → >> chip → Song.copyBeatsToNext clones the pattern into the following bar of that section"
+  fill: "User → hover beat lane → >>| chip → Song.copyBeatsToRest clones the pattern into every later bar of that section"
   play: "Transport → first event of each measure/pass → render frozen chord and drum measure at song BPM"
 
 related_features:

@@ -71,6 +71,7 @@ Item {
   signal sectionPlayToggled(int sectionIndex)
   signal beatEditorRequested(int sectionIndex, int measureIndex)
   signal beatsCopyRequested(int sectionIndex, int measureIndex)
+  signal beatsFillRequested(int sectionIndex, int measureIndex)
 
   readonly property var appendChoices: [
     { label: "Verse", name: "Verse" },
@@ -756,31 +757,56 @@ Item {
                       id: beatLaneHover
                     }
 
-                    // Declared after beatMouse so it takes the click, and
+                    // Declared after beatMouse so these take the click, and
                     // only offered when there is a pattern and a bar to
                     // put it in.
-                    Button {
-                      id: beatCopyButton
+                    Row {
+                      id: beatCopyActions
                       readonly property bool offered: root.beatsVisible
                         && BeatUi.patternHasHit(beatLane.pattern)
                         && measureBox.measureIndex + 1 < sectionCol.measures.length
-                      visible: offered && (beatLaneHover.hovered || hot)
+                      visible: offered
+                        && (beatLaneHover.hovered || nextChip.hot || fillChip.hot)
                       anchors.right: parent.right
                       anchors.rightMargin: Style.space(2)
                       anchors.verticalCenter: parent.verticalCenter
-                      text: ">>"
-                      bordered: true
-                      background: Color.menu.background
-                      foreground: root.foreground
-                      accent: Color.accent
-                      fontSize: root.beatLaneFontPx
-                      horizontalPadding: Style.space(3)
-                      verticalPadding: Style.space(1)
-                      tooltipText: "Copy these beats to the next bar"
-                      onClicked: root.beatsCopyRequested(
-                        sectionCol.sectionIndex,
-                        measureBox.measureIndex
-                      )
+                      spacing: Style.space(2)
+
+                      Button {
+                        id: nextChip
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: ">>"
+                        bordered: true
+                        background: Color.menu.background
+                        foreground: root.foreground
+                        accent: Color.accent
+                        fontSize: root.beatLaneFontPx
+                        horizontalPadding: Style.space(3)
+                        verticalPadding: Style.space(1)
+                        tooltipText: "Copy these beats to the next bar"
+                        onClicked: root.beatsCopyRequested(
+                          sectionCol.sectionIndex,
+                          measureBox.measureIndex
+                        )
+                      }
+
+                      Button {
+                        id: fillChip
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: ">>|"
+                        bordered: true
+                        background: Color.menu.background
+                        foreground: root.foreground
+                        accent: Color.accent
+                        fontSize: root.beatLaneFontPx
+                        horizontalPadding: Style.space(3)
+                        verticalPadding: Style.space(1)
+                        tooltipText: "Copy these beats to every later bar in this section"
+                        onClicked: root.beatsFillRequested(
+                          sectionCol.sectionIndex,
+                          measureBox.measureIndex
+                        )
+                      }
                     }
                   }
                 }

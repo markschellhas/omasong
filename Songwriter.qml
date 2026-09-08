@@ -1576,6 +1576,9 @@ Item {
             onBeatsCopyRequested: function(sectionIndex, measureIndex) {
               root.updateSong(Song.copyBeatsToNext(root.song, sectionIndex, measureIndex))
             }
+            onBeatsFillRequested: function(sectionIndex, measureIndex) {
+              root.updateSong(Song.copyBeatsToRest(root.song, sectionIndex, measureIndex))
+            }
           }
         }
 
