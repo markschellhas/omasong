@@ -35,3 +35,14 @@ function sequencerNextFocusIndex(current, delta, stepCount, laneCount) {
   var next = (index + direction) % count
   return next < 0 ? next + count : next
 }
+
+function beatAsciiRow(values, hitChar, restChar) {
+  var hit = (typeof hitChar === "string" && hitChar.length > 0) ? hitChar.charAt(0) : "x"
+  var rest = (typeof restChar === "string" && restChar.length > 0) ? restChar.charAt(0) : "-"
+  if (!Array.isArray(values))
+    return ""
+  var out = ""
+  for (var i = 0; i < values.length; i++)
+    out += values[i] ? hit : rest
+  return out
+}

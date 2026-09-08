@@ -2,6 +2,7 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 import "js/Model.js" as Model
+import "js/BeatUi.js" as BeatUi
 
 Item {
   id: root
@@ -697,29 +698,24 @@ Item {
                           verticalAlignment: Text.AlignVCenter
                         }
 
-                        Item {
+                        Text {
                           id: summarySteps
                           anchors.left: parent.left
                           anchors.leftMargin: Style.space(14)
                           anchors.right: parent.right
                           anchors.top: parent.top
                           anchors.bottom: parent.bottom
-
-                          Repeater {
-                            model: root.beatsVisible ? beatSummaryRow.values.length : 0
-
-                            delegate: Rectangle {
-                              required property int index
-                              readonly property bool active: !!beatSummaryRow.values[index]
-                              x: index * summarySteps.width / Math.max(1, beatSummaryRow.values.length)
-                              width: Math.max(1, (index + 1) * summarySteps.width
-                                / Math.max(1, beatSummaryRow.values.length) - x - 1)
-                              height: active ? Math.max(3, summarySteps.height - Style.space(4)) : 1
-                              anchors.verticalCenter: parent.verticalCenter
-                              radius: 1
-                              color: active ? Color.accent : root.faint
-                            }
-                          }
+                          text: root.beatsVisible
+                            ? BeatUi.beatAsciiRow(beatSummaryRow.values, "x", "-")
+                            : ""
+                          textFormat: Text.PlainText
+                          color: root.dim
+                          font.family: Style.font.menuFamily
+                          font.pixelSize: Style.font.caption
+                          fontSizeMode: Text.HorizontalFit
+                          minimumPixelSize: 4
+                          horizontalAlignment: Text.AlignLeft
+                          verticalAlignment: Text.AlignVCenter
                         }
                       }
                     }
