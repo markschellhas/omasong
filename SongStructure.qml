@@ -705,15 +705,14 @@ Item {
                           anchors.right: parent.right
                           anchors.top: parent.top
                           anchors.bottom: parent.bottom
+                          clip: true
                           text: root.beatsVisible
                             ? BeatUi.beatAsciiRow(beatSummaryRow.values, "x", "-")
                             : ""
                           textFormat: Text.PlainText
                           color: root.dim
                           font.family: Style.font.menuFamily
-                          font.pixelSize: Style.font.caption
-                          fontSizeMode: Text.HorizontalFit
-                          minimumPixelSize: 4
+                          font.pixelSize: Math.max(7, Style.font.caption - 2)
                           horizontalAlignment: Text.AlignLeft
                           verticalAlignment: Text.AlignVCenter
                         }
