@@ -295,31 +295,26 @@ Item {
   }
 
   function playMeasureAudio(event) {
-    if (!event || !event.measureStart || !event.patternedMeasure)
+    if (!event || !event.measureStart || !event.patternedMeasure || !event.measureAudio)
       return
-    var section = song.sections[event.sectionIndex]
-    if (!section)
-      return
-    var pattern = Song.getBeats(song, event.sectionIndex, event.measureIndex)
+    var frozen = event.measureAudio
+    var pattern = frozen.beats
     if (Song.isBeatPatternEmpty(pattern))
       return
-    var steps = Song.beatStepCount(section.timeSig)
-    var measure = section.measures[event.measureIndex]
-    var slots = measure && measure.slots ? measure.slots : []
-    var denominator = section.timeSig && section.timeSig.denominator
-    var offsetBeats = 0
+    var steps = Number(frozen.steps)
+    if (!(steps > 0))
+      return
+    var frozenChords = frozen.chords || []
     var chords = []
-    for (var slotIndex = 0; slotIndex < slots.length; slotIndex++) {
-      var slot = slots[slotIndex]
-      var durationBeats = Song.slotDurationBeats(slot.span, denominator)
-      if (slot.chord) {
+    for (var chordIndex = 0; chordIndex < frozenChords.length; chordIndex++) {
+      var scheduled = frozenChords[chordIndex]
+      if (scheduled && scheduled.chord) {
         chords.push({
-          offsetBeats: offsetBeats,
-          durationBeats: durationBeats,
-          midis: Model.triadMidi(slot.chord)
+          offsetBeats: scheduled.offsetBeats,
+          durationBeats: scheduled.durationBeats,
+          midis: Model.triadMidi(scheduled.chord)
         })
       }
-      offsetBeats += durationBeats
     }
     var spec = {
       steps: steps,

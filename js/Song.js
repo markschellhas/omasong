@@ -742,9 +742,26 @@ function appendMeasure(events, beat, section, si, mi, repeatPass) {
   var denom = section.timeSig && section.timeSig.denominator
   var measureStartBeat = beat
   var measureDurationBeats = 0
-  for (var index = 0; index < slots.length; index++)
-    measureDurationBeats += slotDurationBeats(spanOf(slots[index]), denom)
   var patternedMeasure = !isBeatPatternEmpty(measure)
+  var measureChords = []
+  for (var index = 0; index < slots.length; index++) {
+    var measureSlot = slots[index]
+    var measureSlotDuration = slotDurationBeats(spanOf(measureSlot), denom)
+    var measureChord = cloneChord(measureSlot.chord)
+    if (measureChord) {
+      measureChords.push({
+        offsetBeats: measureDurationBeats,
+        durationBeats: measureSlotDuration,
+        chord: measureChord
+      })
+    }
+    measureDurationBeats += measureSlotDuration
+  }
+  var measureAudio = patternedMeasure ? {
+    steps: beatStepCount(section.timeSig),
+    beats: normalizeBeatPattern(measure.beats, beatStepCount(section.timeSig)),
+    chords: measureChords
+  } : null
   for (var sl = 0; sl < slots.length; sl++) {
     var slot = slots[sl]
     var dur = slotDurationBeats(spanOf(slot), denom)
@@ -761,7 +778,8 @@ function appendMeasure(events, beat, section, si, mi, repeatPass) {
       measureStart: sl === 0,
       measureOffsetBeats: beat - measureStartBeat,
       measureDurationBeats: measureDurationBeats,
-      patternedMeasure: patternedMeasure
+      patternedMeasure: patternedMeasure,
+      measureAudio: sl === 0 ? measureAudio : null
     })
     beat += dur
   }
@@ -814,7 +832,8 @@ function buildTimeline(song) {
         measureStart: e.measureStart,
         measureOffsetBeats: e.measureOffsetBeats,
         measureDurationBeats: e.measureDurationBeats,
-        patternedMeasure: e.patternedMeasure
+        patternedMeasure: e.patternedMeasure,
+        measureAudio: e.measureAudio
       })
     }
     if (sectionEvents.length) {
