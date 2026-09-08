@@ -1573,6 +1573,9 @@ Item {
             onBeatEditorRequested: function(sectionIndex, measureIndex) {
               root.openBeatEditor(sectionIndex, measureIndex)
             }
+            onBeatsCopyRequested: function(sectionIndex, measureIndex) {
+              root.updateSong(Song.copyBeatsToNext(root.song, sectionIndex, measureIndex))
+            }
           }
         }
 

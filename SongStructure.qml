@@ -70,6 +70,7 @@ Item {
   signal slotSelected(int sectionIndex, int measureIndex, int slotIndex)
   signal sectionPlayToggled(int sectionIndex)
   signal beatEditorRequested(int sectionIndex, int measureIndex)
+  signal beatsCopyRequested(int sectionIndex, int measureIndex)
 
   readonly property var appendChoices: [
     { label: "Verse", name: "Verse" },
@@ -744,6 +745,39 @@ Item {
                       hoverEnabled: true
                       cursorShape: Qt.PointingHandCursor
                       onClicked: root.beatEditorRequested(
+                        sectionCol.sectionIndex,
+                        measureBox.measureIndex
+                      )
+                    }
+
+                    // Keeps reporting hover while the pointer sits on the
+                    // copy chip, which a plain MouseArea would stop doing.
+                    HoverHandler {
+                      id: beatLaneHover
+                    }
+
+                    // Declared after beatMouse so it takes the click, and
+                    // only offered when there is a pattern and a bar to
+                    // put it in.
+                    Button {
+                      id: beatCopyButton
+                      readonly property bool offered: root.beatsVisible
+                        && BeatUi.patternHasHit(beatLane.pattern)
+                        && measureBox.measureIndex + 1 < sectionCol.measures.length
+                      visible: offered && (beatLaneHover.hovered || hot)
+                      anchors.right: parent.right
+                      anchors.rightMargin: Style.space(2)
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: ">>"
+                      bordered: true
+                      background: Color.menu.background
+                      foreground: root.foreground
+                      accent: Color.accent
+                      fontSize: root.beatLaneFontPx
+                      horizontalPadding: Style.space(3)
+                      verticalPadding: Style.space(1)
+                      tooltipText: "Copy these beats to the next bar"
+                      onClicked: root.beatsCopyRequested(
                         sectionCol.sectionIndex,
                         measureBox.measureIndex
                       )

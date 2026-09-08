@@ -125,6 +125,40 @@ assertEq(beatRowLength([true, false, true]), 3)
 assertEq(beatRowLength(null), 0)
 assertEq(beatRowLength("xxxx"), 0)
 assertEq(beatRowLength({}), 0)
+assertEq(patternHasHit({ kick: [false, false], snare: [], hihat: [] }), false)
+assertEq(patternHasHit({ kick: [false, true], snare: [], hihat: [] }), true)
+assertEq(patternHasHit({ kick: [], snare: [], hihat: [true] }), true)
+assertEq(patternHasHit({ kick: { length: 2, 0: false, 1: true } }), true)
+assertEq(patternHasHit(null), false)
+assertEq(patternHasHit({}), false)
+
+// copyBeatsToNext: within a section, fresh arrays, bounds-checked
+var copySrc = normalizeSong({
+  sections: [{
+    name: "Verse",
+    timeSig: { numerator: 4, denominator: 4 },
+    measures: [
+      { slots: [{ span: 4 }], beats: { kick: [true], snare: [], hihat: [true] } },
+      { slots: [{ span: 4 }], beats: { snare: [true] } },
+      { slots: [{ span: 4 }], beats: {} }
+    ]
+  }]
+})
+assertEq(canCopyBeatsToNext(copySrc, 0, 0), true)
+assertEq(canCopyBeatsToNext(copySrc, 0, 2), false)   // last bar in section
+assertEq(canCopyBeatsToNext(copySrc, 0, 9), false)   // out of range
+var copied = copyBeatsToNext(copySrc, 0, 0)
+assertEq(copied.sections[0].measures[1].beats.kick[0], true)
+assertEq(copied.sections[0].measures[1].beats.hihat[0], true)
+assertEq(copied.sections[0].measures[1].beats.snare[0], false)  // overwritten
+assertEq(copied.sections[0].measures[1].beats.kick.length, 16)
+// source untouched, and the two bars must not share arrays
+assertEq(copySrc.sections[0].measures[1].beats.kick[0], false)
+var copiedThenToggled = toggleBeat(copied, 0, 1, "kick", 4)
+assertEq(copiedThenToggled.sections[0].measures[1].beats.kick[4], true)
+assertEq(copiedThenToggled.sections[0].measures[0].beats.kick[4], false)
+// copying from the last bar is a no-op
+assertEq(isBeatPatternEmpty(copyBeatsToNext(copySrc, 0, 2).sections[0].measures[2].beats), true)
 assertEq(BEAT_LANES.join(","), "kick,snare,hihat")
 assertEq(beatStepCount({ numerator: 4, denominator: 4 }), 16)
 assertEq(beatStepCount({ numerator: 3, denominator: 4 }), 12)

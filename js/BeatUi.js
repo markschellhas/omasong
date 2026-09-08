@@ -49,6 +49,23 @@ function beatRowLength(values) {
   return Math.floor(n)
 }
 
+// True when any lane in a measure's pattern has a hit. Reads sequence
+// wrappers as well as real arrays, and needs no lane list because the
+// pattern is keyed by lane name.
+function patternHasHit(pattern) {
+  if (!pattern || typeof pattern !== "object")
+    return false
+  for (var key in pattern) {
+    var values = pattern[key]
+    var count = beatRowLength(values)
+    for (var step = 0; step < count; step++) {
+      if (values[step])
+        return true
+    }
+  }
+  return false
+}
+
 function beatAsciiRow(values, hitChar, restChar) {
   var hit = (typeof hitChar === "string" && hitChar.length > 0) ? hitChar.charAt(0) : "x"
   var rest = (typeof restChar === "string" && restChar.length > 0) ? restChar.charAt(0) : "-"

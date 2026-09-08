@@ -467,6 +467,34 @@ function clearBeats(song, sectionIndex, measureIndex) {
   return next
 }
 
+// Copying stays inside the section: the next section can carry another
+// meter, and its own first bar is rarely the intended target.
+function canCopyBeatsToNext(song, sectionIndex, measureIndex) {
+  if (!validMeasure(song, sectionIndex, measureIndex))
+    return false
+  var section = song.sections[sectionIndex]
+  if (measureIndex + 1 >= section.measures.length)
+    return false
+  return !isBeatPatternEmpty(section.measures[measureIndex].beats)
+}
+
+function copyBeatsToNext(song, sectionIndex, measureIndex) {
+  var next = cloneSong(song)
+  if (!validMeasure(next, sectionIndex, measureIndex))
+    return next
+  var section = next.sections[sectionIndex]
+  var target = measureIndex + 1
+  if (target >= section.measures.length)
+    return next
+  // normalizeBeatPattern returns fresh arrays, so the two bars never
+  // end up sharing a pattern.
+  section.measures[target].beats = normalizeBeatPattern(
+    section.measures[measureIndex].beats,
+    beatStepCount(section.timeSig)
+  )
+  return next
+}
+
 function setBpm(song, bpm) {
   var next = cloneSong(song)
   var n = Number(bpm)
