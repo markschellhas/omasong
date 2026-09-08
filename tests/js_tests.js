@@ -115,6 +115,16 @@ assertEq(beatAsciiRow([false, false, false, false], "x", "-"), "----")
 assertEq(beatAsciiRow([], "x", "-"), "")
 assertEq(beatAsciiRow(null, "x", "-"), "")
 assertEq(beatAsciiRow([true, false], "", ""), "x-")
+// QML hands model-derived lanes over as sequence wrappers: array-like, but
+// Array.isArray() is false for them. beatAsciiRow must still render those.
+var wrappedLane = { length: 4, 0: true, 1: false, 2: false, 3: true }
+assertEq(Array.isArray(wrappedLane), false)
+assertEq(beatAsciiRow(wrappedLane, "x", "-"), "x--x")
+assertEq(beatRowLength(wrappedLane), 4)
+assertEq(beatRowLength([true, false, true]), 3)
+assertEq(beatRowLength(null), 0)
+assertEq(beatRowLength("xxxx"), 0)
+assertEq(beatRowLength({}), 0)
 assertEq(BEAT_LANES.join(","), "kick,snare,hihat")
 assertEq(beatStepCount({ numerator: 4, denominator: 4 }), 16)
 assertEq(beatStepCount({ numerator: 3, denominator: 4 }), 12)

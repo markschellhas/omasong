@@ -36,13 +36,25 @@ function sequencerNextFocusIndex(current, delta, stepCount, laneCount) {
   return next < 0 ? next + count : next
 }
 
+// A pattern lane that reached QML through a model or property boundary
+// arrives as a sequence wrapper: it indexes and reports length like an
+// array, but Array.isArray() is false for it. Duck-type on length so both
+// real arrays and wrapped sequences work.
+function beatRowLength(values) {
+  if (!values || typeof values === "string")
+    return 0
+  var n = Number(values.length)
+  if (!isFinite(n) || n < 1)
+    return 0
+  return Math.floor(n)
+}
+
 function beatAsciiRow(values, hitChar, restChar) {
   var hit = (typeof hitChar === "string" && hitChar.length > 0) ? hitChar.charAt(0) : "x"
   var rest = (typeof restChar === "string" && restChar.length > 0) ? restChar.charAt(0) : "-"
-  if (!Array.isArray(values))
-    return ""
+  var count = beatRowLength(values)
   var out = ""
-  for (var i = 0; i < values.length; i++)
+  for (var i = 0; i < count; i++)
     out += values[i] ? hit : rest
   return out
 }

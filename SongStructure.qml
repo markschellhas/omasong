@@ -676,8 +676,10 @@ Item {
                         id: beatSummaryRow
                         required property var modelData
                         required property int index
+                        // Sequence-wrapped lanes fail Array.isArray, so only
+                        // check for presence and let BeatUi read the length.
                         readonly property var values: beatLane.pattern
-                          && Array.isArray(beatLane.pattern[modelData.key])
+                          && beatLane.pattern[modelData.key]
                           ? beatLane.pattern[modelData.key]
                           : []
                         x: Style.space(3)
