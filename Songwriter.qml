@@ -38,6 +38,7 @@ Item {
   property real slotFillProgress: 0
   property int currentBar: 1
   property real currentBeat: 0
+  property real audioStartMs: 0
   property int displayBeat: 1
   property int selectedSection: 0
   property int selectedMeasure: 0
@@ -151,6 +152,7 @@ Item {
   function open(payloadJson) {
     opened = true
     startAgentServer()
+    startAudioEngine()
     refreshLibrary()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
@@ -161,6 +163,7 @@ Item {
     closeBeatEditor()
     opened = false
     stopAgentServer()
+    stopAudioEngine()
   }
 
   function dismiss() {
@@ -177,6 +180,17 @@ Item {
   function stopAgentServer() {
     agentRestart.stop()
     agentServer.running = false
+  }
+
+  function startAudioEngine() {
+    if (!audioEngine.running)
+      audioEngine.running = true
+    engineSend({ cmd: "warmup", instrument: currentInstrument() })
+  }
+
+  function stopAudioEngine() {
+    audioEngineRestart.stop()
+    audioEngine.running = false
   }
 
   function clampSelection() {
@@ -270,6 +284,7 @@ Item {
 
   function updateSong(next) {
     var prevBpm = song && song.bpm
+    var prevInstrument = song && song.instrument
     var loop = next && next.loop !== undefined ? next.loop : (song && song.loop)
     var octave = next && next.octave !== undefined ? next.octave : (song && song.octave)
     var layout = next && next.layout !== undefined ? next.layout : (song && song.layout)
@@ -292,6 +307,17 @@ Item {
     song = normalized
     if (fillSection >= 0 && prevBpm !== undefined && normalized.bpm !== prevBpm)
       retimeFillForBpm()
+    if (prevInstrument !== undefined
+        && KeyMap.clampInstrument(prevInstrument) !== normalized.instrument)
+      engineSend({ cmd: "warmup", instrument: normalized.instrument })
+    if (playing && prevBpm !== undefined && normalized.bpm !== prevBpm) {
+      var scope = playScopeSection
+      stopPlayback()
+      if (scope >= 0)
+        startSectionPlayback(scope)
+      else
+        startPlayback()
+    }
     clampSelection()
     clampBeatEditor()
     persistSoon()
@@ -339,13 +365,22 @@ Item {
       return
     var dur = seconds ? KeyMap.clampSeconds(seconds) : 0.7
     if (withAudio !== false) {
-      var cmd = ["python3", playScript, "--midi"]
-      for (var i = 0; i < safe.length; i++)
-        cmd.push(String(safe[i]))
-      cmd.push("--instrument", String(currentInstrument()))
-      if (seconds)
-        cmd.push("--seconds", String(dur))
-      Quickshell.execDetached(cmd)
+      if (audioEngine.running) {
+        engineSend({
+          cmd: "play-midi",
+          midis: safe,
+          seconds: dur,
+          instrument: currentInstrument()
+        })
+      } else {
+        var cmd = ["python3", playScript, "--midi"]
+        for (var i = 0; i < safe.length; i++)
+          cmd.push(String(safe[i]))
+        cmd.push("--instrument", String(currentInstrument()))
+        if (seconds)
+          cmd.push("--seconds", String(dur))
+        Quickshell.execDetached(cmd)
+      }
     }
     previewNotes = safe
     refreshPiano()
@@ -360,20 +395,20 @@ Item {
     return encoded
   }
 
-  function playMeasureAudio(event) {
-    if (!event || !event.measureStart || !event.patternedMeasure || !event.measureAudio)
+  function engineSend(obj) {
+    if (!audioEngine.running)
       return
-    var frozen = event.measureAudio
-    var pattern = frozen.beats
-    if (Song.isBeatPatternEmpty(pattern))
-      return
-    var steps = Number(frozen.steps)
-    if (!(steps > 0))
-      return
-    var frozenChords = frozen.chords || []
+    audioEngine.write(JSON.stringify(obj) + "\n")
+  }
+
+  function engineMeasureSpec(event) {
+    var frozen = event && event.measureAudio
+    if (!frozen)
+      return null
     var chords = []
-    for (var chordIndex = 0; chordIndex < frozenChords.length; chordIndex++) {
-      var scheduled = frozenChords[chordIndex]
+    var frozenChords = frozen.chords || []
+    for (var i = 0; i < frozenChords.length; i++) {
+      var scheduled = frozenChords[i]
       if (scheduled && scheduled.chord) {
         chords.push({
           offsetBeats: scheduled.offsetBeats,
@@ -382,21 +417,64 @@ Item {
         })
       }
     }
-    var spec = {
-      steps: steps,
+    return {
+      steps: frozen.steps,
       bpm: song.bpm,
       instrument: currentInstrument(),
       drums: {
-        kick: encodedBeatLane(pattern.kick, steps),
-        snare: encodedBeatLane(pattern.snare, steps),
-        hihat: encodedBeatLane(pattern.hihat, steps)
+        kick: encodedBeatLane(frozen.beats && frozen.beats.kick, frozen.steps),
+        snare: encodedBeatLane(frozen.beats && frozen.beats.snare, frozen.steps),
+        hihat: encodedBeatLane(frozen.beats && frozen.beats.hihat, frozen.steps)
       },
       chords: chords
     }
-    Quickshell.execDetached([
-      "python3", playScript,
-      "--measure", JSON.stringify(spec)
-    ])
+  }
+
+  function onEngineMessage(data) {
+    var msg
+    try {
+      msg = JSON.parse(data)
+    } catch (e) {
+      statusText = "Audio engine failed"
+      stopPlayback()
+      return
+    }
+    if (!msg || typeof msg !== "object")
+      return
+    if (msg.event === "started" && playing && audioStartMs === 0) {
+      audioStartMs = Date.now() + (msg.latencyMs || 20)
+      engineStartedTimeout.stop()
+      transportTimer.start()
+    }
+  }
+
+  function queueEnginePlayback(tl) {
+    playing = true
+    currentBeat = 0
+    currentBar = 1
+    playEvent = null
+    audioStartMs = 0
+    transportTimer.stop()
+    engineStartedTimeout.stop()
+    if (!audioEngine.running) {
+      statusText = "Audio engine failed"
+      stopPlayback()
+      return
+    }
+    var launches = Song.measureLaunchEvents(tl)
+    var specs = []
+    for (var i = 0; i < launches.length; i++) {
+      var spec = engineMeasureSpec(launches[i])
+      if (spec)
+        specs.push(spec)
+    }
+    engineSend({
+      cmd: "play",
+      loop: !!song.loop,
+      latencyMs: 20,
+      measures: specs
+    })
+    engineStartedTimeout.restart()
   }
 
   function playCirclePreview(notes) {
@@ -763,7 +841,8 @@ Item {
 
   function applyPlayhead(event) {
     if (!event) {
-      stopPlayback()
+      if (playing)
+        stopPlayback()
       return
     }
     if (playEvent
@@ -785,27 +864,11 @@ Item {
         statusText = name + " · " + Model.chordName(event.chord.rootPc, event.chord.quality)
         beginSlotFill(event.sectionIndex, event.measureIndex, event.slotIndex, event.durationBeats, false)
       }
-      if (event.patternedMeasure) {
-        applySounding(event, false)
-        playMeasureAudio(event)
-      } else {
-        applySounding(event, true)
-      }
+      applySounding(event, false)
     } else if (playing && !event.rest && event.chord) {
       updateFillProgress()
     }
     displayBeat = Math.max(1, Math.floor(currentBeat - measureStartBeat(timeline, event)) + 1)
-  }
-
-  function scheduleBeatTick() {
-    var delta = Song.beatTickDelta(timeline, currentBeat)
-    if (!(delta > 0)) {
-      stopPlayback()
-      return
-    }
-    // Floor at 8ms so float residuals cannot storm the UI thread at ~1ms.
-    transportTimer.interval = Math.max(8, Math.round(Song.beatsToSeconds(delta, song.bpm) * 1000))
-    transportTimer.restart()
   }
 
   function startPlayback() {
@@ -816,12 +879,7 @@ Item {
     }
     playScopeSection = -1
     playTimeline = tl
-    playing = true
-    currentBeat = 0
-    currentBar = 1
-    playEvent = null
-    applyPlayhead(Song.eventAtBeat(tl, currentBeat))
-    scheduleBeatTick()
+    queueEnginePlayback(tl)
   }
 
   function startSectionPlayback(sectionIndex) {
@@ -832,12 +890,7 @@ Item {
     }
     playScopeSection = sectionIndex
     playTimeline = tl
-    playing = true
-    currentBeat = 0
-    currentBar = 1
-    playEvent = null
-    applyPlayhead(Song.eventAtBeat(tl, currentBeat))
-    scheduleBeatTick()
+    queueEnginePlayback(tl)
   }
 
   function toggleSectionPlayback(sectionIndex) {
@@ -849,7 +902,9 @@ Item {
   }
 
   function stopPlayback() {
+    engineSend({ cmd: "stop" })
     playing = false
+    audioStartMs = 0
     playScopeSection = -1
     playTimeline = []
     playEvent = null
@@ -857,6 +912,7 @@ Item {
     currentBar = 1
     displayBeat = 1
     soundingNotes = []
+    engineStartedTimeout.stop()
     transportTimer.stop()
     clearSlotFill()
     refreshPiano()
@@ -1063,15 +1119,23 @@ Item {
 
   Timer {
     id: transportTimer
-    interval: 1000
-    repeat: false
+    interval: 16
+    repeat: true
+    running: false
     onTriggered: {
-      var delta = Song.beatTickDelta(timeline, currentBeat)
-      currentBeat += delta
+      if (!playing || !(audioStartMs > 0))
+        return
+      var beat = Song.beatAtWallClock(audioStartMs, Date.now(), song.bpm)
       var total = Song.timelineDurationBeats(timeline)
-      if (currentBeat >= total) {
+      if (!(total > 0)) {
+        stopPlayback()
+        return
+      }
+      if (beat >= total) {
         if (song.loop) {
-          currentBeat = 0
+          var cycle = Math.floor(beat / total)
+          audioStartMs += cycle * Song.beatsToSeconds(total, song.bpm) * 1000
+          beat = Song.beatAtWallClock(audioStartMs, Date.now(), song.bpm)
           currentBar = 1
           playEvent = null
         } else {
@@ -1079,8 +1143,19 @@ Item {
           return
         }
       }
+      currentBeat = beat
       applyPlayhead(Song.eventAtBeat(timeline, currentBeat))
-      scheduleBeatTick()
+    }
+  }
+
+  Timer {
+    id: engineStartedTimeout
+    interval: 2000
+    onTriggered: {
+      if (playing && !(audioStartMs > 0)) {
+        statusText = "Audio engine failed"
+        stopPlayback()
+      }
     }
   }
 
@@ -1204,13 +1279,48 @@ Item {
     }
   }
 
+  Process {
+    id: audioEngine
+    running: false
+    stdinEnabled: true
+    command: ["/usr/bin/python3", "-u", root.playScript, "--engine"]
+    stdout: SplitParser {
+      onRead: data => root.onEngineMessage(String(data))
+    }
+    stderr: StdioCollector {
+      waitForEnd: false
+    }
+    onStarted: root.engineSend({ cmd: "warmup", instrument: root.currentInstrument() })
+    onExited: {
+      if (root.playing)
+        root.stopPlayback()
+      if (root.opened)
+        audioEngineRestart.restart()
+    }
+  }
+
+  Timer {
+    id: audioEngineRestart
+    interval: 400
+    onTriggered: {
+      if (root.opened && !audioEngine.running) {
+        audioEngine.running = true
+        root.engineSend({ cmd: "warmup", instrument: root.currentInstrument() })
+      }
+    }
+  }
+
   Component.onCompleted: {
     Quickshell.execDetached(["install", "-d", "-m", "700", root.libraryRuntimeDir])
     songFile.reload()
     refreshPiano()
   }
 
-  Component.onDestruction: stopAgentServer()
+  Component.onDestruction: {
+    stopPlayback()
+    stopAgentServer()
+    stopAudioEngine()
+  }
 
   PanelWindow {
     id: panel
