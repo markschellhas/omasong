@@ -9,7 +9,7 @@ apps:
   - songwriter
 
 user_flow:
-  primary: "Play/preview/live → play-notes.py --engine → pw-cat raw s16 44100 mono latency 20ms"
+  primary: "Play/preview/live → play-notes.py --engine → pw-cat raw s16 44100 mono latency 20ms stdin -"
 
 related_features:
   - playback (engine output)

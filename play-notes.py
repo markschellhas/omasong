@@ -634,6 +634,7 @@ def output_command() -> list[str]:
             "1",
             "--latency",
             "%sms" % OUTPUT_LATENCY_MS,
+            "-",
         ]
     if shutil.which("paplay"):
         return ["paplay", "--raw", "--rate=%s" % RATE, "--channels=1", "--format=s16le"]

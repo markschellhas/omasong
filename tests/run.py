@@ -263,9 +263,9 @@ def test_play_notes() -> None:
     if shutil.which("pw-cat"):
         if play_notes.output_command() != [
             "pw-cat", "-p", "-a", "--format", "s16", "--rate", "44100",
-            "--channels", "1", "--latency", "20ms",
+            "--channels", "1", "--latency", "20ms", "-",
         ]:
-            raise SystemExit("output_command must prefer pw-cat at 20ms latency")
+            raise SystemExit("output_command must prefer pw-cat at 20ms latency reading stdin")
 
     class RecordingStdin:
         def __init__(self) -> None:
