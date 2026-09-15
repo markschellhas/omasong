@@ -213,6 +213,28 @@ def test_play_notes() -> None:
     if max(abs(s) for s in overlapped[nominal : nominal + int(play_notes.RATE * 0.04)]) < 100:
         raise SystemExit("next-bar kick missing after tail mix")
 
+    if len(scheduled) <= nominal * 2:
+        raise SystemExit("one-shot schedule must keep a tail after the last bar")
+    one_shot_late = play_notes.schedule_measures([late])
+    if len(one_shot_late) <= nominal:
+        raise SystemExit("one-shot last-step kick must ring past the bar")
+    looped = play_notes.schedule_measures([late], loop=True)
+    if len(looped) != nominal:
+        raise SystemExit("looped schedule must be exactly the nominal bar")
+    if max(abs(s) for s in looped[: int(play_notes.RATE * 0.08)]) < 100:
+        raise SystemExit("last-step kick tail must wrap into the loop downbeat")
+    looped_two = play_notes.schedule_measures([m1, late], loop=True)
+    if len(looped_two) != nominal * 2:
+        raise SystemExit("looped two-bar schedule must be exactly two nominal bars")
+    looped_engine = play_notes.AudioEngine(sink=play_notes.BufferSink())
+    looped_started = looped_engine.handle({
+        "cmd": "play",
+        "loop": True,
+        "measures": [m1, late],
+    })
+    if looped_started.get("frames") != nominal * 2:
+        raise SystemExit("engine loop play must queue the nominal timeline")
+
     engine = play_notes.AudioEngine(sink=play_notes.BufferSink())
     ready = engine.handle({"cmd": "warmup", "instrument": 0})
     if not ready.get("ok"):

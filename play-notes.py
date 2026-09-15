@@ -485,13 +485,14 @@ def _drum_mix(kick: str, snare: str, hihat: str, steps: int, bpm: float) -> tupl
     return mix, nominal_frames
 
 
-def _finish_mix(mix: array) -> array:
-    fade_frames = min(len(mix), max(1, int(RATE * 0.01)))
-    fade_start = len(mix) - fade_frames
-    for i in range(fade_start, len(mix)):
-        mix[i] *= (len(mix) - 1 - i) / fade_frames
-    if mix:
-        mix[-1] = 0.0
+def _finish_mix(mix: array, loop: bool = False) -> array:
+    if not loop:
+        fade_frames = min(len(mix), max(1, int(RATE * 0.01)))
+        fade_start = len(mix) - fade_frames
+        for i in range(fade_start, len(mix)):
+            mix[i] *= (len(mix) - 1 - i) / fade_frames
+        if mix:
+            mix[-1] = 0.0
     peak = max((abs(sample) for sample in mix), default=0.0)
     scale = 0.94 / peak if peak > 0.94 else 1.0
     return array("h", (int(max(-1.0, min(1.0, sample * scale)) * 32767) for sample in mix))
@@ -584,7 +585,7 @@ def render_measure(value: object) -> array:
     return _finish_mix(mix)
 
 
-def schedule_measures(specs: list[object]) -> array:
+def schedule_measures(specs: list[object], loop: bool = False) -> array:
     normalized = [normalize_measure_spec(spec) for spec in specs]
     if not normalized:
         return array("h")
@@ -619,7 +620,12 @@ def schedule_measures(specs: list[object]) -> array:
             idx = start + i
             if 0 <= idx < len(mix):
                 mix[idx] += sample
-    return _finish_mix(mix)
+    if loop and cursor > 0:
+        extra = mix[cursor:]
+        for i, sample in enumerate(extra):
+            mix[i % cursor] += sample
+        mix = mix[:cursor]
+    return _finish_mix(mix, loop=loop)
 
 
 def output_command() -> list[str]:
@@ -912,7 +918,7 @@ class AudioEngine:
             if not isinstance(measures, list):
                 measures = []
             try:
-                pcm = schedule_measures(measures)
+                pcm = schedule_measures(measures, loop=bool(msg.get("loop")))
             except ValueError as exc:
                 return {"ok": False, "error": str(exc)}
             self.sink.write(pcm, loop=bool(msg.get("loop")))
