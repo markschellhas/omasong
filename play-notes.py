@@ -577,6 +577,44 @@ def render_measure(value: object) -> array:
     return _finish_mix(mix)
 
 
+def schedule_measures(specs: list[object]) -> array:
+    normalized = [normalize_measure_spec(spec) for spec in specs]
+    if not normalized:
+        return array("h")
+    placements: list[tuple[dict, int, int]] = []
+    cursor = 0
+    max_end = 0
+    for spec in normalized:
+        nominal, tail = measure_frame_counts(spec["steps"], spec["bpm"])
+        placements.append((spec, cursor, nominal))
+        max_end = max(max_end, cursor + nominal + tail)
+        cursor += nominal
+    mix = array("f", [0.0]) * max(1, max_end)
+    for spec, start, _nominal in placements:
+        rendered, _ = _drum_mix(
+            spec["drums"]["kick"],
+            spec["drums"]["snare"],
+            spec["drums"]["hihat"],
+            spec["steps"],
+            spec["bpm"],
+        )
+        pad_frames = int(RATE * PAD)
+        for chord in spec["chords"]:
+            chord_start = int(round(RATE * chord["offsetBeats"] * 60.0 / spec["bpm"]))
+            seconds = chord["durationBeats"] * 60.0 / spec["bpm"]
+            pcm = render_midi_notes(chord["midis"], seconds, spec["instrument"])
+            audio = pcm[pad_frames : max(pad_frames, len(pcm) - pad_frames)]
+            for i, sample in enumerate(audio):
+                idx = start + chord_start + i
+                if 0 <= idx < len(mix):
+                    mix[idx] += sample / 32767.0
+        for i, sample in enumerate(rendered):
+            idx = start + i
+            if 0 <= idx < len(mix):
+                mix[idx] += sample
+    return _finish_mix(mix)
+
+
 def write_wav(path: str, frames: list[int]) -> None:
     with wave.open(path, "w") as wav:
         wav.setnchannels(1)

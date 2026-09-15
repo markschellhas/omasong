@@ -167,6 +167,49 @@ def test_play_notes() -> None:
     if max(abs(sample) for sample in drum_window) < 100:
         raise SystemExit("combined measure omitted drum audio")
 
+    m0 = {
+        "steps": 8,
+        "bpm": 120,
+        "instrument": 0,
+        "drums": {"kick": "10000000", "snare": "00000000", "hihat": "00000000"},
+        "chords": [{"offsetBeats": 0, "durationBeats": 0.5, "midis": [60, 64, 67]}],
+    }
+    m1 = {
+        "steps": 8,
+        "bpm": 120,
+        "instrument": 0,
+        "drums": {"kick": "10000000", "snare": "00000000", "hihat": "00000000"},
+        "chords": [],
+    }
+    one_bar = play_notes.schedule_measures([m0])
+    if max(abs(s) for s in one_bar[: int(play_notes.RATE * 0.04)]) < 100:
+        raise SystemExit("one-bar schedule is silent at downbeat 0")
+    scheduled = play_notes.schedule_measures([m0, m1])
+    nominal, _tail = play_notes.measure_frame_counts(8, 120)
+    if len(scheduled) < nominal * 2:
+        raise SystemExit("scheduled timeline is shorter than two nominal measures")
+    window0 = scheduled[: int(play_notes.RATE * 0.04)]
+    window1 = scheduled[nominal : nominal + int(play_notes.RATE * 0.04)]
+    if max(abs(s) for s in window0) < 100:
+        raise SystemExit("measure 0 downbeat is silent")
+    if max(abs(s) for s in window1) < 100:
+        raise SystemExit("measure 1 downbeat is not on the next bar")
+
+    late = {
+        "steps": 8,
+        "bpm": 120,
+        "instrument": 0,
+        "drums": {"kick": "00000001", "snare": "00000000", "hihat": "00000000"},
+        "chords": [],
+    }
+    overlapped = play_notes.schedule_measures([late, m1])
+    # Last-step kick of bar 1 must be audible in bar 2 without delaying bar 2's kick.
+    tail_into_next = overlapped[nominal : nominal + int(play_notes.RATE * 0.08)]
+    if max(abs(s) for s in tail_into_next) < 100:
+        raise SystemExit("drum tail was cut instead of mixed into the next bar")
+    if max(abs(s) for s in overlapped[nominal : nominal + int(play_notes.RATE * 0.04)]) < 100:
+        raise SystemExit("next-bar kick missing after tail mix")
+
     with tempfile.TemporaryDirectory() as tmp:
         drums = Path(tmp) / "drums.wav"
         proc = subprocess.run(
