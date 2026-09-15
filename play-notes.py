@@ -12,6 +12,7 @@ Usage:
   play-notes.py --write out.wav --midi 60 64 67 --instrument 1 --seconds 0.4
   play-notes.py --drums 1000 0010 1111 --steps 4 --bpm 120
   play-notes.py --measure '{"steps":4,"bpm":120,"drums":{},"chords":[]}'
+  play-notes.py --engine
 """
 
 from __future__ import annotations
@@ -20,16 +21,20 @@ import argparse
 import json
 import math
 import os
+import queue
 import shutil
 import struct
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import wave
 from array import array
 from pathlib import Path
 
 RATE = 44100
+OUTPUT_LATENCY_MS = 20
 DEFAULT_SECONDS = 0.9
 MAX_SECONDS = 30.0
 MIN_SECONDS = 0.05
@@ -615,6 +620,327 @@ def schedule_measures(specs: list[object]) -> array:
     return _finish_mix(mix)
 
 
+def output_command() -> list[str]:
+    if shutil.which("pw-cat"):
+        return [
+            "pw-cat",
+            "-p",
+            "-a",
+            "--format",
+            "s16",
+            "--rate",
+            str(RATE),
+            "--channels",
+            "1",
+            "--latency",
+            "%sms" % OUTPUT_LATENCY_MS,
+        ]
+    if shutil.which("paplay"):
+        return ["paplay", "--raw", "--rate=%s" % RATE, "--channels=1", "--format=s16le"]
+    if shutil.which("aplay"):
+        return ["aplay", "-q", "-t", "raw", "-f", "S16_LE", "-r", str(RATE), "-c", "1"]
+    return []
+
+
+def clamp_latency_ms(value) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return OUTPUT_LATENCY_MS
+    if n <= 0:
+        return OUTPUT_LATENCY_MS
+    return n
+
+
+def _s16_array(pcm) -> array:
+    if isinstance(pcm, array) and pcm.typecode == "h":
+        return pcm
+    return array("h", (int(sample) for sample in pcm))
+
+
+def _pcm_le_bytes(frames) -> bytes:
+    samples = _s16_array(frames)
+    if sys.byteorder == "little":
+        return samples.tobytes()
+    swapped = array("h", samples)
+    swapped.byteswap()
+    return swapped.tobytes()
+
+
+class BufferSink:
+    def __init__(self) -> None:
+        self.frames = array("h")
+
+    def write(self, pcm, loop: bool = False) -> None:
+        if not pcm:
+            return
+        self.frames.extend(pcm)
+        if loop:
+            self.frames.extend(pcm)
+
+    def mix(self, pcm) -> None:
+        self.write(pcm)
+
+    def stop(self) -> None:
+        return
+
+    def close(self) -> None:
+        return
+
+
+class PipeSink:
+    def __init__(self) -> None:
+        self._proc: subprocess.Popen | None = None
+        self._lock = threading.Lock()
+        self._queue: queue.Queue = queue.Queue()
+        self._mix = array("h")
+        self._generation = 0
+        self._closed = False
+        self._thread = threading.Thread(target=self._run, name="play-notes-pipe", daemon=True)
+        self._thread.start()
+
+    def write(self, pcm, loop: bool = False) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._generation += 1
+            gen = self._generation
+        self._drain()
+        self._queue.put(("play", gen, _s16_array(pcm) if pcm else array("h"), bool(loop)))
+
+    def mix(self, pcm) -> None:
+        if not pcm:
+            return
+        samples = _s16_array(pcm)
+        with self._lock:
+            if self._closed:
+                return
+            idle = self._proc is None and self._queue.empty() and not self._mix
+            if idle:
+                start = True
+            else:
+                self._mix.extend(samples)
+                start = False
+        if start:
+            self.write(samples)
+
+    def stop(self) -> None:
+        with self._lock:
+            self._generation += 1
+            self._mix = array("h")
+        self._drain()
+
+    def close(self) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            self._generation += 1
+            self._mix = array("h")
+        self._drain()
+        self._queue.put(("close", 0, None, False))
+        self._thread.join(timeout=1.0)
+        self._close_proc()
+
+    def _drain(self) -> None:
+        while True:
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                return
+
+    def _close_proc(self) -> None:
+        with self._lock:
+            proc = self._proc
+            self._proc = None
+        if proc is None:
+            return
+        try:
+            if proc.stdin:
+                proc.stdin.close()
+        except OSError:
+            pass
+        try:
+            proc.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            try:
+                proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
+
+    def _ensure_open(self) -> bool:
+        with self._lock:
+            if self._closed:
+                return False
+            if self._proc is not None and self._proc.poll() is None:
+                return self._proc.stdin is not None
+            self._proc = None
+        cmd = output_command()
+        if not cmd:
+            return False
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            return False
+        with self._lock:
+            self._proc = proc
+            if not self._closed and proc.stdin is not None:
+                return True
+        self._close_proc()
+        return False
+
+    def _apply_mix(self, chunk: array) -> array:
+        with self._lock:
+            extra = self._mix
+            if not extra:
+                return chunk
+            n = min(len(chunk), len(extra))
+            out = array("h", chunk)
+            for i in range(n):
+                val = int(out[i]) + int(extra[i])
+                if val > 32767:
+                    val = 32767
+                elif val < -32767:
+                    val = -32767
+                out[i] = val
+            self._mix = extra[n:]
+        return out
+
+    def _emit(self, samples) -> None:
+        if not samples:
+            return
+        chunk = samples if isinstance(samples, array) and samples.typecode == "h" else _s16_array(samples)
+        chunk = self._apply_mix(chunk)
+        if not self._ensure_open():
+            return
+        proc = self._proc
+        if proc is None or proc.stdin is None:
+            return
+        try:
+            proc.stdin.write(_pcm_le_bytes(chunk))
+            proc.stdin.flush()
+        except (BrokenPipeError, OSError):
+            self._close_proc()
+
+    def _current_gen(self) -> tuple[bool, int]:
+        with self._lock:
+            return self._closed, self._generation
+
+    def _run(self) -> None:
+        chunk_n = max(1, int(RATE * OUTPUT_LATENCY_MS / 1000.0))
+        silence = array("h", [0] * chunk_n)
+        idle_until = 0.0
+        while True:
+            closed, _gen = self._current_gen()
+            if closed:
+                break
+            try:
+                item = self._queue.get(timeout=OUTPUT_LATENCY_MS / 1000.0)
+            except queue.Empty:
+                proc_open = self._proc is not None
+                if proc_open:
+                    now = time.monotonic()
+                    if now >= idle_until:
+                        self._emit(silence)
+                        idle_until = now + chunk_n / float(RATE)
+                continue
+            kind, gen, pcm, loop = item
+            if kind == "close":
+                break
+            if kind != "play":
+                continue
+            while True:
+                closed, current = self._current_gen()
+                if closed or gen != current:
+                    break
+                i = 0
+                n = len(pcm) if pcm is not None else 0
+                aborted = False
+                while i < n:
+                    closed, current = self._current_gen()
+                    if closed or gen != current:
+                        aborted = True
+                        break
+                    self._emit(pcm[i : i + chunk_n])
+                    i += chunk_n
+                if aborted or not loop or n == 0:
+                    break
+        self._close_proc()
+
+
+class AudioEngine:
+    def __init__(self, sink=None) -> None:
+        self.sink = sink if sink is not None else PipeSink()
+
+    def handle(self, msg: object) -> dict:
+        if not isinstance(msg, dict):
+            return {"ok": False, "error": "invalid message"}
+        cmd = msg.get("cmd")
+        if cmd == "warmup":
+            sample_bank_ready(clamp_instrument(msg.get("instrument", 0)))
+            return {"ok": True}
+        if cmd == "play":
+            measures = msg.get("measures")
+            if not isinstance(measures, list):
+                measures = []
+            try:
+                pcm = schedule_measures(measures)
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc)}
+            self.sink.write(pcm, loop=bool(msg.get("loop")))
+            return {
+                "event": "started",
+                "frames": len(pcm),
+                "latencyMs": clamp_latency_ms(msg.get("latencyMs")),
+            }
+        if cmd == "stop":
+            self.sink.stop()
+            return {"ok": True}
+        if cmd == "play-midi":
+            raw = msg.get("midis") if isinstance(msg.get("midis"), list) else []
+            midis = [note for note in (clamp_midi(item) for item in raw) if note is not None][:MAX_VOICES]
+            if midis:
+                seconds = clamp_seconds(msg.get("seconds", DEFAULT_SECONDS))
+                pcm = render_midi_notes(midis, seconds, clamp_instrument(msg.get("instrument", 0)))
+                mix = getattr(self.sink, "mix", self.sink.write)
+                mix(pcm)
+            return {"ok": True}
+        if cmd == "shutdown":
+            self.sink.close()
+            return {"ok": True}
+        return {"ok": False, "error": "unknown command"}
+
+
+def run_engine() -> int:
+    engine = AudioEngine()
+    while True:
+        line = sys.stdin.readline()
+        if line == "":
+            engine.handle({"cmd": "shutdown"})
+            return 0
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line)
+        except json.JSONDecodeError:
+            print(json.dumps({"ok": False, "error": "invalid json"}), flush=True)
+            continue
+        if not isinstance(msg, dict):
+            print(json.dumps({"ok": False, "error": "invalid message"}), flush=True)
+            continue
+        result = engine.handle(msg)
+        print(json.dumps(result), flush=True)
+        if msg.get("cmd") == "shutdown":
+            return 0
+
+
 def write_wav(path: str, frames: list[int]) -> None:
     with wave.open(path, "w") as wav:
         wav.setnchannels(1)
@@ -659,6 +985,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--midi", action="store_true", help="treat values as MIDI note numbers")
     mode.add_argument("--drums", nargs=3, metavar=("KICK", "SNARE", "HIHAT"), help="binary sixteenth-note lane patterns")
     mode.add_argument("--measure", metavar="JSON", help="bounded combined chord and drum measure")
+    parser.add_argument("--engine", action="store_true", help="persistent NDJSON audio engine")
     parser.add_argument("--write", metavar="PATH", help="write WAV instead of playing")
     parser.add_argument("--seconds", type=float, help="override duration in seconds")
     parser.add_argument("--instrument", type=int, default=0, help="timbre 0–2 (Piano, Electric Piano, Organ)")
@@ -695,6 +1022,8 @@ def render(args: argparse.Namespace, nums: list[float], seconds: float) -> list[
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.engine:
+        return run_engine()
     if args.measure is not None:
         if args.values or args.seconds is not None:
             sys.stderr.write("play-notes: measure mode does not accept pitches or --seconds\n")

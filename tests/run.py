@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -209,6 +210,57 @@ def test_play_notes() -> None:
         raise SystemExit("drum tail was cut instead of mixed into the next bar")
     if max(abs(s) for s in overlapped[nominal : nominal + int(play_notes.RATE * 0.04)]) < 100:
         raise SystemExit("next-bar kick missing after tail mix")
+
+    engine = play_notes.AudioEngine(sink=play_notes.BufferSink())
+    ready = engine.handle({"cmd": "warmup", "instrument": 0})
+    if not ready.get("ok"):
+        raise SystemExit("warmup must succeed without PipeWire")
+    started = engine.handle({
+        "cmd": "play",
+        "loop": False,
+        "latencyMs": 20,
+        "measures": [m0, m1],
+    })
+    if started.get("event") != "started":
+        raise SystemExit("play must emit started")
+    pcm = engine.sink.frames
+    if max(abs(s) for s in pcm[: int(play_notes.RATE * 0.04)]) < 100:
+        raise SystemExit("engine play did not write the first downbeat")
+    stopped = engine.handle({"cmd": "stop"})
+    if not stopped.get("ok"):
+        raise SystemExit("stop must succeed")
+    note = engine.handle({
+        "cmd": "play-midi",
+        "midis": [60, 64, 67],
+        "seconds": 0.12,
+        "instrument": 0,
+    })
+    if not note.get("ok"):
+        raise SystemExit("play-midi must mix onto the engine sink")
+    print("play-notes engine ok")
+
+    proc = subprocess.run(
+        [sys.executable, str(ROOT / "play-notes.py"), "--engine"],
+        input=json.dumps({"cmd": "warmup", "instrument": 0}) + "\n"
+        + json.dumps({"cmd": "shutdown"}) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    if proc.returncode != 0:
+        sys.stderr.write(proc.stdout + proc.stderr)
+        raise SystemExit("engine process failed")
+    lines = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+    if not lines or not lines[0].get("ok"):
+        raise SystemExit("engine stdin protocol did not ACK warmup")
+    print("play-notes engine protocol ok")
+
+    if shutil.which("pw-cat"):
+        if play_notes.output_command() != [
+            "pw-cat", "-p", "-a", "--format", "s16", "--rate", "44100",
+            "--channels", "1", "--latency", "20ms",
+        ]:
+            raise SystemExit("output_command must prefer pw-cat at 20ms latency")
 
     with tempfile.TemporaryDirectory() as tmp:
         drums = Path(tmp) / "drums.wav"
