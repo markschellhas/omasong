@@ -807,11 +807,11 @@ function appendMeasure(events, beat, section, si, mi, repeatPass) {
     }
     measureDurationBeats += measureSlotDuration
   }
-  var measureAudio = patternedMeasure ? {
+  var measureAudio = {
     steps: beatStepCount(section.timeSig),
     beats: normalizeBeatPattern(measure.beats, beatStepCount(section.timeSig)),
     chords: measureChords
-  } : null
+  }
   for (var sl = 0; sl < slots.length; sl++) {
     var slot = slots[sl]
     var dur = slotDurationBeats(spanOf(slot), denom)
@@ -892,6 +892,28 @@ function buildTimeline(song) {
     }
   }
   return events
+}
+
+function beatAtWallClock(startMs, nowMs, bpm) {
+  var start = Number(startMs)
+  var now = Number(nowMs)
+  if (!isFinite(start) || !isFinite(now))
+    return 0
+  var elapsed = (now - start) / 1000
+  if (!(elapsed > 0))
+    return 0
+  return elapsed * (Number(bpm) > 0 ? Number(bpm) : 120) / 60
+}
+
+function measureLaunchEvents(events) {
+  var launches = []
+  if (!events)
+    return launches
+  for (var i = 0; i < events.length; i++) {
+    if (events[i] && events[i].measureStart)
+      launches.push(events[i])
+  }
+  return launches
 }
 
 function beatsToSeconds(beats, bpm) {
