@@ -909,11 +909,14 @@ class AudioEngine:
             except ValueError as exc:
                 return {"ok": False, "error": str(exc)}
             self.sink.write(pcm, loop=bool(msg.get("loop")))
-            return {
+            started = {
                 "event": "started",
                 "frames": len(pcm),
                 "latencyMs": clamp_latency_ms(msg.get("latencyMs")),
             }
+            if "id" in msg:
+                started["id"] = msg["id"]
+            return started
         if cmd == "stop":
             self.sink.stop()
             return {"ok": True}

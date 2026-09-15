@@ -39,6 +39,7 @@ Item {
   property int currentBar: 1
   property real currentBeat: 0
   property real audioStartMs: 0
+  property int enginePlayId: 0
   property int displayBeat: 1
   property int selectedSection: 0
   property int selectedMeasure: 0
@@ -441,7 +442,8 @@ Item {
     }
     if (!msg || typeof msg !== "object")
       return
-    if (msg.event === "started" && playing && audioStartMs === 0) {
+    if (msg.event === "started" && playing && audioStartMs === 0
+        && msg.id === enginePlayId) {
       audioStartMs = Date.now() + (msg.latencyMs || 20)
       engineStartedTimeout.stop()
       transportTimer.start()
@@ -461,6 +463,8 @@ Item {
       stopPlayback()
       return
     }
+    enginePlayId += 1
+    engineSend({ cmd: "stop" })
     var launches = Song.measureLaunchEvents(tl)
     var specs = []
     for (var i = 0; i < launches.length; i++) {
@@ -470,6 +474,7 @@ Item {
     }
     engineSend({
       cmd: "play",
+      id: enginePlayId,
       loop: !!song.loop,
       latencyMs: 20,
       measures: specs
@@ -902,6 +907,7 @@ Item {
   }
 
   function stopPlayback() {
+    enginePlayId += 1
     engineSend({ cmd: "stop" })
     playing = false
     audioStartMs = 0

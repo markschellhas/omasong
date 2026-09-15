@@ -219,12 +219,15 @@ def test_play_notes() -> None:
         raise SystemExit("warmup must succeed without PipeWire")
     started = engine.handle({
         "cmd": "play",
+        "id": 7,
         "loop": False,
         "latencyMs": 20,
         "measures": [m0, m1],
     })
     if started.get("event") != "started":
         raise SystemExit("play must emit started")
+    if started.get("id") != 7:
+        raise SystemExit("play must echo id on started")
     pcm = engine.sink.frames
     if max(abs(s) for s in pcm[: int(play_notes.RATE * 0.04)]) < 100:
         raise SystemExit("engine play did not write the first downbeat")
