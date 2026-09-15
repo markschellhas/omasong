@@ -263,9 +263,9 @@ def test_play_notes() -> None:
     if shutil.which("pw-cat"):
         if play_notes.output_command() != [
             "pw-cat", "-p", "-a", "--format", "s16", "--rate", "44100",
-            "--channels", "1", "--latency", "20ms", "-",
+            "--channels", "1", "--latency", "%sms" % play_notes.OUTPUT_LATENCY_MS, "-",
         ]:
-            raise SystemExit("output_command must prefer pw-cat at 20ms latency reading stdin")
+            raise SystemExit("output_command must prefer pw-cat reading stdin at engine latency")
 
     class RecordingStdin:
         def __init__(self) -> None:
@@ -308,7 +308,7 @@ def test_play_notes() -> None:
         return sum(1 for sample in samples if sample == marker)
 
     marker = 12345
-    chunk_n = max(1, int(play_notes.RATE * play_notes.OUTPUT_LATENCY_MS / 1000.0))
+    chunk_n = max(1, int(play_notes.RATE * play_notes.WRITE_CHUNK_MS / 1000.0))
     pcm = array("h", [marker]) * play_notes.RATE
     recorder = RecordingStdin()
     pipe = play_notes.PipeSink(proc=FakeProc(recorder))
@@ -319,7 +319,7 @@ def test_play_notes() -> None:
             if time.monotonic() > deadline:
                 raise SystemExit("paced pipe sink wrote nothing")
             time.sleep(0.001)
-        time.sleep(play_notes.OUTPUT_LATENCY_MS / 1000.0)
+        time.sleep(play_notes.WRITE_CHUNK_MS / 1000.0)
         t0 = time.monotonic()
         pipe.stop()
         if time.monotonic() - t0 > 0.5:
@@ -337,6 +337,31 @@ def test_play_notes() -> None:
     finally:
         pipe.close()
     print("play-notes pipe stop ok")
+
+    class SlowStdin(RecordingStdin):
+        def write(self, data: bytes) -> int:
+            time.sleep(0.005)
+            return super().write(data)
+
+    audio_s = 0.4
+    slow_pcm = array("h", [2000]) * int(play_notes.RATE * audio_s)
+    slow = SlowStdin()
+    slow_pipe = play_notes.PipeSink(proc=FakeProc(slow))
+    try:
+        t0 = time.monotonic()
+        slow_pipe.write(slow_pcm, loop=False)
+        want = len(slow_pcm) * 2
+        deadline = t0 + audio_s + 1.0
+        while len(slow.snapshot()) < want and time.monotonic() < deadline:
+            time.sleep(0.005)
+        elapsed = time.monotonic() - t0
+        if len(slow.snapshot()) < want:
+            raise SystemExit("slow pipe sink did not finish the buffer")
+        if elapsed > audio_s * 1.15:
+            raise SystemExit("pipe writer fell behind realtime under emit cost")
+    finally:
+        slow_pipe.close()
+    print("play-notes pipe realtime ok")
 
     with tempfile.TemporaryDirectory() as tmp:
         drums = Path(tmp) / "drums.wav"

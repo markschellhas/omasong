@@ -34,7 +34,9 @@ from array import array
 from pathlib import Path
 
 RATE = 44100
-OUTPUT_LATENCY_MS = 20
+WRITE_CHUNK_MS = 20
+OUTPUT_LATENCY_MS = 80
+PREFILL_CHUNKS = max(1, int(math.ceil(OUTPUT_LATENCY_MS / WRITE_CHUNK_MS)))
 DEFAULT_SECONDS = 0.9
 MAX_SECONDS = 30.0
 MIN_SECONDS = 0.05
@@ -643,16 +645,6 @@ def output_command() -> list[str]:
     return []
 
 
-def clamp_latency_ms(value) -> int:
-    try:
-        n = int(value)
-    except (TypeError, ValueError):
-        return OUTPUT_LATENCY_MS
-    if n <= 0:
-        return OUTPUT_LATENCY_MS
-    return n
-
-
 def _s16_array(pcm) -> array:
     if isinstance(pcm, array) and pcm.typecode == "h":
         return pcm
@@ -847,45 +839,59 @@ class PipeSink:
             time.sleep(min(0.005, remaining))
 
     def _run(self) -> None:
-        # One 20ms chunk ahead: stop cannot leave a long pw-cat buffer.
-        chunk_n = max(1, int(RATE * OUTPUT_LATENCY_MS / 1000.0))
-        period = chunk_n / float(RATE)
+        # Prefill OUTPUT_LATENCY_MS, then pace from a steady clock so emit
+        # cost is not added onto every chunk (that underruns after a few bars).
+        chunk_n = max(1, int(RATE * WRITE_CHUNK_MS / 1000.0))
+        prefill = chunk_n * PREFILL_CHUNKS
         silence = array("h", [0] * chunk_n)
-        next_write = 0.0
+        origin = None
+        written = 0
         while True:
             closed, _gen = self._current_gen()
             if closed:
                 break
             try:
-                item = self._queue.get(timeout=OUTPUT_LATENCY_MS / 1000.0)
+                item = self._queue.get(timeout=WRITE_CHUNK_MS / 1000.0)
             except queue.Empty:
-                proc_open = self._proc is not None
-                if proc_open:
-                    now = time.monotonic()
-                    if now >= next_write:
-                        self._emit(silence)
-                        next_write = time.monotonic() + period
+                if self._proc is None or origin is None:
+                    continue
+                played = int((time.monotonic() - origin) * RATE)
+                if written <= played + chunk_n:
+                    self._emit(silence)
+                    written += chunk_n
                 continue
             kind, gen, pcm, loop = item
             if kind == "close":
                 break
             if kind != "play":
                 continue
+            origin = time.monotonic()
+            written = 0
             while True:
                 closed, current = self._current_gen()
                 if closed or gen != current:
+                    origin = None
+                    written = 0
                     break
                 i = 0
                 n = len(pcm) if pcm is not None else 0
                 aborted = False
                 while i < n:
-                    if not self._wait_slot(gen, next_write):
-                        aborted = True
-                        break
-                    self._emit(pcm[i : i + chunk_n])
-                    next_write = time.monotonic() + period
+                    now = time.monotonic()
+                    played = int((now - origin) * RATE)
+                    if written > played + prefill:
+                        wait_until = origin + (written - prefill) / float(RATE)
+                        if not self._wait_slot(gen, wait_until):
+                            aborted = True
+                            break
+                    chunk = pcm[i : i + chunk_n]
+                    self._emit(chunk)
+                    written += len(chunk)
                     i += chunk_n
                 if aborted or not loop or n == 0:
+                    if aborted:
+                        origin = None
+                        written = 0
                     break
         self._close_proc()
 
@@ -913,7 +919,7 @@ class AudioEngine:
             started = {
                 "event": "started",
                 "frames": len(pcm),
-                "latencyMs": clamp_latency_ms(msg.get("latencyMs")),
+                "latencyMs": OUTPUT_LATENCY_MS,
             }
             if "id" in msg:
                 started["id"] = msg["id"]

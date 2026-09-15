@@ -444,7 +444,7 @@ Item {
       return
     if (msg.event === "started" && playing && audioStartMs === 0
         && msg.id === enginePlayId) {
-      audioStartMs = Date.now() + (msg.latencyMs || 20)
+      audioStartMs = Date.now() + (msg.latencyMs || 80)
       engineStartedTimeout.stop()
       transportTimer.start()
     }
@@ -476,7 +476,7 @@ Item {
       cmd: "play",
       id: enginePlayId,
       loop: !!song.loop,
-      latencyMs: 20,
+      latencyMs: 80,
       measures: specs
     })
     engineStartedTimeout.restart()
