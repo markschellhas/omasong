@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import wave
 from array import array
 from pathlib import Path
@@ -261,6 +263,77 @@ def test_play_notes() -> None:
             "--channels", "1", "--latency", "20ms",
         ]:
             raise SystemExit("output_command must prefer pw-cat at 20ms latency")
+
+    class RecordingStdin:
+        def __init__(self) -> None:
+            self._buf = bytearray()
+            self._lock = threading.Lock()
+
+        def write(self, data: bytes) -> int:
+            with self._lock:
+                self._buf.extend(data)
+            return len(data)
+
+        def flush(self) -> None:
+            return
+
+        def close(self) -> None:
+            return
+
+        def snapshot(self) -> bytes:
+            with self._lock:
+                return bytes(self._buf)
+
+    class FakeProc:
+        def __init__(self, stdin: RecordingStdin) -> None:
+            self.stdin = stdin
+
+        def poll(self) -> None:
+            return None
+
+        def wait(self, timeout: float | None = None) -> int:
+            return 0
+
+        def kill(self) -> None:
+            return
+
+    def count_marker(data: bytes, marker: int) -> int:
+        samples = array("h")
+        samples.frombytes(data)
+        if sys.byteorder != "little":
+            samples.byteswap()
+        return sum(1 for sample in samples if sample == marker)
+
+    marker = 12345
+    chunk_n = max(1, int(play_notes.RATE * play_notes.OUTPUT_LATENCY_MS / 1000.0))
+    pcm = array("h", [marker]) * play_notes.RATE
+    recorder = RecordingStdin()
+    pipe = play_notes.PipeSink(proc=FakeProc(recorder))
+    try:
+        pipe.write(pcm, loop=True)
+        deadline = time.monotonic() + 1.0
+        while count_marker(recorder.snapshot(), marker) == 0:
+            if time.monotonic() > deadline:
+                raise SystemExit("paced pipe sink wrote nothing")
+            time.sleep(0.001)
+        time.sleep(play_notes.OUTPUT_LATENCY_MS / 1000.0)
+        t0 = time.monotonic()
+        pipe.stop()
+        if time.monotonic() - t0 > 0.5:
+            raise SystemExit("pipe sink stop hung")
+        time.sleep(0.05)
+        after_stop = count_marker(recorder.snapshot(), marker)
+        if after_stop >= len(pcm):
+            raise SystemExit("stop did not prevent dumping the whole play buffer")
+        if after_stop > chunk_n * 10:
+            raise SystemExit("pipe writer got more than one chunk ahead")
+        time.sleep(0.15)
+        later = count_marker(recorder.snapshot(), marker)
+        if later > after_stop:
+            raise SystemExit("play PCM continued after stop")
+    finally:
+        pipe.close()
+    print("play-notes pipe stop ok")
 
     with tempfile.TemporaryDirectory() as tmp:
         drums = Path(tmp) / "drums.wav"

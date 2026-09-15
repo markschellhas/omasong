@@ -689,8 +689,9 @@ class BufferSink:
 
 
 class PipeSink:
-    def __init__(self) -> None:
-        self._proc: subprocess.Popen | None = None
+    def __init__(self, proc=None) -> None:
+        self._owns_proc = proc is None
+        self._proc = proc
         self._lock = threading.Lock()
         self._queue: queue.Queue = queue.Queue()
         self._mix = array("h")
@@ -773,6 +774,8 @@ class PipeSink:
         with self._lock:
             if self._closed:
                 return False
+            if not self._owns_proc:
+                return self._proc is not None and self._proc.stdin is not None
             if self._proc is not None and self._proc.poll() is None:
                 return self._proc.stdin is not None
             self._proc = None
@@ -832,10 +835,22 @@ class PipeSink:
         with self._lock:
             return self._closed, self._generation
 
+    def _wait_slot(self, gen: int, until: float) -> bool:
+        while True:
+            closed, current = self._current_gen()
+            if closed or gen != current:
+                return False
+            remaining = until - time.monotonic()
+            if remaining <= 0:
+                return True
+            time.sleep(min(0.005, remaining))
+
     def _run(self) -> None:
+        # One 20ms chunk ahead: stop cannot leave a long pw-cat buffer.
         chunk_n = max(1, int(RATE * OUTPUT_LATENCY_MS / 1000.0))
+        period = chunk_n / float(RATE)
         silence = array("h", [0] * chunk_n)
-        idle_until = 0.0
+        next_write = 0.0
         while True:
             closed, _gen = self._current_gen()
             if closed:
@@ -846,9 +861,9 @@ class PipeSink:
                 proc_open = self._proc is not None
                 if proc_open:
                     now = time.monotonic()
-                    if now >= idle_until:
+                    if now >= next_write:
                         self._emit(silence)
-                        idle_until = now + chunk_n / float(RATE)
+                        next_write = time.monotonic() + period
                 continue
             kind, gen, pcm, loop = item
             if kind == "close":
@@ -863,11 +878,11 @@ class PipeSink:
                 n = len(pcm) if pcm is not None else 0
                 aborted = False
                 while i < n:
-                    closed, current = self._current_gen()
-                    if closed or gen != current:
+                    if not self._wait_slot(gen, next_write):
                         aborted = True
                         break
                     self._emit(pcm[i : i + chunk_n])
+                    next_write = time.monotonic() + period
                     i += chunk_n
                 if aborted or not loop or n == 0:
                     break
