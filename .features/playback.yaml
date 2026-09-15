@@ -10,12 +10,12 @@ apps:
   - songwriter
 
 user_flow:
-  primary: "User → Play or Space → walk buildTimeline events"
+  primary: "User → Play or Space → queue measureLaunchEvents on audio engine; playhead follows wall clock from started+latency"
   section: "User → section Play → buildSectionTimeline for that section only"
   loop: "User → Loop toggle → wrap currentBeat"
   bpm: "User → BPM 40–240 → Song.setBpm"
-  audition: "User → click filled slot → play chord for slotDurationBeats; chip fill follows wall clock at BPM"
-  beats: "First event of each measure/pass → launch one frozen chord-and-drum measure render at song BPM"
+  audition: "User → click filled slot → engine play-midi for slotDurationBeats; chip fill follows wall clock at BPM"
+  beats: "Every measure/pass (drums optional) → one spec on the engine sample clock"
 
 related_features:
   - song_structure (Song as source)
@@ -30,8 +30,9 @@ related_features:
 
 core_components:
   - play-notes.py
+  - play-notes.py --engine
   - samples/piano
   - samples/epiano
   - samples/organ
 
-notes: "Transport left cluster is title/library; right is play/Loop/Beats/BPM. Loop defaults on. No tap tempo. Space is play/stop when laptop map is off and the beat editor is closed, not sustain. Slot fill uses wall-clock BPM. Overlay playhead is not in CI."
+notes: "Transport left cluster is title/library; right is play/Loop/Beats/BPM. Loop defaults on. No tap tempo. Space is play/stop when laptop map is off and the beat editor is closed, not sustain. Slot fill uses wall-clock BPM. Playhead is wall-clock from engine started; PipeWire is not in CI; no per-bar execDetached."

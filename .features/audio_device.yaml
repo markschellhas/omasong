@@ -9,7 +9,7 @@ apps:
   - songwriter
 
 user_flow:
-  primary: "Play, preview, or live note → play-notes.py → pw-play / paplay / aplay"
+  primary: "Play/preview/live → play-notes.py --engine → pw-cat raw s16 44100 mono latency 20ms"
 
 related_features:
   - playback (engine output)
@@ -22,4 +22,4 @@ core_components:
   - samples/epiano
   - samples/organ
 
-notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano, Electric Piano, and Organ mix sample banks. PipeWire and omarchy plugin validate are not in CI."
+notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano, Electric Piano, and Organ mix sample banks. Persistent process; sample cache lives across bars; pw-play is not the transport path. PipeWire and omarchy plugin validate are not in CI."

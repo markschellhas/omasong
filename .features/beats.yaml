@@ -18,7 +18,7 @@ user_flow:
   clear: "User → Clear → Song.clearBeats empties that measure only"
   copy: "User → hover beat lane → >> chip → Song.copyBeatsToNext clones the pattern into the following bar of that section"
   fill: "User → hover beat lane → >>| chip → Song.copyBeatsToRest clones the pattern into every later bar of that section"
-  play: "Transport → first event of each measure/pass → render frozen chord and drum measure at song BPM"
+  play: "Transport → queue frozen measure with chords and drums; step 0 is sample 0 of that bar"
 
 related_features:
   - song_structure (beat lane shares section and measure identity)
@@ -35,4 +35,4 @@ core_components:
   - tests/js_tests.js
   - tests/run.py
 
-notes: "Steps are sixteenths from numerator*16/denominator: 4/4=16, 3/4=12, 6/8=12. Patterns are on/off only; percussion is synthesized by the existing detached audio helper."
+notes: "Steps are sixteenths from numerator*16/denominator: 4/4=16, 3/4=12, 6/8=12. Patterns are on/off only; tails mix into the next bar."

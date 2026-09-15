@@ -14,7 +14,7 @@ Plugin id: `markschellhas.songwriter`
 | `chord_slots` | Place, split (drop on a filled chord), edge-resize, clear |
 | `beats` | Optional beat lane per bar; edit meter-aware kick, snare, and hi-hat sixteenth-note patterns |
 | `row_repeats` | `:||` at the end of each 4-bar row plays that row twice |
-| `playback` | Play / Stop / Loop / BPM 40–240 / Space; playhead and sounding-note highlight |
+| `playback` | Play / Stop / Loop / BPM 40–240 / Space; Play starts on the downbeat with beats and chords sharing one clock; playhead and sounding-note highlight |
 | `piano_keyboard` | C3–C5; click keys; light triads from play, preview, or selection |
 | `instruments` | Piano, Electric Piano, Organ |
 | `laptop_keys` | Off by default; A=C, W=C♯, …; Z/X octave; steals H/J/K/L when on |
