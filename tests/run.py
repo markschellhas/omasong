@@ -360,6 +360,83 @@ def test_play_notes() -> None:
         pipe.close()
     print("play-notes pipe stop ok")
 
+    def peak_after(data: bytes, skip_bytes: int = 0) -> int:
+        samples = array("h")
+        samples.frombytes(data)
+        if sys.byteorder != "little":
+            samples.byteswap()
+        rest = samples[skip_bytes // 2 :]
+        return max((abs(sample) for sample in rest), default=0)
+
+    def wait_peak(stdin: RecordingStdin, skip_bytes: int, timeout: float = 1.0) -> int:
+        deadline = time.monotonic() + timeout
+        peak = 0
+        while time.monotonic() < deadline:
+            peak = peak_after(stdin.snapshot(), skip_bytes)
+            if peak >= 100:
+                return peak
+            time.sleep(0.01)
+        return peak
+
+    idle_rec = RecordingStdin()
+    idle_pipe = play_notes.PipeSink(proc=FakeProc(idle_rec))
+    try:
+        idle_engine = play_notes.AudioEngine(sink=idle_pipe)
+        idle_engine.handle({
+            "cmd": "play-midi",
+            "midis": [60, 64, 67],
+            "seconds": 0.12,
+            "instrument": 0,
+        })
+        if wait_peak(idle_rec, 0) < 100:
+            raise SystemExit("play-midi on an idle pipe sink was silent")
+    finally:
+        idle_pipe.close()
+
+    stopped_rec = RecordingStdin()
+    stopped_pipe = play_notes.PipeSink(proc=FakeProc(stopped_rec))
+    try:
+        stopped_engine = play_notes.AudioEngine(sink=stopped_pipe)
+        stopped_engine.handle({"cmd": "play", "measures": [m0]})
+        time.sleep(0.05)
+        stopped_engine.handle({"cmd": "stop"})
+        time.sleep(0.05)
+        after_stop_bytes = len(stopped_rec.snapshot())
+        time.sleep(0.12)
+        keepalive_bytes = len(stopped_rec.snapshot())
+        if keepalive_bytes - after_stop_bytes < play_notes.RATE * 0.08 * 2:
+            raise SystemExit("pipe went idle after stop; preview restarts with a buffer stutter")
+        stopped_engine.handle({"cmd": "warmup", "instrument": 0})
+        stopped_engine.handle({
+            "cmd": "play-midi",
+            "midis": [60],
+            "seconds": 0.05,
+            "instrument": 0,
+        })
+        time.sleep(0.08)
+        at_return_start = len(stopped_rec.snapshot())
+        stopped_engine.handle({
+            "cmd": "play-midi",
+            "midis": [60, 64, 67],
+            "seconds": 0.4,
+            "instrument": 0,
+        })
+        at_return = len(stopped_rec.snapshot())
+        time.sleep(0.015)
+        burst = stopped_rec.snapshot()[at_return:]
+        burst_samples = array("h")
+        burst_samples.frombytes(burst)
+        if sys.byteorder != "little":
+            burst_samples.byteswap()
+        burst_sec = sum(1 for sample in burst_samples if abs(sample) >= 100) / play_notes.RATE
+        if burst_sec > 0.05:
+            raise SystemExit("play-midi after stop dumped a prefill burst")
+        if wait_peak(stopped_rec, at_return_start) < 100:
+            raise SystemExit("play-midi after stop was silent")
+    finally:
+        stopped_pipe.close()
+    print("play-notes play-midi pipe ok")
+
     class SlowStdin(RecordingStdin):
         def write(self, data: bytes) -> int:
             time.sleep(0.005)

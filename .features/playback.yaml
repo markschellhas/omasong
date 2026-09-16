@@ -15,6 +15,7 @@ user_flow:
   loop: "User → Loop toggle → wrap currentBeat"
   bpm: "User → BPM 40–240 → Song.setBpm"
   audition: "User → click filled slot → engine play-midi for slotDurationBeats; chip fill follows wall clock at BPM"
+  preview: "User → click circle wedge/chip or grid cell → play-midi triad; keyboard highlight does not depend on the sink"
   beats: "Every measure/pass (drums optional) → one spec on the engine sample clock"
 
 related_features:

@@ -696,6 +696,7 @@ class PipeSink:
         self._mix = array("h")
         self._generation = 0
         self._closed = False
+        self._clock = None
         self._thread = threading.Thread(target=self._run, name="play-notes-pipe", daemon=True)
         self._thread.start()
 
@@ -715,12 +716,13 @@ class PipeSink:
         with self._lock:
             if self._closed:
                 return
-            idle = self._proc is None and self._queue.empty() and not self._mix
-            if idle:
-                start = True
-            else:
+            # Mix onto the live writer. After stop the clock keeps running so
+            # preview does not restart pw-cat with an 80ms prefill burst.
+            if self._clock is not None:
                 self._mix.extend(samples)
                 start = False
+            else:
+                start = True
         if start:
             self.write(samples)
 
@@ -737,6 +739,7 @@ class PipeSink:
             self._closed = True
             self._generation += 1
             self._mix = array("h")
+            self._clock = None
         self._drain()
         self._queue.put(("close", 0, None, False))
         self._thread.join(timeout=1.0)
@@ -859,7 +862,7 @@ class PipeSink:
             try:
                 item = self._queue.get(timeout=WRITE_CHUNK_MS / 1000.0)
             except queue.Empty:
-                if self._proc is None or origin is None:
+                if origin is None:
                     continue
                 played = int((time.monotonic() - origin) * RATE)
                 if written <= played + chunk_n:
@@ -873,11 +876,16 @@ class PipeSink:
                 continue
             origin = time.monotonic()
             written = 0
+            with self._lock:
+                self._clock = origin
             while True:
                 closed, current = self._current_gen()
                 if closed or gen != current:
-                    origin = None
-                    written = 0
+                    if closed:
+                        origin = None
+                        written = 0
+                        with self._lock:
+                            self._clock = None
                     break
                 i = 0
                 n = len(pcm) if pcm is not None else 0
@@ -896,8 +904,12 @@ class PipeSink:
                     i += chunk_n
                 if aborted or not loop or n == 0:
                     if aborted:
-                        origin = None
-                        written = 0
+                        closed, _current = self._current_gen()
+                        if closed:
+                            origin = None
+                            written = 0
+                            with self._lock:
+                                self._clock = None
                     break
         self._close_proc()
 

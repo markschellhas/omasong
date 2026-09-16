@@ -22,4 +22,4 @@ core_components:
   - samples/epiano
   - samples/organ
 
-notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano, Electric Piano, and Organ mix sample banks. Persistent process; sample cache lives across bars; pw-play is not the transport path. PipeWire and omarchy plugin validate are not in CI."
+notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano, Electric Piano, and Organ mix sample banks. Persistent process; sample cache lives across bars; pw-play is not the transport path. After stop the writer keeps silence so play-midi mixes at the cursor instead of restarting pw-cat. PipeWire and omarchy plugin validate are not in CI."
