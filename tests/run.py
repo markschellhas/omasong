@@ -250,6 +250,26 @@ def test_play_notes() -> None:
         raise SystemExit("play must emit started")
     if started.get("id") != 7:
         raise SystemExit("play must echo id on started")
+    slow = dict(m0)
+    slow["bpm"] = 40
+    slow_started = engine.handle({
+        "cmd": "play",
+        "id": 8,
+        "loop": False,
+        "measures": [slow],
+    })
+    if slow_started.get("event") != "started" or slow_started.get("id") != 8:
+        raise SystemExit("play must emit started at a slow BPM")
+    too_long = {
+        "steps": 128,
+        "bpm": 40,
+        "instrument": 0,
+        "drums": {"kick": "1" * 128, "snare": "0" * 128, "hihat": "0" * 128},
+        "chords": [],
+    }
+    failed_play = engine.handle({"cmd": "play", "id": 9, "measures": [too_long]})
+    if failed_play.get("ok") is not False:
+        raise SystemExit("oversized play must return ok false, not started")
     pcm = engine.sink.frames
     if max(abs(s) for s in pcm[: int(play_notes.RATE * 0.04)]) < 100:
         raise SystemExit("engine play did not write the first downbeat")

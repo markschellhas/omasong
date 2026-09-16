@@ -430,17 +430,25 @@ Item {
     }
   }
 
+  function failEngineStart() {
+    statusText = "Audio engine failed"
+    stopPlayback()
+  }
+
   function onEngineMessage(data) {
     var msg
     try {
       msg = JSON.parse(data)
     } catch (e) {
-      statusText = "Audio engine failed"
-      stopPlayback()
+      failEngineStart()
       return
     }
     if (!msg || typeof msg !== "object")
       return
+    if (msg.ok === false && playing && audioStartMs === 0) {
+      failEngineStart()
+      return
+    }
     if (msg.event === "started" && playing && audioStartMs === 0
         && msg.id === enginePlayId) {
       audioStartMs = Date.now() + (msg.latencyMs || 80)
@@ -458,8 +466,7 @@ Item {
     transportTimer.stop()
     engineStartedTimeout.stop()
     if (!audioEngine.running) {
-      statusText = "Audio engine failed"
-      stopPlayback()
+      failEngineStart()
       return
     }
     enginePlayId += 1
@@ -1142,12 +1149,11 @@ Item {
 
   Timer {
     id: engineStartedTimeout
-    interval: 2000
+    // Full-song prerender grows as BPM drops (12 bars at 75 is ~2s).
+    interval: 30000
     onTriggered: {
-      if (playing && !(audioStartMs > 0)) {
-        statusText = "Audio engine failed"
-        stopPlayback()
-      }
+      if (playing && !(audioStartMs > 0))
+        failEngineStart()
     }
   }
 
