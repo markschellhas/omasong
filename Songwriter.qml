@@ -74,13 +74,6 @@ Item {
   readonly property int beatEditorStepCount: beatEditorSectionData
     ? Song.beatStepCount(beatEditorSectionData.timeSig) : 16
   readonly property int laptopOctave: KeyMap.clampOctave(song && song.laptopOctave)
-  readonly property string headerHint: {
-    var name = Focus.regionName(navRegion)
-    if (root.laptopKeys)
-      return name + " · Laptop keys on"
-    return name
-  }
-
   readonly property int cardWidth: Math.min(Style.space(1180), panel.width - Style.gapsOut * 2)
   readonly property int cardHeight: Math.min(Style.space(820), panel.height - Style.gapsOut * 2)
   readonly property int headerHeight: Style.space(52)
@@ -1478,7 +1471,7 @@ Item {
             anchors.right: closeButton.left
             anchors.rightMargin: Style.spacing.sm
             height: Style.space(30)
-            text: "Mark's Songwriter Board"
+            text: "HERMANICA 83"
             color: root.foreground
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.heading
@@ -1494,7 +1487,7 @@ Item {
             anchors.right: closeButton.left
             anchors.rightMargin: Style.spacing.sm
             anchors.bottom: parent.bottom
-            text: root.headerHint
+            text: "Songwriting Arrangement Station"
             textFormat: Text.PlainText
             color: root.dim
             font.family: Style.font.menuFamily

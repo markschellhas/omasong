@@ -9,7 +9,7 @@ apps:
   - songwriter
 
 user_flow:
-  primary: "User → j/k or up/down → cycleNavRegion; focus frame and hint text update"
+  primary: "User → j/k or up/down → cycleNavRegion; focus frame updates"
   horizontal: "User → h/l or left/right → Circle rotates key; Keyboard cycles instrument; Song ignores"
   song_cells: "User → Tab or Shift+Tab with Song structure highlighted → move the selected cell"
   degrees: "User → 1–7 with Circle focused and laptop keys off → previewChip"
