@@ -10,7 +10,7 @@ var MAX_TIME_NUMERATOR = 16
 var MAX_SLOTS_PER_MEASURE = 16
 var MAX_BEAT_STEPS = MAX_TIME_NUMERATOR * 8
 var MAX_TITLE_LEN = 80
-var MAX_ID_LEN = 64
+var MAX_ID_LEN = 96
 var BEAT_LANES = ["kick", "snare", "hihat"]
 
 function normalizeTitle(raw) {
@@ -307,9 +307,21 @@ function makeSection(name, ts) {
   return section
 }
 
+function emptySong() {
+  return {
+    title: "Untitled",
+    id: "",
+    bpm: 120,
+    keyIndex: 0,
+    beatsVisible: false,
+    sections: [makeSection("Verse"), makeSection("Chorus")]
+  }
+}
+
 function defaultSong() {
-  var verse = makeSection("Verse")
-  var chorus = makeSection("Chorus")
+  var song = emptySong()
+  var verse = song.sections[0]
+  var chorus = song.sections[1]
   verse.measures[0].slots[0].chord = { rootPc: 0, quality: "major" }
   verse.measures[1].slots[0].chord = { rootPc: 7, quality: "major" }
   verse.measures[2].slots[0].chord = { rootPc: 5, quality: "major" }
@@ -318,14 +330,7 @@ function defaultSong() {
   chorus.measures[1].slots[0].chord = { rootPc: 7, quality: "major" }
   chorus.measures[2].slots[0].chord = { rootPc: 0, quality: "major" }
   chorus.measures[3].slots[0].chord = { rootPc: 4, quality: "minor" }
-  return {
-    title: "Untitled",
-    id: "",
-    bpm: 120,
-    keyIndex: 0,
-    beatsVisible: false,
-    sections: [verse, chorus]
-  }
+  return song
 }
 
 function copyMeasure(src, cap, beatSteps) {

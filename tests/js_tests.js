@@ -86,6 +86,24 @@ assertEq(triad(0, "major").quality, "major")
 assertEq(triad(0, "minor").rootPc, 9)
 assertEq(triad(0, "minor").quality, "minor")
 
+var blank = emptySong()
+assertEq(blank.title, "Untitled")
+assertEq(blank.id, "")
+assertEq(blank.bpm, 120)
+assertEq(blank.keyIndex, 0)
+assertEq(blank.beatsVisible, false)
+assertEq(blank.sections.length, 2)
+assertEq(blank.sections[0].name, "Verse")
+assertEq(blank.sections[1].name, "Chorus")
+assertEq(blank.sections[0].measures.length, 4)
+assertEq(blank.sections[0].measures[0].slots[0].chord, null)
+assert(isMeasureEmpty(blank.sections[0].measures[0]), "new project verse is empty")
+assert(isMeasureEmpty(blank.sections[1].measures[0]), "new project chorus is empty")
+var blankNorm = normalizeSong(blank)
+assertEq(blankNorm.title, "Untitled")
+assertEq(blankNorm.id, "")
+assertEq(blankNorm.sections[0].measures[0].slots[0].chord, null)
+
 var song = defaultSong()
 assertEq(song.bpm, 120)
 assertEq(song.keyIndex, 0)
@@ -287,7 +305,7 @@ var longTitle = ""
 for (var ti = 0; ti < 100; ti++) longTitle += "x"
 assertEq(normalizeTitle(longTitle).length, MAX_TITLE_LEN)
 var longId = ""
-for (var ii = 0; ii < 65; ii++) longId += "a"
+for (var ii = 0; ii < 97; ii++) longId += "a"
 assertEq(normalizeId(longId), "")
 var maxId = longId.slice(0, MAX_ID_LEN)
 assertEq(normalizeId(maxId), maxId)

@@ -24,6 +24,7 @@ Item {
   signal titleEdited(string value)
   signal saveRequested
   signal openRequested
+  signal newRequested
 
   readonly property int beatPulseMs: Math.max(200, Math.round(60000 / Math.max(40, bpm)))
   readonly property bool compactTransport: width < Style.space(1040)
@@ -79,20 +80,34 @@ Item {
 
     Button {
       anchors.verticalCenter: parent.verticalCenter
-      text: root.veryTightTransport ? "" : "Save"
-      iconText: root.veryTightTransport ? "\uf0c7" : ""
-      tooltipText: "Save song to library"
+      text: root.veryTightTransport ? "" : "New"
+      iconText: root.veryTightTransport ? "\uf15b" : ""
+      tooltipText: "Start a new untitled project"
       focusable: true
       foreground: root.foreground
       accent: Color.accent
-      onClicked: root.saveRequested()
+      onClicked: root.newRequested()
+    }
+
+    Button {
+      anchors.verticalCenter: parent.verticalCenter
+      text: root.veryTightTransport ? "" : "Save"
+      iconText: root.veryTightTransport ? "\uf0c7" : ""
+      tooltipText: "Save this project as JSON"
+      focusable: true
+      foreground: root.foreground
+      accent: Color.accent
+      onClicked: {
+        root.commitTitle()
+        root.saveRequested()
+      }
     }
 
     Button {
       anchors.verticalCenter: parent.verticalCenter
       text: root.veryTightTransport ? "" : "Open"
       iconText: root.veryTightTransport ? "\uf07c" : ""
-      tooltipText: "Open a saved song"
+      tooltipText: "Open a saved project"
       focusable: true
       foreground: root.foreground
       accent: Color.accent

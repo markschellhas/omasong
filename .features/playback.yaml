@@ -20,7 +20,7 @@ user_flow:
 
 related_features:
   - song_structure (Song as source)
-  - song_library (title/library on transport left)
+  - song_library (title/New/Save/Open on transport left)
   - chord_slots (slot duration, audition)
   - row_repeats (timeline repeatPass)
   - piano_keyboard (soundingNotes highlight)
@@ -36,4 +36,4 @@ core_components:
   - samples/epiano
   - samples/organ
 
-notes: "Transport left cluster is title/library; right is play/Loop/Beats/BPM. Loop defaults on. No tap tempo. Space is play/stop when laptop map is off and the beat editor is closed, not sustain. Slot fill uses wall-clock BPM. Playhead is wall-clock from engine started; PipeWire is not in CI; no per-bar execDetached."
+notes: "Transport left cluster is title/New/Save/Open; right is play/Loop/Beats/BPM. Loop defaults on. No tap tempo. Space is play/stop when laptop map is off and the beat editor is closed, not sustain. Slot fill uses wall-clock BPM. Playhead is wall-clock from engine started; PipeWire is not in CI; no per-bar execDetached."

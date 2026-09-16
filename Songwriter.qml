@@ -122,8 +122,7 @@ Item {
 
   property var librarySongs: []
   property string libraryMenuKind: ""
-  property bool libraryLoaded: false
-  property bool libraryOpenAfterGet: false
+  property bool libraryOpenAfterList: false
   property var libraryQueue: []
   property real libraryMenuX: 0
   property real libraryMenuY: 0
@@ -529,13 +528,13 @@ Item {
   }
 
   function refreshLibrary() {
-    enqueueLibrary({ action: "get" })
+    enqueueLibrary({ action: "list" })
   }
 
   function enqueueLibrary(job) {
     if (!job || !job.action)
       return
-    if (libraryProcess.running) {
+    if (libraryProcess.running || libraryProcess.staging) {
       libraryQueue = libraryQueue.concat([job])
       return
     }
@@ -543,31 +542,40 @@ Item {
   }
 
   function startLibrary(job) {
-    var action = (job && job.action) || "get"
+    var action = (job && job.action) || "list"
     libraryProcess.action = action
     libraryProcess.expectedId = ""
     libraryProcess.output = ""
     libraryProcess.errorOutput = ""
+    libraryProcess.staging = false
     if (action === "save") {
       var payload = job.payload || {}
       libraryProcess.expectedId = payload.id ? String(payload.id) : ""
+      var text = ""
       try {
-        saveSelectionFile.setText(JSON.stringify(payload) + "\n")
+        text = JSON.stringify(payload)
       } catch (e) {
         statusText = "Save failed"
         Qt.callLater(function() { root.drainLibraryQueue() })
         return
       }
-      libraryProcess.command = [root.libraryScript, "save"]
-    } else if (action === "delete") {
-      libraryProcess.command = [root.libraryScript, "delete", String(job.id || "")]
-    } else {
-      libraryProcess.command = [root.libraryScript, "get"]
+      libraryProcess.staging = true
+      libraryProcess.command = ["python3", root.writeScript, root.saveSelectionPath, text]
+      libraryProcess.running = true
+      return
     }
+    if (action === "load")
+      libraryProcess.command = [root.libraryScript, "load", String(job.id || "")]
+    else if (action === "delete")
+      libraryProcess.command = [root.libraryScript, "delete", String(job.id || "")]
+    else
+      libraryProcess.command = [root.libraryScript, "list"]
     libraryProcess.running = true
   }
 
   function drainLibraryQueue() {
+    if (libraryProcess.running || libraryProcess.staging)
+      return
     if (!libraryQueue.length)
       return
     var next = libraryQueue[0]
@@ -582,45 +590,68 @@ Item {
     return currentId === ""
   }
 
-  function applyLibraryResult(raw, action, expectedId) {
-    var ok = false
+  function applyProjectList(raw) {
     try {
       var parsed = JSON.parse(raw || "{}")
-      var songs = Array.isArray(parsed.songs) ? parsed.songs : []
-      librarySongs = songs
-      libraryLoaded = true
-      ok = true
-      if (action === "save") {
-        if (songStillMatchesSave(expectedId)) {
-          var entry = null
-          if (expectedId) {
-            for (var i = 0; i < songs.length; i++) {
-              if (songs[i] && String(songs[i].id) === expectedId) {
-                entry = songs[i]
-                break
-              }
-            }
-          } else if (songs.length) {
-            entry = songs[0]
-          }
-          if (entry) {
-            applySongFields({
-              id: entry.id || "",
-              title: entry.title || "Untitled"
-            })
-          }
-        }
-        statusText = "Saved"
-      } else if (action === "delete") {
-        statusText = "Removed"
-        if (libraryMenuKind === "open" && !songs.length)
-          closeLibraryMenu()
-      }
+      librarySongs = Array.isArray(parsed.projects) ? parsed.projects : []
+      return parsed
     } catch (e) {
-      statusText = action === "save" ? "Save failed" : "Library error"
-      ok = false
+      return null
     }
-    return ok
+  }
+
+  function applySaveResult(raw, expectedId) {
+    var parsed = applyProjectList(raw)
+    if (!parsed) {
+      statusText = "Save failed"
+      return false
+    }
+    if (songStillMatchesSave(expectedId)) {
+      applySongFields({
+        id: parsed.id || "",
+        title: parsed.title || (song && song.title) || "Untitled"
+      })
+    }
+    statusText = "Saved"
+    return true
+  }
+
+  function applyLoadResult(raw) {
+    var parsed
+    try {
+      parsed = JSON.parse(raw || "{}")
+    } catch (e) {
+      statusText = "Open failed"
+      return false
+    }
+    if (!parsed || !Song.looksLikeSongDocument(parsed)) {
+      statusText = "Open failed"
+      return false
+    }
+    stopPlayback()
+    closeBeatEditor()
+    var next = seedSong(parsed)
+    next.id = parsed.id || ""
+    next.title = parsed.title || "Untitled"
+    updateSong(next)
+    statusText = "Loaded " + (next.title || "Untitled")
+    return true
+  }
+
+  function newProject() {
+    stopPlayback()
+    closeBeatEditor()
+    closeLibraryMenu()
+    if (structure && typeof structure.closeMenu === "function")
+      structure.closeMenu()
+    heldNotes = ({})
+    previewNotes = []
+    previewChord = null
+    selectedSection = 0
+    selectedMeasure = 0
+    selectedSlot = 0
+    updateSong(seedSong(Song.emptySong()))
+    statusText = "New project"
   }
 
   function saveToLibrary() {
@@ -636,12 +667,8 @@ Item {
   }
 
   function openLibraryMenu() {
-    if (!libraryLoaded) {
-      libraryOpenAfterGet = true
-      refreshLibrary()
-      return
-    }
-    showLibraryMenu()
+    libraryOpenAfterList = true
+    enqueueLibrary({ action: "list" })
   }
 
   function showLibraryMenu() {
@@ -659,7 +686,7 @@ Item {
     if (!layer || !anchor)
       return
     var gap = Style.space(4)
-    var menuW = Style.space(260)
+    var menuW = Style.space(280)
     var menuH = libraryMenuPanel.height
     var below = anchor.mapToItem(layer, 0, anchor.height + gap)
     libraryMenuX = Math.max(0, Math.min(below.x, Math.max(0, layer.width - menuW)))
@@ -671,51 +698,10 @@ Item {
     libraryMenuY = y
   }
 
-  function libraryMenuItems() {
-    var items = []
-    var songs = librarySongs || []
-    var i
-    for (i = 0; i < songs.length; i++) {
-      var entry = songs[i] || {}
-      items.push({
-        kind: "load",
-        label: entry.title || "Untitled",
-        entry: entry
-      })
-    }
-    for (i = 0; i < songs.length; i++) {
-      var doomed = songs[i] || {}
-      items.push({
-        kind: "delete",
-        label: "Remove · " + (doomed.title || "Untitled"),
-        id: doomed.id || ""
-      })
-    }
-    return items
-  }
-
   function pickLibraryMenu(item) {
-    if (!item)
+    if (!item || !item.id)
       return
-    if (item.kind === "load") {
-      closeLibraryMenu()
-      loadFromLibrary(item.entry)
-      return
-    }
-    if (item.kind === "delete" && item.id)
-      enqueueLibrary({ action: "delete", id: item.id })
-  }
-
-  function loadFromLibrary(entry) {
-    if (!entry || !entry.song)
-      return
-    stopPlayback()
-    closeBeatEditor()
-    var next = seedSong(entry.song)
-    next.id = entry.id || ""
-    next.title = entry.title || "Untitled"
-    updateSong(next)
-    statusText = "Loaded " + (next.title || "Untitled")
+    enqueueLibrary({ action: "load", id: item.id })
   }
 
   function clearCirclePreview() {
@@ -1196,23 +1182,13 @@ Item {
     }
   }
 
-  FileView {
-    id: saveSelectionFile
-    path: root.saveSelectionPath
-    preload: false
-    watchChanges: false
-    blockWrites: true
-    atomicWrites: true
-    printErrors: true
-    onSaveFailed: root.statusText = "Save failed"
-  }
-
   Process {
     id: libraryProcess
     property string action: ""
     property string expectedId: ""
     property string output: ""
     property string errorOutput: ""
+    property bool staging: false
     command: []
     stdout: StdioCollector {
       waitForEnd: true
@@ -1226,17 +1202,49 @@ Item {
       var completed = libraryProcess.action
       var expectedId = libraryProcess.expectedId
       var raw = libraryProcess.output
-      var wantOpen = root.libraryOpenAfterGet
-      if (completed === "get")
-        root.libraryOpenAfterGet = false
+      var wantOpen = root.libraryOpenAfterList
+      if (libraryProcess.staging) {
+        if (exitCode === 0) {
+          Qt.callLater(function() {
+            libraryProcess.staging = false
+            libraryProcess.output = ""
+            libraryProcess.errorOutput = ""
+            libraryProcess.command = [root.libraryScript, "save"]
+            libraryProcess.running = true
+          })
+          return
+        }
+        libraryProcess.staging = false
+        root.statusText = "Save failed"
+        root.drainLibraryQueue()
+        return
+      }
+      if (completed === "list")
+        root.libraryOpenAfterList = false
       if (exitCode === 0) {
-        var parsedOk = root.applyLibraryResult(raw, completed, expectedId)
-        if (completed === "get" && wantOpen && parsedOk)
-          root.showLibraryMenu()
+        if (completed === "load") {
+          if (root.applyLoadResult(raw))
+            root.closeLibraryMenu()
+        } else if (completed === "save") {
+          root.applySaveResult(raw, expectedId)
+        } else {
+          var parsed = root.applyProjectList(raw)
+          if (!parsed)
+            root.statusText = "Library error"
+          else if (completed === "list" && wantOpen)
+            root.showLibraryMenu()
+          else if (completed === "delete") {
+            root.statusText = "Removed"
+            if (root.libraryMenuKind === "open" && !(root.librarySongs || []).length)
+              root.closeLibraryMenu()
+          }
+        }
       } else {
         var err = String(libraryProcess.errorOutput || "").trim()
         if (completed === "save")
           root.statusText = err || "Save failed"
+        else if (completed === "load")
+          root.statusText = err || "Open failed"
         else if (completed === "delete")
           root.statusText = err || "Remove failed"
         else
@@ -1538,6 +1546,7 @@ Item {
           onTitleEdited: function(value) {
             root.applySongFields({ title: value })
           }
+          onNewRequested: { root.newProject(); root.refocusKeys() }
           onSaveRequested: { root.saveToLibrary(); root.refocusKeys() }
           onOpenRequested: { root.openLibraryMenu(); root.refocusKeys() }
         }
@@ -1822,32 +1831,53 @@ Item {
           x: root.libraryMenuX
           y: root.libraryMenuY
           z: 1001
-          width: Style.space(260)
-          height: libraryMenuCol.implicitHeight + Style.spacing.sm * 2
+          width: Style.space(280)
+          height: libraryFlick.height + Style.spacing.sm * 2
           radius: Style.cornerRadius
           color: Color.menu.background
           border.width: 1
           border.color: Color.menu.border
           onHeightChanged: if (root.libraryMenuKind !== "") root.positionLibraryMenu()
 
-          Column {
-            id: libraryMenuCol
+          Flickable {
+            id: libraryFlick
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: Style.spacing.sm
-            spacing: Style.space(4)
+            height: Math.min(libraryMenuCol.implicitHeight, Style.space(320))
+            contentHeight: libraryMenuCol.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            interactive: contentHeight > height
 
-            Repeater {
-              model: root.libraryMenuKind !== "" ? root.libraryMenuItems() : []
+            Column {
+              id: libraryMenuCol
+              width: libraryFlick.width
+              spacing: Style.space(4)
 
-              delegate: Button {
-                required property var modelData
+              Text {
+                visible: !(root.librarySongs && root.librarySongs.length)
                 width: parent.width
-                text: modelData.label
-                bordered: true
-                foreground: root.foreground
-                onClicked: root.pickLibraryMenu(modelData)
+                text: "No saved projects"
+                color: root.dim
+                font.family: Style.font.menuFamily
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+              }
+
+              Repeater {
+                model: root.libraryMenuKind !== "" ? (root.librarySongs || []) : []
+
+                delegate: Button {
+                  required property var modelData
+                  width: parent.width
+                  text: (modelData && (modelData.title || modelData.id)) ? (modelData.title || modelData.id) : "Untitled"
+                  leftAlign: true
+                  bordered: true
+                  foreground: root.foreground
+                  onClicked: root.pickLibraryMenu(modelData)
+                }
               }
             }
           }

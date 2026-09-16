@@ -768,92 +768,119 @@ def test_agent() -> None:
 def test_song_library() -> None:
     if not SONG_LIBRARY.is_file():
         raise SystemExit("song-library missing")
-    sample_song = {"sections": [{"name": "Verse", "measures": []}]}
+    sample_song = {"sections": [{"name": "Verse", "measures": [{"slots": []}]}]}
 
     with tempfile.TemporaryDirectory() as tmp:
         data = Path(tmp) / "data"
         runtime = Path(tmp) / "runtime"
         env = _song_library_env(data, runtime)
+        projects = data / "songwriter" / "projects"
 
-        got = _run_song_library(env, "get")
-        if got.returncode != 0:
-            sys.stderr.write(got.stdout + got.stderr)
-            raise SystemExit(got.returncode or 1)
-        library = json.loads(got.stdout)
-        if library != {"songs": []}:
-            raise SystemExit("get should create empty library")
-        library_path = data / "songwriter" / "library.json"
-        if not library_path.is_file():
-            raise SystemExit("get did not create library.json")
+        listed = _run_song_library(env, "list")
+        if listed.returncode != 0:
+            sys.stderr.write(listed.stdout + listed.stderr)
+            raise SystemExit(listed.returncode or 1)
+        payload = json.loads(listed.stdout)
+        if payload != {"projects": []}:
+            raise SystemExit("list should start empty")
+        if not projects.is_dir():
+            raise SystemExit("list did not create projects dir")
 
-        _stage_save(
-            runtime,
-            {"id": "song-1", "title": "Demo", "song": sample_song},
-        )
+        _stage_save(runtime, {"id": "", "title": "Demo", "song": sample_song})
         saved = _run_song_library(env, "save")
         if saved.returncode != 0:
             sys.stderr.write(saved.stdout + saved.stderr)
             raise SystemExit(saved.returncode or 1)
-        library = json.loads(saved.stdout)
-        if len(library["songs"]) != 1 or library["songs"][0]["id"] != "song-1":
-            raise SystemExit("save did not upsert entry")
-        if library["songs"][0]["title"] != "Demo":
-            raise SystemExit("save title mismatch")
-        if not isinstance(library["songs"][0]["updatedAt"], (int, float)):
-            raise SystemExit("save missing updatedAt")
+        result = json.loads(saved.stdout)
+        if result["id"] != "Demo" or result["title"] != "Demo":
+            raise SystemExit("save id/title mismatch: " + saved.stdout)
+        demo_path = projects / "Demo.json"
+        if not demo_path.is_file():
+            raise SystemExit("save did not write Demo.json")
+        demo_doc = json.loads(demo_path.read_text())
+        if demo_doc["title"] != "Demo" or demo_doc["id"] != "Demo":
+            raise SystemExit("saved file missing title/id")
+        if demo_doc["sections"][0]["name"] != "Verse":
+            raise SystemExit("saved file dropped song body")
 
         _stage_save(
             runtime,
-            {"id": "song-1", "title": "Demo Updated", "song": sample_song},
+            {"id": "Demo", "title": "Demo", "song": {**sample_song, "bpm": 90}},
         )
         updated = _run_song_library(env, "save")
         if updated.returncode != 0:
             sys.stderr.write(updated.stdout + updated.stderr)
             raise SystemExit(updated.returncode or 1)
-        library = json.loads(updated.stdout)
-        if len(library["songs"]) != 1:
-            raise SystemExit("upsert should keep single entry for same id")
-        if library["songs"][0]["title"] != "Demo Updated":
-            raise SystemExit("save did not update title")
+        if len(list(projects.glob("*.json"))) != 1:
+            raise SystemExit("update should overwrite the same file")
+        if json.loads(demo_path.read_text()).get("bpm") != 90:
+            raise SystemExit("update did not write new song body")
 
         _stage_save(
             runtime,
-            {"id": "", "title": "Minted", "song": sample_song},
+            {"id": "Demo", "title": "Demo Renamed", "song": sample_song},
         )
+        renamed = _run_song_library(env, "save")
+        if renamed.returncode != 0:
+            sys.stderr.write(renamed.stdout + renamed.stderr)
+            raise SystemExit(renamed.returncode or 1)
+        renamed_result = json.loads(renamed.stdout)
+        if renamed_result["id"] != "Demo Renamed":
+            raise SystemExit("rename did not adopt new filename id")
+        if demo_path.exists():
+            raise SystemExit("rename left the old file behind")
+        renamed_path = projects / "Demo Renamed.json"
+        if not renamed_path.is_file():
+            raise SystemExit("rename did not write the new file")
+
+        _stage_save(runtime, {"id": "", "title": "Minted", "song": sample_song})
         minted = _run_song_library(env, "save")
         if minted.returncode != 0:
             sys.stderr.write(minted.stdout + minted.stderr)
             raise SystemExit(minted.returncode or 1)
-        library = json.loads(minted.stdout)
-        if len(library["songs"]) != 2:
-            raise SystemExit("empty id should mint a new entry")
-        minted_id = library["songs"][0]["id"]
-        if not minted_id or minted_id == "song-1":
-            raise SystemExit("minted id missing or colliding")
-        if library["songs"][0]["title"] != "Minted":
-            raise SystemExit("minted save title mismatch")
+        minted_id = json.loads(minted.stdout)["id"]
+        if minted_id != "Minted":
+            raise SystemExit("fresh save should use the title as id")
+        if len(list(projects.glob("*.json"))) != 2:
+            raise SystemExit("fresh save should add a second project file")
 
         _stage_save(
             runtime,
-            {"id": "   ", "title": "Whitespace Id", "song": sample_song},
+            {"id": "", "title": "Minted", "song": {**sample_song, "bpm": 88}},
         )
-        ws_id = _run_song_library(env, "save")
-        if ws_id.returncode != 0:
-            sys.stderr.write(ws_id.stdout + ws_id.stderr)
-            raise SystemExit(ws_id.returncode or 1)
-        library = json.loads(ws_id.stdout)
-        if len(library["songs"]) != 3:
-            raise SystemExit("whitespace id should mint a new entry")
-        ws_minted = library["songs"][0]["id"]
-        if not ws_minted or ws_minted in ("song-1", minted_id, "   "):
-            raise SystemExit("whitespace id was not minted")
+        collision = _run_song_library(env, "save")
+        if collision.returncode != 0:
+            sys.stderr.write(collision.stdout + collision.stderr)
+            raise SystemExit(collision.returncode or 1)
+        collision_id = json.loads(collision.stdout)["id"]
+        if collision_id != "Minted":
+            raise SystemExit("fresh save with the same name should overwrite, got " + collision_id)
+        if json.loads((projects / "Minted.json").read_text()).get("bpm") != 88:
+            raise SystemExit("same-name save did not overwrite Minted.json")
+        if len(list(projects.glob("*.json"))) != 2:
+            raise SystemExit("same-name save should not create a second file")
+
+        _stage_save(
+            runtime,
+            {"id": "stale-uuid", "title": "Minted", "song": {**sample_song, "bpm": 77}},
+        )
+        stale = _run_song_library(env, "save")
+        if stale.returncode != 0:
+            sys.stderr.write(stale.stdout + stale.stderr)
+            raise SystemExit(stale.returncode or 1)
+        if json.loads(stale.stdout)["id"] != "Minted":
+            raise SystemExit("stale id should save by title")
+        if json.loads((projects / "Minted.json").read_text()).get("bpm") != 77:
+            raise SystemExit("stale id did not update Minted.json")
+        if (projects / "stale-uuid.json").exists():
+            raise SystemExit("stale id should not create a uuid-named file")
 
         _stage_save(
             runtime,
             {
-                "id": "flat-1",
+                "id": "",
                 "title": "Flat",
-                "sections": [{"name": "Chorus", "measures": []}],
+                "sections": [{"name": "Chorus", "measures": [{"slots": []}]}],
                 "bpm": 100,
             },
         )
@@ -861,24 +888,41 @@ def test_song_library() -> None:
         if flat.returncode != 0:
             sys.stderr.write(flat.stdout + flat.stderr)
             raise SystemExit(flat.returncode or 1)
-        library = json.loads(flat.stdout)
-        flat_entry = library["songs"][0]
-        if flat_entry["id"] != "flat-1" or flat_entry["title"] != "Flat":
-            raise SystemExit("flat hybrid id/title mismatch")
-        if "id" in flat_entry["song"] or "title" in flat_entry["song"]:
-            raise SystemExit("flat hybrid nested id/title into song")
-        if flat_entry["song"].get("sections") != [{"name": "Chorus", "measures": []}]:
-            raise SystemExit("flat hybrid did not preserve song body")
-        if flat_entry["song"].get("bpm") != 100:
-            raise SystemExit("flat hybrid dropped song fields")
+        flat_id = json.loads(flat.stdout)["id"]
+        flat_doc = json.loads((projects / f"{flat_id}.json").read_text())
+        if flat_doc.get("bpm") != 100 or flat_doc["sections"][0]["name"] != "Chorus":
+            raise SystemExit("flat song document was not saved")
 
-        deleted = _run_song_library(env, "delete", minted_id)
+        dropped = projects / "Hand Dropped.json"
+        dropped.write_text(
+            json.dumps({"title": "Hand Dropped", "sections": [{"name": "Bridge", "measures": [{}]}]})
+        )
+        listed_all = _run_song_library(env, "list")
+        if listed_all.returncode != 0:
+            sys.stderr.write(listed_all.stdout + listed_all.stderr)
+            raise SystemExit(listed_all.returncode or 1)
+        names = {item["id"] for item in json.loads(listed_all.stdout)["projects"]}
+        expected = {"Demo Renamed", "Minted", "Flat", "Hand Dropped"}
+        if names != expected:
+            raise SystemExit(f"list missed project files: {names} vs {expected}")
+
+        loaded = _run_song_library(env, "load", "Hand Dropped")
+        if loaded.returncode != 0:
+            sys.stderr.write(loaded.stdout + loaded.stderr)
+            raise SystemExit(loaded.returncode or 1)
+        loaded_doc = json.loads(loaded.stdout)
+        if loaded_doc["title"] != "Hand Dropped" or loaded_doc["sections"][0]["name"] != "Bridge":
+            raise SystemExit("load did not return the dropped file")
+
+        deleted = _run_song_library(env, "delete", "Flat")
         if deleted.returncode != 0:
             sys.stderr.write(deleted.stdout + deleted.stderr)
             raise SystemExit(deleted.returncode or 1)
-        library = json.loads(deleted.stdout)
-        if any(s["id"] == minted_id for s in library["songs"]):
-            raise SystemExit("delete did not remove minted entry")
+        remaining = {item["id"] for item in json.loads(deleted.stdout)["projects"]}
+        if "Flat" in remaining:
+            raise SystemExit("delete did not remove Flat")
+        if (projects / "Flat.json").exists():
+            raise SystemExit("delete left Flat.json on disk")
 
         (runtime / "omarchy-songwriter" / "save-selection.json").unlink(missing_ok=True)
         missing = _run_song_library(env, "save")
@@ -894,23 +938,41 @@ def test_song_library() -> None:
         if no_id.returncode != 2:
             raise SystemExit("delete without id should exit 2, got " + str(no_id.returncode))
 
-        # Restore a valid library, then corrupt and assert bytes unchanged.
-        _stage_save(
-            runtime,
-            {"id": "song-1", "title": "Demo Updated", "song": sample_song},
-        )
-        restored = _run_song_library(env, "save")
-        if restored.returncode != 0:
-            sys.stderr.write(restored.stdout + restored.stderr)
-            raise SystemExit(restored.returncode or 1)
+        missing_load = _run_song_library(env, "load", "no-such-project")
+        if missing_load.returncode != 2:
+            raise SystemExit("missing load should exit 2, got " + str(missing_load.returncode))
 
-        corrupt_bytes = b"not-json"
-        library_path.write_bytes(corrupt_bytes)
-        corrupt = _run_song_library(env, "get")
-        if corrupt.returncode != 4:
-            raise SystemExit("corrupt library should exit 4, got " + str(corrupt.returncode))
-        if library_path.read_bytes() != corrupt_bytes:
-            raise SystemExit("corrupt library was overwritten")
+        # Migrate the old single-file library into per-project JSON files.
+        other = Path(tmp) / "migrate"
+        other_runtime = Path(tmp) / "migrate-runtime"
+        other_env = _song_library_env(other, other_runtime)
+        library_path = other / "songwriter" / "library.json"
+        library_path.parent.mkdir(parents=True)
+        library_path.write_text(
+            json.dumps(
+                {
+                    "songs": [
+                        {
+                            "id": "old-uuid",
+                            "title": "From Library",
+                            "updatedAt": 1,
+                            "song": sample_song,
+                        }
+                    ]
+                }
+            )
+        )
+        migrated = _run_song_library(other_env, "list")
+        if migrated.returncode != 0:
+            sys.stderr.write(migrated.stdout + migrated.stderr)
+            raise SystemExit(migrated.returncode or 1)
+        migrated_names = {item["id"] for item in json.loads(migrated.stdout)["projects"]}
+        if migrated_names != {"From Library"}:
+            raise SystemExit("library.json was not migrated to a project file")
+        if library_path.exists():
+            raise SystemExit("library.json should be renamed after migration")
+        if not (other / "songwriter" / "library.json.bak").is_file():
+            raise SystemExit("library.json.bak missing after migration")
 
         print("song-library ok")
 
