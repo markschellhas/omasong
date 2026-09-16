@@ -437,6 +437,63 @@ def test_play_notes() -> None:
         stopped_pipe.close()
     print("play-notes play-midi pipe ok")
 
+    warmed_rec = RecordingStdin()
+    warmed_pipe = play_notes.PipeSink(proc=FakeProc(warmed_rec))
+    try:
+        warmed_engine = play_notes.AudioEngine(sink=warmed_pipe)
+        warmed_engine.handle({"cmd": "warmup", "instrument": 0})
+        first = None
+        deadline = time.monotonic() + 2.0
+        while True:
+            if warmed_rec.snapshot():
+                if first is None:
+                    first = time.monotonic()
+                if time.monotonic() - first >= 0.20:
+                    break
+            if time.monotonic() > deadline:
+                raise SystemExit("warmup must start the output clock so preview is not a cold pw-cat")
+            time.sleep(0.01)
+        elapsed = time.monotonic() - first
+        samples = len(warmed_rec.snapshot()) // 2
+        ahead = samples / float(play_notes.RATE) - elapsed
+        min_ahead = (play_notes.OUTPUT_LATENCY_MS / 1000.0) * 0.5
+        if ahead < min_ahead:
+            raise SystemExit("keepalive queued less than PipeWire latency; preview underruns and stutters")
+        before_mix = len(warmed_rec.snapshot())
+        warmed_engine.handle({
+            "cmd": "play-midi",
+            "midis": [60, 64, 67],
+            "seconds": 0.4,
+            "instrument": 0,
+        })
+        time.sleep(0.015)
+        burst = warmed_rec.snapshot()[before_mix:]
+        burst_samples = array("h")
+        burst_samples.frombytes(burst)
+        if sys.byteorder != "little":
+            burst_samples.byteswap()
+        burst_sec = sum(1 for sample in burst_samples if abs(sample) >= 100) / play_notes.RATE
+        if burst_sec > 0.05:
+            raise SystemExit("play-midi on a warmed sink dumped a prefill burst")
+        if wait_peak(warmed_rec, before_mix) < 100:
+            raise SystemExit("play-midi on a warmed sink was silent")
+        warmed_engine.handle({"cmd": "stop"})
+        time.sleep(0.05)
+        before_play = len(warmed_rec.snapshot())
+        warmed_engine.handle({"cmd": "play", "measures": [m0]})
+        time.sleep(0.015)
+        play_burst = warmed_rec.snapshot()[before_play:]
+        play_samples = array("h")
+        play_samples.frombytes(play_burst)
+        if sys.byteorder != "little":
+            play_samples.byteswap()
+        play_burst_sec = sum(1 for sample in play_samples if abs(sample) >= 100) / play_notes.RATE
+        if play_burst_sec > 0.05:
+            raise SystemExit("play on a warmed sink dumped a prefill burst")
+    finally:
+        warmed_pipe.close()
+    print("play-notes preview clock ok")
+
     class SlowStdin(RecordingStdin):
         def write(self, data: bytes) -> int:
             time.sleep(0.005)

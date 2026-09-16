@@ -261,6 +261,18 @@ def sample_bank_ready(instrument: int) -> bool:
     return (bank["dir"] / bank["ready"]).is_file()
 
 
+def warmup_samples(instrument: int) -> None:
+    bank = sample_bank(instrument)
+    if not bank or not sample_bank_ready(instrument):
+        return
+    need = int(RATE * DEFAULT_SECONDS) + 2
+    for midi in range(PIANO_MIDI_MIN, PIANO_MIDI_MAX + 1):
+        try:
+            load_sample_mono(midi, need, bank)
+        except (OSError, ValueError):
+            continue
+
+
 def sample_path(midi: int, bank: dict | None = None) -> Path:
     folder = SAMPLE_DIR if bank is None else bank["dir"]
     return folder / f"{midi_note_name(midi)}.wav"
@@ -709,28 +721,33 @@ class PipeSink:
         self._drain()
         self._queue.put(("play", gen, _s16_array(pcm) if pcm else array("h"), bool(loop)))
 
+    def start(self) -> None:
+        with self._lock:
+            if self._closed or self._clock is not None:
+                return
+        self._queue.put(("run", 0, None, False))
+
     def mix(self, pcm) -> None:
         if not pcm:
+            self.start()
             return
         samples = _s16_array(pcm)
         with self._lock:
             if self._closed:
                 return
-            # Mix onto the live writer. After stop the clock keeps running so
-            # preview does not restart pw-cat with an 80ms prefill burst.
-            if self._clock is not None:
-                self._mix.extend(samples)
-                start = False
-            else:
-                start = True
-        if start:
-            self.write(samples)
+            # Mix onto the live writer. Never write() the chord — that restarts
+            # the clock and dumps OUTPUT_LATENCY_MS of audio as a buffer gulp.
+            self._mix.extend(samples)
+            live = self._clock is not None
+        if not live:
+            self.start()
 
     def stop(self) -> None:
         with self._lock:
             self._generation += 1
             self._mix = array("h")
         self._drain()
+        self._queue.put(("run", 0, None, False))
 
     def close(self) -> None:
         with self._lock:
@@ -817,11 +834,12 @@ class PipeSink:
             self._mix = extra[n:]
         return out
 
-    def _emit(self, samples) -> None:
+    def _emit(self, samples, apply_mix: bool = True) -> None:
         if not samples:
             return
         chunk = samples if isinstance(samples, array) and samples.typecode == "h" else _s16_array(samples)
-        chunk = self._apply_mix(chunk)
+        if apply_mix:
+            chunk = self._apply_mix(chunk)
         if not self._ensure_open():
             return
         proc = self._proc
@@ -837,80 +855,97 @@ class PipeSink:
         with self._lock:
             return self._closed, self._generation
 
-    def _wait_slot(self, gen: int, until: float) -> bool:
-        while True:
-            closed, current = self._current_gen()
-            if closed or gen != current:
-                return False
-            remaining = until - time.monotonic()
-            if remaining <= 0:
-                return True
-            time.sleep(min(0.005, remaining))
-
     def _run(self) -> None:
-        # Prefill OUTPUT_LATENCY_MS, then pace from a steady clock so emit
-        # cost is not added onto every chunk (that underruns after a few bars).
+        # Prefill OUTPUT_LATENCY_MS of silence, then pace from a steady clock so
+        # emit cost is not added onto every chunk (that underruns after a few bars).
+        # Keepalive must hold the same lead as play: one 20ms chunk is less than
+        # pw-cat's latency, so the stream underruns and preview stutters.
+        # Do not reset the clock on play — warmup already filled the node, and a
+        # second prefill would make the downbeat (and the next chord) late.
         chunk_n = max(1, int(RATE * WRITE_CHUNK_MS / 1000.0))
         prefill = chunk_n * PREFILL_CHUNKS
         silence = array("h", [0] * chunk_n)
         origin = None
         written = 0
-        while True:
-            closed, _gen = self._current_gen()
-            if closed:
-                break
-            try:
-                item = self._queue.get(timeout=WRITE_CHUNK_MS / 1000.0)
-            except queue.Empty:
-                if origin is None:
-                    continue
-                played = int((time.monotonic() - origin) * RATE)
-                if written <= played + chunk_n:
-                    self._emit(silence)
-                    written += chunk_n
-                continue
-            kind, gen, pcm, loop = item
-            if kind == "close":
-                break
-            if kind != "play":
-                continue
+        play_pcm = None
+        play_pos = 0
+        play_loop = False
+        play_gen = 0
+
+        def begin_clock() -> None:
+            nonlocal origin, written
+            if origin is not None:
+                return
+            for _ in range(PREFILL_CHUNKS):
+                self._emit(silence, apply_mix=False)
+                written += chunk_n
             origin = time.monotonic()
-            written = 0
             with self._lock:
                 self._clock = origin
-            while True:
-                closed, current = self._current_gen()
-                if closed or gen != current:
-                    if closed:
-                        origin = None
-                        written = 0
-                        with self._lock:
-                            self._clock = None
+
+        def next_chunk(current_gen: int) -> array:
+            nonlocal play_pcm, play_pos
+            if play_pcm is None or play_gen != current_gen:
+                return silence
+            n = len(play_pcm)
+            if n == 0:
+                play_pcm = None
+                return silence
+            if play_pos >= n:
+                if play_loop:
+                    play_pos = 0
+                else:
+                    play_pcm = None
+                    return silence
+            chunk = play_pcm[play_pos : play_pos + chunk_n]
+            play_pos += len(chunk)
+            if not chunk:
+                play_pcm = None
+                return silence
+            if len(chunk) < chunk_n:
+                padded = array("h", chunk)
+                padded.extend([0] * (chunk_n - len(chunk)))
+                if not play_loop:
+                    play_pcm = None
+                return padded
+            return chunk
+
+        while True:
+            closed, current = self._current_gen()
+            if closed:
+                break
+            timeout = WRITE_CHUNK_MS / 1000.0
+            if origin is not None:
+                due = origin + max(0, written - prefill) / float(RATE)
+                timeout = max(0.0, due - time.monotonic())
+            try:
+                item = self._queue.get(timeout=timeout)
+            except queue.Empty:
+                item = None
+            if item is not None:
+                kind, gen, pcm, loop = item
+                if kind == "close":
                     break
-                i = 0
-                n = len(pcm) if pcm is not None else 0
-                aborted = False
-                while i < n:
-                    now = time.monotonic()
-                    played = int((now - origin) * RATE)
-                    if written > played + prefill:
-                        wait_until = origin + (written - prefill) / float(RATE)
-                        if not self._wait_slot(gen, wait_until):
-                            aborted = True
-                            break
-                    chunk = pcm[i : i + chunk_n]
-                    self._emit(chunk)
-                    written += len(chunk)
-                    i += chunk_n
-                if aborted or not loop or n == 0:
-                    if aborted:
-                        closed, _current = self._current_gen()
-                        if closed:
-                            origin = None
-                            written = 0
-                            with self._lock:
-                                self._clock = None
-                    break
+                if kind == "run":
+                    begin_clock()
+                    continue
+                if kind == "play":
+                    begin_clock()
+                    play_pcm = pcm
+                    play_pos = 0
+                    play_loop = loop
+                    play_gen = gen
+                    continue
+            if origin is None:
+                continue
+            played = int((time.monotonic() - origin) * RATE)
+            if written > played + prefill:
+                continue
+            closed, current = self._current_gen()
+            if closed:
+                break
+            self._emit(next_chunk(current))
+            written += chunk_n
         self._close_proc()
 
 
@@ -923,7 +958,11 @@ class AudioEngine:
             return {"ok": False, "error": "invalid message"}
         cmd = msg.get("cmd")
         if cmd == "warmup":
-            sample_bank_ready(clamp_instrument(msg.get("instrument", 0)))
+            instrument = clamp_instrument(msg.get("instrument", 0))
+            warmup_samples(instrument)
+            start = getattr(self.sink, "start", None)
+            if callable(start):
+                start()
             return {"ok": True}
         if cmd == "play":
             measures = msg.get("measures")
@@ -951,6 +990,9 @@ class AudioEngine:
             if midis:
                 seconds = clamp_seconds(msg.get("seconds", DEFAULT_SECONDS))
                 pcm = render_midi_notes(midis, seconds, clamp_instrument(msg.get("instrument", 0)))
+                pad_frames = int(RATE * PAD)
+                if pad_frames > 0 and len(pcm) > pad_frames * 2:
+                    pcm = pcm[pad_frames:]
                 mix = getattr(self.sink, "mix", self.sink.write)
                 mix(pcm)
             return {"ok": True}

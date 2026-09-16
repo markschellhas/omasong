@@ -10,6 +10,7 @@ apps:
 
 user_flow:
   primary: "Play/preview/live → play-notes.py --engine → pw-cat raw s16 44100 mono latency 80ms stdin -"
+  warmup: "Overlay open → warmup preloads C3–C5 samples and starts the silence clock so the first preview does not cold-start pw-cat"
 
 related_features:
   - playback (engine output)
@@ -22,4 +23,4 @@ core_components:
   - samples/epiano
   - samples/organ
 
-notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano, Electric Piano, and Organ mix sample banks. Persistent process; sample cache lives across bars; pw-play is not the transport path. After stop the writer keeps silence so play-midi mixes at the cursor instead of restarting pw-cat. PipeWire and omarchy plugin validate are not in CI."
+notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano, Electric Piano, and Organ mix sample banks. Persistent process; sample cache lives across bars; pw-play is not the transport path. Warmup starts the silence clock; keepalive holds OUTPUT_LATENCY_MS (not one 20ms chunk) so pw-cat does not underrun. play-midi mixes at the cursor; it must not write() a prefill burst. PipeWire and omarchy plugin validate are not in CI."
