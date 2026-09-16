@@ -26,7 +26,6 @@ Item {
 
   signal chordAuditioned(var chord, var notes, string label)
   signal chordDragStarted(string payload)
-  signal rootRequested(int pc)
 
   function modeAt(rowIndex) {
     return ParallelMode.visibleModeIndex(rowIndex, showAllModes)
@@ -72,10 +71,6 @@ Item {
     root.showAllModes = all
     if (!all)
       root.homeModeIndex = ParallelMode.clampHomeToVisible(root.homeModeIndex, false)
-  }
-
-  function stepRoot(delta) {
-    root.rootRequested(Model.wrapPitchClass(root.rootPc + delta))
   }
 
   function cellPayload(modeIndex, degreeIndex) {
@@ -315,88 +310,61 @@ Item {
     }
   }
 
-  Column {
+  Row {
     id: strip
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.bottom: parent.bottom
     spacing: Style.space(2)
 
-    Row {
-      width: parent.width
-      spacing: Style.space(2)
-
-      Button {
-        text: "◀"
-        bordered: true
-        foreground: root.foreground
-        fontSize: Style.font.caption
-        tooltipText: "Lower root"
-        onClicked: root.stepRoot(-1)
-      }
-
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        width: Style.space(28)
-        text: ParallelMode.rootName(root.rootPc)
-        color: root.foreground
-        font.family: Style.font.menuFamily
-        font.pixelSize: Style.font.caption
-        horizontalAlignment: Text.AlignHCenter
-      }
-
-      Button {
-        text: "▶"
-        bordered: true
-        foreground: root.foreground
-        fontSize: Style.font.caption
-        tooltipText: "Raise root"
-        onClicked: root.stepRoot(1)
-      }
-
-      Button {
-        text: root.useSevenths ? "7ths" : "3"
-        selected: root.useSevenths
-        bordered: true
-        foreground: root.foreground
-        fontSize: Style.font.caption
-        tooltipText: "Triads vs seventh chords"
-        onClicked: root.useSevenths = !root.useSevenths
-      }
-
-      Button {
-        text: root.showAllModes ? "7" : "4"
-        selected: root.showAllModes
-        bordered: true
-        foreground: root.foreground
-        fontSize: Style.font.caption
-        tooltipText: root.showAllModes ? "Seven modes" : "Common four modes"
-        onClicked: root.setShowAllModes(!root.showAllModes)
-      }
+    Text {
+      anchors.verticalCenter: parent.verticalCenter
+      width: Style.space(28)
+      text: ParallelMode.rootName(root.rootPc)
+      color: root.foreground
+      font.family: Style.font.menuFamily
+      font.pixelSize: Style.font.caption
+      horizontalAlignment: Text.AlignHCenter
     }
 
-    Row {
-      spacing: Style.space(2)
+    Button {
+      text: "▲"
+      bordered: true
+      foreground: root.foreground
+      fontSize: Style.font.caption
+      tooltipText: "Brighten (up a mode)"
+      enabled: root.homeModeIndex > 0
+      onClicked: root.shiftHome(-1)
+    }
 
-      Button {
-        text: "▲"
-        bordered: true
-        foreground: root.foreground
-        fontSize: Style.font.caption
-        tooltipText: "Brighten (up a mode)"
-        enabled: root.homeModeIndex > 0
-        onClicked: root.shiftHome(-1)
-      }
+    Button {
+      text: "▼"
+      bordered: true
+      foreground: root.foreground
+      fontSize: Style.font.caption
+      tooltipText: "Darken (down a mode)"
+      enabled: root.homeModeIndex < 6
+      onClicked: root.shiftHome(1)
+    }
 
-      Button {
-        text: "▼"
-        bordered: true
-        foreground: root.foreground
-        fontSize: Style.font.caption
-        tooltipText: "Darken (down a mode)"
-        enabled: root.homeModeIndex < 6
-        onClicked: root.shiftHome(1)
-      }
+    Button {
+      text: root.useSevenths ? "7ths" : "3"
+      selected: root.useSevenths
+      bordered: true
+      foreground: root.foreground
+      fontSize: Style.font.caption
+      tooltipText: "Triads vs seventh chords"
+      onClicked: root.useSevenths = !root.useSevenths
+    }
+
+    Button {
+      text: root.showAllModes ? "7" : "4"
+      selected: root.showAllModes
+      bordered: true
+      foreground: root.foreground
+      fontSize: Style.font.caption
+      tooltipText: root.showAllModes ? "Seven modes" : "Common four modes"
+      onClicked: root.setShowAllModes(!root.showAllModes)
     }
   }
 }

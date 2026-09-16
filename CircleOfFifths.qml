@@ -112,10 +112,6 @@ Item {
     return payload
   }
 
-  function onWedgeClicked(index, ringName) {
-    root.tonicPicked(index, ringName)
-  }
-
   onKeyIndexChanged: root.clearPreviewHighlight()
 
   Timer {
@@ -506,9 +502,7 @@ Item {
           if (!ring.dragging)
             ring.setHover(mouse.x, mouse.y)
         }
-        onReleased: function(mouse) {
-          if (!ring.dragging && ring.pressHit)
-            root.onWedgeClicked(ring.pressHit.index, ring.pressHit.ring)
+        onReleased: function() {
           ring.dragging = false
           ring.pressHit = null
         }
@@ -560,9 +554,6 @@ Item {
         onChordDragStarted: function(payload) {
           root.chordDragPayload = payload
           root.chordDragStarted(payload)
-        }
-        onRootRequested: function(pc) {
-          root.tonicPicked(Model.keyIndexFromPc(pc), "major")
         }
       }
     }
