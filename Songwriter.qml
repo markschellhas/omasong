@@ -79,8 +79,20 @@ Item {
   readonly property int cardHeight: Math.min(Style.space(820), panel.height - Style.gapsOut * 2)
   readonly property int headerHeight: Style.space(52)
   readonly property int transportHeight: Style.space(44)
-  readonly property int pianoHeight: Style.space(146)
+  // One spacing scale for the whole card. Regions are set apart by regionGap;
+  // each opens with a caption sitting the smaller regionLabelGap above its
+  // content, so the caption groups with what it names instead of floating
+  // between two regions.
+  readonly property int cardPadding: Style.space(8)
+  readonly property int headerGap: Style.space(6)
+  readonly property int regionGap: Style.space(10)
+  readonly property int regionInset: Style.space(3)
+  readonly property int regionLabelHeight: Style.space(13)
+  readonly property int regionLabelGap: Style.space(6)
+  readonly property int regionHeaderHeight: regionLabelHeight + regionLabelGap
+  readonly property int pianoHeight: Style.space(146) + regionHeaderHeight
   readonly property int guitarTabWidth: Style.space(148)
+  readonly property int guitarTabGap: Style.space(12)
   readonly property var displayChord: Model.resolveDisplayChord(
     root.playing,
     root.playEvent && root.playEvent.chord,
@@ -1542,10 +1554,12 @@ Item {
         Item {
           id: content
           anchors.fill: parent
-          anchors.margins: Style.spacing.md
+          anchors.margins: root.cardPadding
 
         readonly property int circleHeight: {
-          var rest = height - root.headerHeight - root.transportHeight - root.pianoHeight
+          var chrome = root.headerHeight + root.headerGap + root.transportHeight
+          var gaps = root.regionGap * 3
+          var rest = height - chrome - gaps - root.pianoHeight
           return Math.min(Style.space(340), Math.max(Style.space(230), Math.floor(rest / 3)))
         }
 
@@ -1605,6 +1619,7 @@ Item {
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: header.bottom
+          anchors.topMargin: root.headerGap
           height: root.transportHeight
           foreground: root.foreground
           dim: root.dim
@@ -1646,6 +1661,7 @@ Item {
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: transport.bottom
+          anchors.topMargin: root.regionGap
           height: content.circleHeight
 
           MouseArea {
@@ -1662,10 +1678,30 @@ Item {
             radius: Math.max(2, Style.cornerRadius / 2)
           }
 
+          RegionLabel {
+            id: paletteLabel
+            height: root.regionLabelHeight
+            color: root.dim
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: root.regionInset
+            anchors.rightMargin: root.regionInset
+            // The region is the wheel, the degree chips and the parallel-mode
+            // grid together: everything you pick a chord from.
+            text: "Chord palette"
+          }
+
           CircleOfFifths {
             id: circle
-            anchors.fill: parent
-            anchors.margins: Style.space(2)
+            anchors.top: paletteLabel.bottom
+            anchors.topMargin: root.regionLabelGap
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: root.regionInset
+            anchors.rightMargin: root.regionInset
+            anchors.bottomMargin: root.regionInset
             foreground: root.foreground
             dim: root.dim
             faint: root.faint
@@ -1694,7 +1730,9 @@ Item {
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.top: circleHost.bottom
+          anchors.topMargin: root.regionGap
           anchors.bottom: pianoHost.top
+          anchors.bottomMargin: root.regionGap
 
           MouseArea {
             anchors.fill: parent
@@ -1710,10 +1748,28 @@ Item {
             radius: Math.max(2, Style.cornerRadius / 2)
           }
 
+          RegionLabel {
+            id: structureLabel
+            height: root.regionLabelHeight
+            color: root.dim
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: root.regionInset
+            anchors.rightMargin: root.regionInset
+            text: "Song structure"
+          }
+
           SongStructure {
             id: structure
-            anchors.fill: parent
-            anchors.margins: Style.space(2)
+            anchors.top: structureLabel.bottom
+            anchors.topMargin: root.regionLabelGap
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.leftMargin: root.regionInset
+            anchors.rightMargin: root.regionInset
+            anchors.bottomMargin: root.regionInset
             menuLayer: menuOverlay
             foreground: root.foreground
             dim: root.dim
@@ -1820,15 +1876,38 @@ Item {
 
           Item {
             anchors.fill: parent
-            anchors.margins: Style.space(2)
+            anchors.margins: root.regionInset
+
+            RegionLabel {
+              id: pianoLabel
+              height: root.regionLabelHeight
+              color: root.dim
+              anchors.top: parent.top
+              anchors.left: parent.left
+              anchors.right: tabDivider.left
+              anchors.rightMargin: root.guitarTabGap
+              text: "Piano roll"
+            }
+
+            RegionLabel {
+              id: tabLabel
+              height: root.regionLabelHeight
+              color: root.dim
+              anchors.top: parent.top
+              anchors.left: tabPane.left
+              anchors.right: parent.right
+              anchors.leftMargin: Style.space(8)
+              text: "Guitar tabs"
+            }
 
             Piano {
               id: piano
               anchors.left: parent.left
-              anchors.top: parent.top
+              anchors.top: pianoLabel.bottom
+              anchors.topMargin: root.regionLabelGap
               anchors.bottom: parent.bottom
               anchors.right: tabDivider.left
-              anchors.rightMargin: Style.spacing.sm
+              anchors.rightMargin: root.guitarTabGap
               foreground: root.foreground
               dim: root.dim
               octave: root.laptopOctave
@@ -1858,10 +1937,10 @@ Item {
             Rectangle {
               id: tabDivider
               anchors.right: tabPane.left
-              anchors.rightMargin: Style.spacing.sm
-              anchors.verticalCenter: parent.verticalCenter
+              anchors.rightMargin: root.guitarTabGap
+              anchors.verticalCenter: piano.verticalCenter
               width: 1
-              height: parent.height * 0.82
+              height: piano.height * 0.82
               color: root.dim
               opacity: 0.35
             }
@@ -1869,7 +1948,8 @@ Item {
             GuitarTab {
               id: tabPane
               anchors.right: parent.right
-              anchors.top: parent.top
+              anchors.top: tabLabel.bottom
+              anchors.topMargin: root.regionLabelGap
               anchors.bottom: parent.bottom
               width: root.guitarTabWidth
               foreground: root.foreground
