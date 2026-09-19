@@ -32,7 +32,8 @@ related_features:
 
 core_components:
   - js/BeatUi.js
+  - drywet/instrument.py
   - tests/js_tests.js
   - tests/run.py
 
-notes: "Steps are sixteenths from numerator*16/denominator: 4/4=16, 3/4=12, 6/8=12. Patterns are on/off only; tails mix into the next bar. Loop wraps the last tail into bar 1 so each cycle stays the nominal length."
+notes: "Steps are sixteenths from numerator*16/denominator: 4/4=16, 3/4=12, 6/8=12. Patterns are on/off only. drywet.Drum triggers sit on the Transport sample clock; tails mix into the next bar. Loop wraps the last tail into bar 1 so each cycle stays the nominal length."

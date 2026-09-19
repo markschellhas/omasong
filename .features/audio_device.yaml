@@ -1,16 +1,17 @@
 feature_name: audio_device
-purpose: "Play through PipeWire on the host."
+purpose: "Play through PipeWire on the host. The sink command is vendored drywet; the paced writer stays in the adapter."
 
 entry_points:
   - play-notes.py
+  - drywet/sink.py
   - Songwriter.qml
 
 apps:
   - songwriter
 
 user_flow:
-  primary: "Play/preview/live → play-notes.py --engine → pw-cat raw s16 44100 mono latency 80ms stdin -"
-  warmup: "Overlay open → warmup preloads C3–C5 samples and starts the silence clock so the first preview does not cold-start pw-cat"
+  primary: "Play/preview/live → play-notes.py --engine → drywet PipeWireSink pw-cat raw s16 44100 mono; adapter adds --latency 80ms"
+  warmup: "Overlay open → warmup loads the active bank through drywet.Sampler and starts the silence clock"
 
 related_features:
   - playback (engine output)
@@ -18,9 +19,11 @@ related_features:
   - beats (synthesized percussion measure output)
 
 core_components:
+  - drywet/sink.py
+  - drywet/instrument.py
   - tests/run.py
   - samples/piano
   - samples/epiano
   - samples/organ
 
-notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano, Electric Piano, and Organ mix sample banks. Persistent process; sample cache lives across bars; pw-play is not the transport path. Warmup starts the silence clock; keepalive holds OUTPUT_LATENCY_MS (not one 20ms chunk) so pw-cat does not underrun. play-midi overlays at the write cursor (does not concatenate one-shots). note-on/note-off mix live voices per chunk; they must not prerender a duration or write() a prefill burst. PipeWire and omarchy plugin validate are not in CI."
+notes: "drywet/ is vendored (drywet/UPSTREAM); plugin install does not pip install it. Song JSON, instrument index 0–2, and note-on voices stay in play-notes.py. Paced stdin writer stays there: drywet PipeWireSink writes a block and closes on stop, which restarts pw-cat. Adapter appends --latency 80ms because drywet's argv omits it (pw-cat default 100ms underruns the 20ms writer). Sample cache lives across bars. pw-play is not the transport path."
