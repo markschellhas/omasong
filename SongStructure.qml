@@ -173,9 +173,9 @@ Item {
     root.internalDragSource = null
   }
 
-  function spanFromResizeX(slots, slotIndex, fromLeft, x, width) {
+  function resizePreview(slots, slotIndex, fromLeft, x, width) {
     if (!slots || slotIndex < 0 || slotIndex >= slots.length)
-      return 1
+      return { span: 1, edgeX: 0 }
     var start = 0
     var i
     for (i = 0; i < slotIndex; i++)
@@ -194,7 +194,13 @@ Item {
     var next = fromLeft ? (start + span) - unit : unit - start
     if (next < 1)
       next = 1
-    return next
+    var edgeUnit = fromLeft ? (start + span) - next : start + next
+    var edgeX = Math.floor(edgeUnit * width / capacity)
+    return { span: next, edgeX: edgeX }
+  }
+
+  function spanFromResizeX(slots, slotIndex, fromLeft, x, width) {
+    return root.resizePreview(slots, slotIndex, fromLeft, x, width).span
   }
 
   function pickMenu(item) {
@@ -365,6 +371,9 @@ Item {
                     var n = ts ? Number(ts.numerator) : 4
                     return n < 1 ? 1 : n
                   }
+                  property int resizePreviewSlot: -1
+                  property string resizePreviewEdge: ""
+                  property real resizePreviewX: 0
                   x: index * (barRow.boxW + root.measureGap)
                   width: barRow.boxW
                   height: barRow.height
@@ -607,12 +616,31 @@ Item {
                               }
                             }
                           }
-                          if (!pressed || resizing || pendingClear || !pressEdge)
+                          if (!pressed || pendingClear || !pressEdge)
                             return
-                          var dx = mouse.x - pressX
-                          var dy = mouse.y - pressY
-                          if (dx * dx + dy * dy >= 4)
-                            resizing = true
+                          if (!resizing) {
+                            var dx = mouse.x - pressX
+                            var dy = mouse.y - pressY
+                            if (dx * dx + dy * dy >= 4) {
+                              resizing = true
+                              measureBox.resizePreviewSlot = slotBox.slotIndex
+                              measureBox.resizePreviewEdge = pressEdge
+                              measureBox.resizePreviewX = pressEdge === "left"
+                                ? measureBox.slotX(slotBox.slotIndex)
+                                : measureBox.slotX(slotBox.slotIndex) + measureBox.slotW(slotBox.slotIndex)
+                            }
+                          }
+                          if (resizing) {
+                            var rx = mapToItem(measureBox, mouse.x, 0).x
+                            var preview = root.resizePreview(
+                              measureBox.slots,
+                              slotBox.slotIndex,
+                              pressEdge === "left",
+                              rx,
+                              measureBox.width
+                            )
+                            measureBox.resizePreviewX = preview.edgeX
+                          }
                         }
 
                         onReleased: function(mouse) {
@@ -651,8 +679,36 @@ Item {
                           pendingClear = false
                           resizing = false
                           pressEdge = ""
+                          measureBox.resizePreviewSlot = -1
                         }
                       }
+                    }
+                  }
+
+                  Rectangle {
+                    id: resizeGhost
+                    visible: measureBox.resizePreviewSlot >= 0
+                    y: 0
+                    height: root.slotHeight
+                    radius: Math.max(2, Style.cornerRadius / 2)
+                    color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.16)
+                    border.width: 2
+                    border.color: Color.accent
+                    readonly property real fixedEdge: measureBox.resizePreviewEdge === "left"
+                      ? measureBox.slotX(measureBox.resizePreviewSlot) + measureBox.slotW(measureBox.resizePreviewSlot)
+                      : measureBox.slotX(measureBox.resizePreviewSlot)
+                    x: measureBox.resizePreviewEdge === "left"
+                      ? measureBox.resizePreviewX
+                      : resizeGhost.fixedEdge
+                    width: Math.max(1, measureBox.resizePreviewEdge === "left"
+                      ? resizeGhost.fixedEdge - measureBox.resizePreviewX
+                      : measureBox.resizePreviewX - resizeGhost.fixedEdge)
+
+                    Behavior on x {
+                      NumberAnimation { duration: 100; easing.type: Easing.OutCubic }
+                    }
+                    Behavior on width {
+                      NumberAnimation { duration: 100; easing.type: Easing.OutCubic }
                     }
                   }
 
