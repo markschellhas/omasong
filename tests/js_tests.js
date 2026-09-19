@@ -967,3 +967,33 @@ assertEq(dropLoc.quality, "diminished")
 var dropAeolian = decodeChord(encodeChord(toTriadPayload(aeolian6)))
 assertEq(dropAeolian.rootPc, 8)
 assertEq(dropAeolian.quality, "major")
+
+// Bar-widget status document: the widget must survive a stale, truncated, or
+// hostile status.json without ever inventing a playing state.
+var statusPlaying = statusDocument(true, "My Song", false)
+assertEq(statusPlaying.playing, true)
+assertEq(statusPlaying.panelOpen, false)
+assertEq(statusPlaying.title, "My Song")
+assertEq(statusDocument(1, "x", 1).playing, false, "only true means playing")
+assertEq(statusDocument(true, "a\nb\tc", true).title, "a b c", "title is one line")
+assertEq(statusDocument(true, null, true).title, "")
+var longTitle = ""
+while (longTitle.length < 400)
+  longTitle += "x"
+assertEq(statusDocument(true, longTitle, true).title.length, 120, "title is capped")
+
+assertEq(parseStatus(JSON.stringify(statusPlaying)).playing, true)
+assertEq(parseStatus(JSON.stringify(statusPlaying)).title, "My Song")
+assertEq(parseStatus("").playing, false)
+assertEq(parseStatus("{not json").playing, false)
+assertEq(parseStatus("[]").playing, false, "arrays are not a status document")
+assertEq(parseStatus("null").playing, false)
+assertEq(parseStatus(undefined).playing, false)
+assertEq(parseStatus('{"playing":"yes"}').playing, false, "truthy strings are not playing")
+assertEq(parseStatus('{"playing":true,"title":"a\\nb"}').title, "a b")
+
+assertEq(tooltipText(false, "My Song", false), "Open Songwriter")
+assert(tooltipText(true, "My Song", true).indexOf("Playing: My Song") === 0)
+assert(tooltipText(true, "My Song", false).indexOf("Playing in background: My Song") === 0)
+assert(tooltipText(true, "", true).indexOf("Untitled") >= 0, "blank title falls back")
+assertEq(tooltipText(true, "<b>x</b>", true).indexOf("<"), -1, "tooltip markup is neutralized")

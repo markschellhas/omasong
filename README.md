@@ -19,6 +19,7 @@ Plugin id: `markschellhas.songwriter`
 | `instruments` | Piano, Electric Piano, Organ |
 | `laptop_keys` | Off by default; A=C, W=C♯, …; Z/X octave; steals H/J/K/L when on |
 | `region_focus` | j/k or ↑/↓ cycle Circle / Song / Keyboard; h/l or ←/→ act on the highlighted region; Tab moves Song cells |
+| `background_playback` | Closing the panel mid-play keeps the song sounding; the bar chip turns red, right-click it to stop |
 | `agent_api` | `chords-agent progressions \| song \| health` on 127.0.0.1:17891 |
 | `audio_device` | PipeWire output |
 
@@ -33,6 +34,10 @@ omarchy bar move markschellhas.songwriter --section right
 
 Left-click the bar chip to open the overlay. Clicks outside the card pass
 through to the desktop. Esc closes.
+
+Closing the panel while the song is playing does not stop it. The chip turns
+red for as long as the transport is running; right-click it to stop, or
+left-click to get the overlay back.
 
 ### Keyboard shortcut
 

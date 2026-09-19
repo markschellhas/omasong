@@ -9,6 +9,7 @@ import "js/Song.js" as Song
 import "js/Agent.js" as Agent
 import "js/Keyboard.js" as KeyMap
 import "js/Focus.js" as Focus
+import "js/Status.js" as Status
 
 Item {
   id: root
@@ -112,6 +113,12 @@ Item {
     Qt.resolvedUrl("song-library").toString().replace(/^file:\/\//, ""))
   readonly property string libraryRuntimeDir: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-songwriter"
   readonly property string saveSelectionPath: libraryRuntimeDir + "/save-selection.json"
+  // Playback outlives the panel, so the bar widget reads the transport state
+  // from here rather than from this component.
+  readonly property string statusPath: libraryRuntimeDir + "/status.json"
+  readonly property string statusTitle: (song && song.title) ? String(song.title) : "Untitled"
+  property string publishedStatus: ""
+  property int statusRetries: 0
 
   property var librarySongs: []
   property string libraryMenuKind: ""
@@ -151,12 +158,25 @@ Item {
   }
 
   function close() {
-    stopPlayback()
     closeLibraryMenu()
     closeBeatEditor()
+    // Held laptop/piano notes have no key-up once the panel is gone.
+    releaseAllLiveNotes()
     opened = false
     stopAgentServer()
-    stopAudioEngine()
+    // A sounding transport keeps the engine: the song plays on with the panel
+    // closed, and the bar widget goes urgent until it stops. stopPlayback()
+    // releases the engine itself once opened is false.
+    if (!playing)
+      stopPlayback()
+  }
+
+  function publishStatus() {
+    var text = JSON.stringify(Status.statusDocument(playing, statusTitle, opened))
+    if (text === publishedStatus)
+      return
+    publishedStatus = text
+    statusFile.setText(text)
   }
 
   function dismiss() {
@@ -932,6 +952,9 @@ Item {
     transportTimer.stop()
     clearSlotFill()
     refreshPiano()
+    // Nothing else needs the sink while the panel is closed.
+    if (!opened)
+      stopAudioEngine()
   }
 
   function auditionSlot(sectionIndex, measureIndex, slotIndex) {
@@ -1335,9 +1358,12 @@ Item {
     }
     onStarted: root.engineSend({ cmd: "warmup", instrument: root.currentInstrument() })
     onExited: {
+      // stopPlayback() clears root.playing, so the background case has to be
+      // read before it runs.
+      var keepAlive = root.opened || root.playing
       if (root.playing)
         root.stopPlayback()
-      if (root.opened)
+      if (keepAlive)
         audioEngineRestart.restart()
     }
   }
@@ -1352,6 +1378,42 @@ Item {
       }
     }
   }
+
+  FileView {
+    id: statusFile
+    path: root.statusPath
+    atomicWrites: true
+    printErrors: false
+    onSaved: root.statusRetries = 0
+    // The runtime dir is created by an async install(1) at startup, so an early
+    // write can land before it exists. Retry a few times rather than leaving the
+    // bar widget on a state the transport has already left.
+    onSaveFailed: {
+      if (root.statusRetries >= 5)
+        return
+      root.statusRetries += 1
+      root.publishedStatus = ""
+      statusRetry.restart()
+    }
+  }
+
+  Timer {
+    id: statusRetry
+    interval: 500
+    onTriggered: root.publishStatus()
+  }
+
+  Timer {
+    id: statusInit
+    // Clear whatever a previous shell left behind for this session.
+    interval: 400
+    running: true
+    onTriggered: root.publishStatus()
+  }
+
+  onPlayingChanged: publishStatus()
+  onOpenedChanged: publishStatus()
+  onStatusTitleChanged: publishStatus()
 
   Component.onCompleted: {
     Quickshell.execDetached(["install", "-d", "-m", "700", root.libraryRuntimeDir])

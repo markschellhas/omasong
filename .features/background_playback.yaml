@@ -1,0 +1,28 @@
+feature_name: background_playback
+purpose: "Keep the transport sounding after the overlay panel is closed, and show it on the bar."
+
+entry_points:
+  - BarWidget.qml
+  - Songwriter.qml
+  - js/Status.js
+
+apps:
+  - songwriter
+
+user_flow:
+  primary: "User → close panel (X, Escape, bar toggle) while playing → panel hides, transport and audio engine keep running"
+  indicator: "playing true → bar widget WidgetButton.active → bar.urgent (red) glyph; tooltip names the song"
+  stop: "User → right-click bar widget → omarchy-shell shell call ... stopPlayback → transport stops, engine released, glyph returns to foreground"
+  reopen: "User → left-click bar widget → toggle → open() re-warms the engine; playhead never left wall clock"
+  end: "Loop off and song ends while closed → transportTimer stops playback → engine released, glyph clears"
+
+related_features:
+  - playback (transport, timeline, engine protocol)
+  - audio_device (the sink that stays open)
+  - laptop_keys (held notes are released on close)
+  - song_library (title shown in the bar tooltip)
+
+core_components:
+  - tests/js_tests.js
+
+notes: "Overlay and bar widget are separate QML components with no shared object graph, so state crosses as status.json (FileView setText/atomicWrites out, FileView watchChanges in). Only playing/panelOpen/title cross — per-chord statusText would mean a write per chord. Status.parseStatus treats the file as untrusted: stale, truncated, or non-object input reads as not playing. manifest keepLoaded:true is what lets the engine Process outlive hide(); shell.hide() calls close() on the item. close() skips stopPlayback while playing; stopPlayback releases the engine itself when opened is false. A shell crash leaves a stale file, so startup republishes after the runtime dir exists, with a bounded retry. No QML tests in CI; status shaping is tested through js/Status.js."
