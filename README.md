@@ -1,8 +1,8 @@
-# Mark's Songwriter Board
+# OMASONG 900
 
 Omarchy shell plugin: a bar chip and overlay for circle of fifths, song structure, piano, and guitar tab.
 
-Plugin id: `markschellhas.songwriter`
+Plugin id: `markschellhas.omasong`
 
 ## Features
 
@@ -28,8 +28,8 @@ Changing the circle does **not** transpose placed chords. Chords are triads, not
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/markschellhas/songwriter.git --enable
-omarchy bar move markschellhas.songwriter --section right
+omarchy plugin add https://github.com/markschellhas/omasong.git --enable
+omarchy bar move markschellhas.omasong --section right
 ```
 
 Left-click the bar chip to open the overlay. Clicks outside the card pass
@@ -45,7 +45,7 @@ Omarchy does not load Hyprland binds from plugins, so add this to
 `~/.config/hypr/bindings.lua` after install.
 
 ```lua
-o.bind("SUPER + CTRL + ALT + S", "Songwriter", "omarchy-shell shell toggle markschellhas.songwriter")
+o.bind("SUPER + CTRL + ALT + S", "OMASONG", "omarchy-shell shell toggle markschellhas.omasong")
 ```
 
 ## Status
@@ -57,13 +57,13 @@ Automated check: `python3 tests/run.py`. Full overlay and `omarchy plugin valida
 ## Remove
 
 ```bash
-omarchy plugin remove markschellhas.songwriter
+omarchy plugin remove markschellhas.omasong
 ```
 
 ## Develop locally
 
 ```bash
-omarchy plugin validate ~/.config/omarchy/plugins/markschellhas.songwriter
+omarchy plugin validate ~/.config/omarchy/plugins/markschellhas.omasong
 python3 tests/run.py
 omarchy-shell shell rescanPlugins
 ```

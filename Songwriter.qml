@@ -182,7 +182,7 @@ Item {
   function dismiss() {
     close()
     if (shell && typeof shell.hide === "function")
-      shell.hide((manifest && manifest.id) || "markschellhas.songwriter")
+      shell.hide((manifest && manifest.id) || "markschellhas.omasong")
   }
 
   function startAgentServer() {

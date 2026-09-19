@@ -1,19 +1,20 @@
 {
   "schemaVersion": 1,
-  "id": "markschellhas.songwriter",
-  "name": "Songwriter",
+  "id": "markschellhas.omasong",
+  "name": "OMASONG",
   "version": "0.2.0",
   "author": "Mark Schellhas",
   "license": "MIT",
-  "description": "Mark's Songwriter Board: circle of fifths, song structure, and piano.",
-  "homepage": "https://github.com/markschellhas/songwriter",
-  "repository": "https://github.com/markschellhas/songwriter",
+  "description": "OMASONG 900: circle of fifths, song structure, and piano.",
+  "homepage": "https://github.com/markschellhas/omasong",
+  "repository": "https://github.com/markschellhas/omasong",
   "keywords": [
     "music",
     "chords",
     "tabs",
     "circle of fifths",
-    "songwriter"
+    "omasong",
+    "songbook"
   ],
   "kinds": [
     "overlay",
@@ -25,8 +26,8 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Songwriter",
-    "description": "Open the songwriter overlay",
+    "displayName": "OMASONG",
+    "description": "Open the OMASONG overlay",
     "category": "Music",
     "allowMultiple": false,
     "defaultSection": "right"

@@ -6,7 +6,7 @@ import "js/Status.js" as Status
 
 BarWidget {
   id: root
-  moduleName: "markschellhas.songwriter"
+  moduleName: "markschellhas.omasong"
 
   // The overlay is keepLoaded, so its transport keeps sounding after the panel
   // is closed. The two components share no object graph, so the transport state
@@ -67,12 +67,12 @@ BarWidget {
         return
       if (mouseButton === Qt.RightButton) {
         if (root.playing)
-          root.bar.run("omarchy-shell shell call markschellhas.songwriter stopPlayback ''")
+          root.bar.run("omarchy-shell shell call markschellhas.omasong stopPlayback ''")
         return
       }
       if (mouseButton !== Qt.LeftButton)
         return
-      root.bar.run("omarchy-shell shell toggle markschellhas.songwriter")
+      root.bar.run("omarchy-shell shell toggle markschellhas.omasong")
     }
   }
 }
