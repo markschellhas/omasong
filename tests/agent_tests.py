@@ -416,9 +416,9 @@ def test_rate_limit_returns_429() -> None:
             saw_429 = False
             for _ in range(200):
                 try:
-                    with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.5) as resp:
+                    with urllib.request.urlopen(f"http://127.0.0.1:{port}/song", timeout=0.5) as resp:
                         if resp.status != 200:
-                            raise SystemExit(f"unexpected health status {resp.status}")
+                            raise SystemExit(f"unexpected song status {resp.status}")
                 except urllib.error.HTTPError as exc:
                     if exc.code == 429:
                         saw_429 = True
@@ -426,6 +426,11 @@ def test_rate_limit_returns_429() -> None:
                     raise SystemExit(f"unexpected HTTP error {exc.code}")
             if not saw_429:
                 raise SystemExit("expected rate limit 429 after burst")
+
+            for _ in range(200):
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.5) as resp:
+                    if resp.status != 200:
+                        raise SystemExit(f"unexpected health status {resp.status} (should be exempt from rate limit)")
         finally:
             stop_server(proc)
         print("agent rate limit 429 ok")

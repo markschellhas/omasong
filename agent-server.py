@@ -204,6 +204,7 @@ class RateLimiter:
 
 class AgentHandler(BaseHTTPRequestHandler):
     server_version = "chords-agent/1"
+    timeout = 5  # seconds; StreamRequestHandler.setup() calls connection.settimeout(self.timeout)
 
     def log_message(self, fmt: str, *args: object) -> None:
         return
@@ -261,10 +262,10 @@ class AgentHandler(BaseHTTPRequestHandler):
         return None, 404
 
     def do_GET(self) -> None:  # noqa: N802
-        if self._rate_limited():
+        path = self.path.split("?", 1)[0]
+        if path != "/health" and self._rate_limited():
             self._json(429, '{"error":"rate limit exceeded"}')
             return
-        path = self.path.split("?", 1)[0]
         body, err = self._document(path)
         if body is None:
             if err == 503:
@@ -275,10 +276,10 @@ class AgentHandler(BaseHTTPRequestHandler):
         self._json(200, body)
 
     def do_HEAD(self) -> None:  # noqa: N802
-        if self._rate_limited():
+        path = self.path.split("?", 1)[0]
+        if path != "/health" and self._rate_limited():
             self._json(429, '{"error":"rate limit exceeded"}', head_only=True)
             return
-        path = self.path.split("?", 1)[0]
         body, err = self._document(path)
         if body is None:
             if err == 503:
@@ -292,11 +293,33 @@ class AgentHandler(BaseHTTPRequestHandler):
         self._json(405, '{"error":"only GET is supported"}')
 
 
+MAX_CONCURRENT_CONNECTIONS = 32
+
+
+class BoundedThreadingHTTPServer(ThreadingHTTPServer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._semaphore = threading.BoundedSemaphore(MAX_CONCURRENT_CONNECTIONS)
+
+    def process_request(self, request, client_address):
+        if not self._semaphore.acquire(blocking=False):
+            # Already at the cap — drop the connection immediately, don't queue.
+            self.shutdown_request(request)
+            return
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._semaphore.release()
+
+
 def serve(port: int, home: Optional[Path] = None) -> int:
     if home is not None:
         os.environ["CHORDS_AGENT_HOME"] = str(home)
     try:
-        httpd = ThreadingHTTPServer(("127.0.0.1", port), AgentHandler)
+        httpd = BoundedThreadingHTTPServer(("127.0.0.1", port), AgentHandler)
     except OSError as exc:
         sys.stderr.write(f"agent-server: bind 127.0.0.1:{port} failed: {exc}\n")
         return 2
