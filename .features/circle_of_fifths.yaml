@@ -12,7 +12,7 @@ apps:
 
 user_flow:
   primary: "User → h/l, ←/→, or mouse wheel → rotate; tonic at 12 o'clock. Wedge click does not rotate."
-  drag: "User → drag outer/inner wedge, I–vii° chip, or parallel-mode grid cell → encodeChord triad payload onto a bar slot"
+  drag: "User → drag outer/inner wedge, I–vii° chip, or parallel-mode grid cell → encodeChord triad payload onto a bar slot; cursor shows a DragGhost (accent-filled circle, chord label) as the native drag icon"
   preview: "User → click wedge or chip, or press 1–7 with Circle focused → play triad without rotating; matching chip + I–vi wedge highlight; piano and tab show that triad and keep it after the audition; chip click does not insert"
   grid: "User → one strip row: ▲/▼ brighten/darken home mode, 3/7ths or 4/7 mode toggle; click mode label → home row. Root changes via wheel or ←/→, not grid buttons."
 
@@ -27,5 +27,6 @@ related_features:
 core_components:
   - js/Model.js
   - js/Focus.js
+  - DragGhost.qml
 
-notes: "Key change must not transpose placed chords. 1–7 (Circle focused) highlights the chip and I–vi wedge; vii° is chip-only. Auto-repeat does not re-audition; preview audio is gap-limited. Three equal columns: key label + I–vii° chips left, ring center (cy at south edge, radius 1.5× half-height so south clips), parallel-mode grid right. Grid drops triads even when 7ths are shown."
+notes: "Key change must not transpose placed chords. 1–7 (Circle focused) highlights the chip and I–vi wedge; vii° is chip-only. Auto-repeat does not re-audition; preview audio is gap-limited. Three equal columns: key label + I–vii° chips left, ring center (cy at south edge, radius 1.5× half-height so south clips), parallel-mode grid right. Grid drops triads even when 7ths are shown. Drag start grabToImage()s an off-canvas DragGhost (Color.accent circle, Color.background label text, same accent as active piano keys) into Drag.imageSource before setting Drag.active, so the OS drag pixmap shows the ghost, not the source chip/wedge/cell; a dragPending guard on each source defers Drag.active until the async grab callback resolves."

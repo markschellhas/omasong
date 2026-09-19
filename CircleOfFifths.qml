@@ -104,12 +104,26 @@ Item {
     return payload
   }
 
-  function startChordDragOn(item, chord) {
+  function startChordDragOn(item, chord, onReady) {
     var payload = root.beginChordDrag(chord)
     if (!payload)
       return ""
     item.Drag.mimeData = { "text/plain": payload }
+    var hot = dragGhost.diameter / 2
+    item.Drag.hotSpot = Qt.point(hot, hot)
+    dragGhost.label = Model.chordName(chord.rootPc, chord.quality)
+    dragGhost.grabToImage(function(result) {
+      item.Drag.imageSource = result.url
+      if (onReady)
+        onReady()
+    })
     return payload
+  }
+
+  DragGhost {
+    id: dragGhost
+    x: -1000
+    y: -1000
   }
 
   onKeyIndexChanged: root.clearPreviewHighlight()
@@ -215,6 +229,7 @@ Item {
     width: implicitWidth
     height: implicitHeight
     property bool dragging: false
+    property bool dragPending: false
     property real pressX: 0
     property real pressY: 0
 
@@ -252,15 +267,19 @@ Item {
         chip.pressX = mouse.x
         chip.pressY = mouse.y
         chip.dragging = false
+        chip.dragPending = false
       }
       onPositionChanged: function(mouse) {
-        if (!pressed || chip.dragging || !chip.chipChord)
+        if (!pressed || chip.dragging || chip.dragPending || !chip.chipChord)
           return
         var dx = mouse.x - chip.pressX
         var dy = mouse.y - chip.pressY
         if (dx * dx + dy * dy >= 64) {
-          root.startChordDragOn(chipMouse, chip.chipChord)
-          chip.dragging = true
+          chip.dragPending = true
+          root.startChordDragOn(chipMouse, chip.chipChord, function() {
+            chip.dragPending = false
+            chip.dragging = true
+          })
         }
       }
       onReleased: function() {
@@ -352,6 +371,7 @@ Item {
       property int hoverIndex: -1
       property string hoverRing: ""
       property bool dragging: false
+      property bool dragPending: false
       property var pressHit: null
       property real pressX: 0
       property real pressY: 0
@@ -487,19 +507,23 @@ Item {
           ring.pressX = mouse.x
           ring.pressY = mouse.y
           ring.dragging = false
+          ring.dragPending = false
           if (ring.pressHit)
             root.preview(ring.pressHit.index, ring.pressHit.ring)
         }
         onPositionChanged: function(mouse) {
-          if (pressed && ring.pressHit && !ring.dragging) {
+          if (pressed && ring.pressHit && !ring.dragging && !ring.dragPending) {
             var dx = mouse.x - ring.pressX
             var dy = mouse.y - ring.pressY
             if (dx * dx + dy * dy >= 64) {
-              root.startChordDragOn(ringMouse, root.stationChord(ring.pressHit.index, ring.pressHit.ring))
-              ring.dragging = true
+              ring.dragPending = true
+              root.startChordDragOn(ringMouse, root.stationChord(ring.pressHit.index, ring.pressHit.ring), function() {
+                ring.dragPending = false
+                ring.dragging = true
+              })
             }
           }
-          if (!ring.dragging)
+          if (!ring.dragging && !ring.dragPending)
             ring.setHover(mouse.x, mouse.y)
         }
         onReleased: function() {

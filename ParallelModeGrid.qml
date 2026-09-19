@@ -79,13 +79,28 @@ Item {
     return Model.encodeChord(chord)
   }
 
-  function startCellDragOn(item, modeIndex, degreeIndex) {
+  function startCellDragOn(item, modeIndex, degreeIndex, onReady) {
     var payload = root.cellPayload(modeIndex, degreeIndex)
     if (!payload)
       return ""
     root.chordDragStarted(payload)
     item.Drag.mimeData = { "text/plain": payload }
+    var hot = dragGhost.diameter / 2
+    item.Drag.hotSpot = Qt.point(hot, hot)
+    var chord = ParallelMode.cellChord(rootPc, modeIndex, degreeIndex, useSevenths)
+    dragGhost.label = chord && chord.symbol ? chord.symbol : ""
+    dragGhost.grabToImage(function(result) {
+      item.Drag.imageSource = result.url
+      if (onReady)
+        onReady()
+    })
     return payload
+  }
+
+  DragGhost {
+    id: dragGhost
+    x: -1000
+    y: -1000
   }
 
   Item {
@@ -260,6 +275,7 @@ Item {
                 preventStealing: true
 
                 property bool dragging: false
+                property bool dragPending: false
                 property real pressX: 0
                 property real pressY: 0
 
@@ -285,19 +301,25 @@ Item {
                   pressX = mouse.x
                   pressY = mouse.y
                   dragging = false
+                  dragPending = false
                   root.selectedMode = chordCell.info.modeIndex
                   root.selectedDegree = chordCell.info.degreeIndex
                   root.auditionCell(chordCell.info.modeIndex, chordCell.info.degreeIndex)
                 }
                 onPositionChanged: function(mouse) {
-                  if (!pressed || dragging)
+                  if (!pressed || dragging || dragPending)
                     return
                   var dx = mouse.x - pressX
                   var dy = mouse.y - pressY
                   if (dx * dx + dy * dy < 64)
                     return
-                  if (root.startCellDragOn(cellMouse, chordCell.info.modeIndex, chordCell.info.degreeIndex))
+                  dragPending = true
+                  var started = root.startCellDragOn(cellMouse, chordCell.info.modeIndex, chordCell.info.degreeIndex, function() {
+                    dragPending = false
                     dragging = true
+                  })
+                  if (!started)
+                    dragPending = false
                 }
                 onReleased: function() {
                   dragging = false
