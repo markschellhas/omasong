@@ -1633,6 +1633,7 @@ Item {
           }
           onBpmChangedByUser: function(value) {
             root.applySongFields({ bpm: value })
+            root.refocusKeys()
           }
           onTitleEdited: function(value) {
             root.applySongFields({ title: value })

@@ -218,6 +218,7 @@ Item {
           var n = parseInt(text, 10)
           if (isFinite(n) && n !== root.bpm)
             root.bpmChangedByUser(n)
+          bpmInput.focus = false
         }
       }
     }
