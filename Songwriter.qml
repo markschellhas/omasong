@@ -1558,33 +1558,31 @@ Item {
 
           Text {
             id: title
-            anchors.top: parent.top
             anchors.left: parent.left
-            anchors.right: closeButton.left
-            anchors.rightMargin: Style.spacing.sm
-            height: Style.space(30)
-            text: "HERMANICA 83"
+            anchors.verticalCenter: parent.verticalCenter
+            text: "OMASONG 900"
             color: root.foreground
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.heading
             font.bold: true
             elide: Text.ElideRight
-            horizontalAlignment: Text.AlignHCenter
+            horizontalAlignment: Text.AlignLeft
             verticalAlignment: Text.AlignVCenter
           }
 
           Text {
-            anchors.top: title.bottom
-            anchors.left: parent.left
+            anchors.left: title.right
+            anchors.leftMargin: Style.spacing.sm
             anchors.right: closeButton.left
             anchors.rightMargin: Style.spacing.sm
-            anchors.bottom: parent.bottom
+            anchors.verticalCenter: parent.verticalCenter
             text: "Songwriting Arrangement Station"
             textFormat: Text.PlainText
             color: root.dim
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.caption
-            horizontalAlignment: Text.AlignHCenter
+            font.italic: true
+            horizontalAlignment: Text.AlignLeft
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
           }
