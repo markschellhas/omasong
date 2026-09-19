@@ -77,15 +77,34 @@ Item {
   readonly property int beatEditorStepCount: beatEditorSectionData
     ? Song.beatStepCount(beatEditorSectionData.timeSig) : 16
   readonly property int laptopOctave: KeyMap.clampOctave(song && song.laptopOctave)
-  readonly property int cardWidth: Math.min(Style.space(1180), panel.width - Style.gapsOut * 2)
-  readonly property int cardHeight: Math.min(Style.space(820), panel.height - Style.gapsOut * 2)
-  readonly property int headerHeight: Style.space(52)
+  // The overlay layer ignores exclusive zones, so the card is placed in the
+  // work area by hand: bar clearance on the occupied edge, then the same
+  // gap on all four sides.
+  readonly property string barPosition: shell && shell.barConfig ? String(shell.barConfig.position || "top") : "top"
+  readonly property bool barHidden: !!(shell && shell.bar && shell.bar.barHidden)
+  readonly property int liveBarSize: {
+    if (root.barHidden)
+      return 0
+    if (shell && shell.bar && shell.bar.barSize > 0)
+      return Math.max(0, shell.bar.barSize)
+    return (root.barPosition === "left" || root.barPosition === "right")
+      ? Style.bar.sizeVertical
+      : Style.bar.sizeHorizontal
+  }
+  readonly property int overlayGap: Style.spacing.panelPadding
+  readonly property int workTop: root.barPosition === "top" ? root.liveBarSize : 0
+  readonly property int workRight: root.barPosition === "right" ? root.liveBarSize : 0
+  readonly property int workBottom: root.barPosition === "bottom" ? root.liveBarSize : 0
+  readonly property int workLeft: root.barPosition === "left" ? root.liveBarSize : 0
+  readonly property int cardWidth: Math.max(0, panel.width - root.workLeft - root.workRight - root.overlayGap * 2)
+  readonly property int cardHeight: Math.max(0, panel.height - root.workTop - root.workBottom - root.overlayGap * 2)
+  readonly property int headerHeight: Math.max(Style.spacing.controlHeight, Style.font.heading + Style.spacing.controlPaddingY * 2)
   readonly property int transportHeight: Style.space(44)
-  // One spacing scale for the whole card. Regions are set apart by regionGap;
-  // each opens with a caption sitting the smaller regionLabelGap above its
-  // content, so the caption groups with what it names instead of floating
-  // between two regions.
-  readonly property int cardPadding: Style.space(8)
+  // One spacing scale for the whole card. The window inset is cardPadding on
+  // every side. Regions are set apart by regionGap; each opens with a caption
+  // sitting the smaller regionLabelGap above its content, so the caption
+  // groups with what it names instead of floating between two regions.
+  readonly property int cardPadding: Style.spacing.panelPadding
   readonly property int headerGap: Style.space(6)
   readonly property int regionGap: Style.space(10)
   readonly property int regionInset: Style.space(3)
@@ -1457,7 +1476,11 @@ Item {
       id: card
       width: root.cardWidth
       height: root.cardHeight
-      anchors.centerIn: parent
+      anchors.left: parent.left
+      anchors.top: parent.top
+      anchors.leftMargin: root.workLeft + root.overlayGap
+      anchors.topMargin: root.workTop + root.overlayGap
+      padding: root.cardPadding
       color: root.background
       borderSpec: Border.surfaceSpec("menu", "border", root.border, Math.max(1, Style.normalBorderWidth))
       radius: Style.cornerRadius
@@ -1556,7 +1579,10 @@ Item {
         Item {
           id: content
           anchors.fill: parent
-          anchors.margins: root.cardPadding
+          anchors.topMargin: card.contentTopInset
+          anchors.rightMargin: card.contentRightInset
+          anchors.bottomMargin: card.contentBottomInset
+          anchors.leftMargin: card.contentLeftInset
 
         readonly property int circleHeight: {
           var chrome = root.headerHeight + root.headerGap + root.transportHeight

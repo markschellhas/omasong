@@ -21,6 +21,7 @@ related_features:
   - song_structure (Song region)
   - piano_keyboard (Keyboard region)
   - beats (sequencer interaction retains Song region)
+  - overlay_layout (regions live inside the padded card)
 
 core_components:
   - CircleOfFifths.qml

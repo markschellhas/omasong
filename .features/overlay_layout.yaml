@@ -1,0 +1,18 @@
+feature_name: overlay_layout
+purpose: "Place the overlay card in the work area with equal outer gaps and equal inner padding on all four sides."
+
+entry_points:
+  - Songwriter.qml
+
+apps:
+  - songwriter
+
+user_flow:
+  primary: "User → open overlay → card clears the bar and uses overlayGap on top, right, bottom, and left; content sits panelPadding inside the card border"
+
+related_features:
+  - region_focus (regions stack inside the padded card)
+  - playback (transport is header chrome)
+  - song_library (Open menu anchors to transport)
+
+notes: "Card size is the work area minus overlayGap×2, not a 1180×820 cap. Inner inset is BorderSurface padding (Style.spacing.panelPadding) plus the border. regionGap/regionInset stay internal grouping, not window chrome. Overlay PanelWindow ignores exclusive zones, so bar clearance is applied by hand from shell.bar."
