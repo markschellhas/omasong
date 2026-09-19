@@ -30,4 +30,4 @@ core_components:
   - tests/run.py
   - tests/js_tests.js
 
-notes: "One JSON file per project in XDG_DATA_HOME/songwriter/projects (else ~/.local/share/songwriter/projects). Session autosave stays ~/.local/state/omarchy/songwriter/song.json. Open always re-lists the directory. Old library.json is migrated once to per-file projects. Staging is write-json.py then song-library save."
+notes: "Title/New/Save/Open sit on the transport right. One JSON file per project in XDG_DATA_HOME/songwriter/projects (else ~/.local/share/songwriter/projects). Session autosave stays ~/.local/state/omarchy/songwriter/song.json. Open always re-lists the directory. Old library.json is migrated once to per-file projects. Staging is write-json.py then song-library save. Open menu drops from the transport right edge."

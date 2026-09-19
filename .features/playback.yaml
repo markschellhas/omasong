@@ -21,7 +21,7 @@ user_flow:
 
 related_features:
   - song_structure (Song as source)
-  - song_library (title/New/Save/Open on transport left)
+  - song_library (title/New/Save/Open on transport right)
   - chord_slots (slot duration, audition)
   - row_repeats (timeline repeatPass)
   - piano_keyboard (soundingNotes highlight)
@@ -39,4 +39,4 @@ core_components:
   - samples/epiano
   - samples/organ
 
-notes: "Transport left cluster is title/New/Save/Open; right is play/Loop/Beats/BPM. Loop defaults on. No tap tempo. Space is play/stop when laptop map is off and the beat editor is closed, not sustain. Slot fill uses wall-clock BPM. Playhead is wall-clock from engine started; play prerender can exceed 2s at low BPM so the overlay waits 30s for started and fails immediately on ok:false; PipeWire is not in CI; no per-bar execDetached. Closing the panel mid-play does not stop the transport — see background_playback."
+notes: "Transport left cluster is play/Loop/Beats/BPM; right is title/New/Save/Open. Loop defaults on. No tap tempo. Space is play/stop when laptop map is off and the beat editor is closed, not sustain. Slot fill uses wall-clock BPM. Playhead is wall-clock from engine started; play prerender can exceed 2s at low BPM so the overlay waits 30s for started and fails immediately on ok:false; PipeWire is not in CI; no per-bar execDetached. Closing the panel mid-play does not stop the transport — see background_playback."

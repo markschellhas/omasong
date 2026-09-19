@@ -720,7 +720,7 @@ Item {
     var gap = Style.space(4)
     var menuW = Style.space(280)
     var menuH = libraryMenuPanel.height
-    var below = anchor.mapToItem(layer, 0, anchor.height + gap)
+    var below = anchor.mapToItem(layer, anchor.width - menuW, anchor.height + gap)
     libraryMenuX = Math.max(0, Math.min(below.x, Math.max(0, layer.width - menuW)))
     var y = below.y
     if (y + menuH > layer.height)
