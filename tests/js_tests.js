@@ -992,7 +992,7 @@ assertEq(parseStatus(undefined).playing, false)
 assertEq(parseStatus('{"playing":"yes"}').playing, false, "truthy strings are not playing")
 assertEq(parseStatus('{"playing":true,"title":"a\\nb"}').title, "a b")
 
-assertEq(tooltipText(false, "My Song", false), "Open Songwriter")
+assertEq(tooltipText(false, "My Song", false), "Open Omasong")
 assert(tooltipText(true, "My Song", true).indexOf("Playing: My Song") === 0)
 assert(tooltipText(true, "My Song", false).indexOf("Playing in background: My Song") === 0)
 assert(tooltipText(true, "", true).indexOf("Untitled") >= 0, "blank title falls back")

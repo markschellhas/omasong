@@ -12,6 +12,7 @@ apps:
 user_flow:
   primary: "User → close panel (X, Escape, bar toggle) while playing → panel hides, transport and audio engine keep running"
   indicator: "playing true → bar widget WidgetButton.active → bar.urgent (red) glyph; tooltip names the song"
+  idle: "playing false → tooltip Open Omasong"
   stop: "User → right-click bar widget → omarchy-shell shell call ... stopPlayback → transport stops, engine released, glyph returns to foreground"
   reopen: "User → left-click bar widget → toggle → open() re-warms the engine; playhead never left wall clock"
   end: "Loop off and song ends while closed → transportTimer stops playback → engine released, glyph clears"

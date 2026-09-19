@@ -46,7 +46,7 @@ function parseStatus(raw) {
 // read as markup.
 function tooltipText(playing, title, panelOpen) {
   if (playing !== true)
-    return "Open Songwriter"
+    return "Open Omasong"
   var name = sanitizeLine(title, TEXT_LIMIT) || "Untitled"
   name = name.replace(/</g, "\u2039").replace(/>/g, "\u203a")
   return (panelOpen === true ? "Playing: " : "Playing in background: ")
