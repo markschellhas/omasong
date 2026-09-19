@@ -24,6 +24,8 @@ Item {
   property color border: Color.menu.border
   property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.56)
   property color faint: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.12)
+  readonly property color regionActiveFill: Color.menu.selectedBackground
+  readonly property int regionActiveRadius: Math.max(2, Style.cornerRadius / 2)
 
   property var song: seedSong(Song.defaultSong())
   property bool playing: false
@@ -1672,10 +1674,9 @@ Item {
           Rectangle {
             anchors.fill: parent
             visible: root.navRegion === 0
-            color: "transparent"
-            border.width: Math.max(1, Style.normalBorderWidth)
-            border.color: root.foreground
-            radius: Math.max(2, Style.cornerRadius / 2)
+            color: root.regionActiveFill
+            border.width: 0
+            radius: root.regionActiveRadius
           }
 
           RegionLabel {
@@ -1742,10 +1743,9 @@ Item {
           Rectangle {
             anchors.fill: parent
             visible: root.navRegion === 1
-            color: "transparent"
-            border.width: Math.max(1, Style.normalBorderWidth)
-            border.color: root.foreground
-            radius: Math.max(2, Style.cornerRadius / 2)
+            color: root.regionActiveFill
+            border.width: 0
+            radius: root.regionActiveRadius
           }
 
           RegionLabel {
@@ -1868,10 +1868,9 @@ Item {
           Rectangle {
             anchors.fill: parent
             visible: root.navRegion === 2
-            color: "transparent"
-            border.width: Math.max(1, Style.normalBorderWidth)
-            border.color: root.foreground
-            radius: Math.max(2, Style.cornerRadius / 2)
+            color: root.regionActiveFill
+            border.width: 0
+            radius: root.regionActiveRadius
           }
 
           Item {
