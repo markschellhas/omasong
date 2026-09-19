@@ -15,4 +15,4 @@ related_features:
   - playback (transport is header chrome)
   - song_library (Open menu anchors to transport)
 
-notes: "Card size is the work area minus overlayGap×2, not a 1180×820 cap. Inner inset is BorderSurface padding (Style.spacing.panelPadding) plus the border. regionGap/regionInset stay internal grouping, not window chrome. Overlay PanelWindow ignores exclusive zones, so bar clearance is applied by hand from shell.bar."
+notes: "Card height is the work area minus overlayGap×2, no cap. Card width is the same, capped at maxCardWidth (Style.space(1000)); when capped, the card centers in the work area instead of hugging the left edge, via cardLeftMargin. Inner inset is BorderSurface padding (Style.spacing.panelPadding) plus the border. regionGap/regionInset stay internal grouping, not window chrome. Overlay PanelWindow ignores exclusive zones, so bar clearance is applied by hand from shell.bar."

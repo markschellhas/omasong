@@ -96,8 +96,12 @@ Item {
   readonly property int workRight: root.barPosition === "right" ? root.liveBarSize : 0
   readonly property int workBottom: root.barPosition === "bottom" ? root.liveBarSize : 0
   readonly property int workLeft: root.barPosition === "left" ? root.liveBarSize : 0
-  readonly property int cardWidth: Math.max(0, panel.width - root.workLeft - root.workRight - root.overlayGap * 2)
+  readonly property int maxCardWidth: Style.space(1000)
+  readonly property int workAreaWidth: Math.max(0, panel.width - root.workLeft - root.workRight)
+  readonly property int cardWidth: Math.min(Math.max(0, root.workAreaWidth - root.overlayGap * 2), root.maxCardWidth)
   readonly property int cardHeight: Math.max(0, panel.height - root.workTop - root.workBottom - root.overlayGap * 2)
+  readonly property int cardLeftMargin: root.workLeft
+    + Math.max(root.overlayGap, Math.round((root.workAreaWidth - root.cardWidth) / 2))
   readonly property int headerHeight: Math.max(Style.spacing.controlHeight, Style.font.heading + Style.spacing.controlPaddingY * 2)
   readonly property int transportHeight: Style.space(44)
   // One spacing scale for the whole card. The window inset is cardPadding on
@@ -1478,7 +1482,7 @@ Item {
       height: root.cardHeight
       anchors.left: parent.left
       anchors.top: parent.top
-      anchors.leftMargin: root.workLeft + root.overlayGap
+      anchors.leftMargin: root.cardLeftMargin
       anchors.topMargin: root.workTop + root.overlayGap
       padding: root.cardPadding
       color: root.background
