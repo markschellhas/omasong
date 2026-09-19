@@ -1,18 +1,19 @@
 feature_name: laptop_keys
-purpose: "Optional QWERTY map (A=C …; Z/X octave) that plays live notes and steals H/J/K/L from vim nav."
+purpose: "Optional QWERTY map (A=C …; Z/X octave) that plays freeform live notes and steals H/J/K/L from vim nav."
 
 entry_points:
   - js/Keyboard.js
   - Piano.qml
   - Songwriter.qml
+  - play-notes.py
 
 apps:
   - songwriter
 
 user_flow:
-  primary: "User → glyph toggle on → A/W/S… map to MIDI"
+  primary: "User → glyph toggle on → A/W/S… note-on; key up → note-off"
   octave: "User → Z/X → shiftOctave (0–8)"
-  alt: "Mapping off → j/k/h/l remain region nav"
+  alt: "Mapping off → j/k/h/l remain region nav; held notes release"
 
 related_features:
   - piano_keyboard (toggle and key glyphs)
@@ -21,5 +22,6 @@ related_features:
 
 core_components:
   - tests/js_tests.js
+  - tests/run.py
 
-notes: "Off by default. Space is not sustain."
+notes: "Off by default. Space is not sustain. Auto-repeat is ignored. Live keys are engine note-on/note-off voices, not 0.45s play-midi one-shots."

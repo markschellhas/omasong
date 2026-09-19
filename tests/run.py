@@ -514,6 +514,117 @@ def test_play_notes() -> None:
         warmed_pipe.close()
     print("play-notes preview clock ok")
 
+    stacked = play_notes.overlay_s16(array("h", [1000, 1000, 0]), array("h", [1000, 0, 1000, 500]))
+    if list(stacked) != [2000, 1000, 1000, 500]:
+        raise SystemExit("overlay_s16 must mix at the cursor and extend, not concatenate")
+    same_len = play_notes.overlay_s16(array("h", [3000] * 4), array("h", [3000] * 4))
+    if len(same_len) != 4 or same_len[0] < 5000:
+        raise SystemExit("equal-length overlay must chord, not queue a second note")
+
+    live_rec = RecordingStdin()
+    live_pipe = play_notes.PipeSink(proc=FakeProc(live_rec))
+    try:
+        live_engine = play_notes.AudioEngine(sink=live_pipe)
+        live_engine.handle({"cmd": "warmup", "instrument": 0})
+        first = None
+        deadline = time.monotonic() + 2.0
+        while True:
+            if live_rec.snapshot():
+                if first is None:
+                    first = time.monotonic()
+                if time.monotonic() - first >= 0.20:
+                    break
+            if time.monotonic() > deadline:
+                raise SystemExit("warmup must start the output clock so live notes are not a cold pw-cat")
+            time.sleep(0.01)
+
+        t_cmd = time.monotonic()
+        on = live_engine.handle({"cmd": "note-on", "midi": 60, "instrument": 0})
+        if not on.get("ok"):
+            raise SystemExit("note-on must succeed")
+        if time.monotonic() - t_cmd > 0.05:
+            raise SystemExit("note-on must not prerender a one-shot before mixing")
+        before = len(live_rec.snapshot())
+        if wait_peak(live_rec, before) < 100:
+            raise SystemExit("note-on on a warmed sink was silent")
+
+        time.sleep(0.04)
+        t_second = time.monotonic()
+        live_engine.handle({"cmd": "note-on", "midi": 64, "instrument": 0})
+        if time.monotonic() - t_second > 0.05:
+            raise SystemExit("second note-on must not wait on a queued one-shot")
+        at_second = len(live_rec.snapshot())
+        if wait_peak(live_rec, at_second, timeout=0.2) < 100:
+            raise SystemExit("overlapping live note was silent")
+
+        time.sleep(0.50)
+        still = len(live_rec.snapshot())
+        time.sleep(0.06)
+        if peak_after(live_rec.snapshot()[still:]) < 100:
+            raise SystemExit("held live note stopped at a fixed one-shot length")
+
+        live_engine.handle({"cmd": "note-off", "midi": 60})
+        live_engine.handle({"cmd": "note-off", "midi": 64})
+        time.sleep(play_notes.LIVE_RELEASE_SECONDS + 0.05)
+        after_off = len(live_rec.snapshot())
+        time.sleep(0.12)
+        if peak_after(live_rec.snapshot()[after_off:]) >= 100:
+            raise SystemExit("note-off must release the live voice")
+
+        tap_start = len(live_rec.snapshot())
+        live_engine.handle({"cmd": "note-on", "midi": 67, "instrument": 0})
+        time.sleep(0.08)
+        live_engine.handle({"cmd": "note-off", "midi": 67})
+        time.sleep(play_notes.LIVE_RELEASE_SECONDS + 0.08)
+        tap = live_rec.snapshot()[tap_start:]
+        tap_samples = array("h")
+        tap_samples.frombytes(tap)
+        if sys.byteorder != "little":
+            tap_samples.byteswap()
+        audible = [i for i, sample in enumerate(tap_samples) if abs(sample) >= 100]
+        if not audible:
+            raise SystemExit("staccato live note was silent")
+        tap_sec = (audible[-1] - audible[0]) / float(play_notes.RATE)
+        if tap_sec > 0.35:
+            raise SystemExit("live note duration was quantized instead of following note-off")
+
+        before_burst = len(live_rec.snapshot())
+        live_engine.handle({"cmd": "note-on", "midi": 69, "instrument": 0})
+        time.sleep(0.015)
+        burst = live_rec.snapshot()[before_burst:]
+        burst_samples = array("h")
+        burst_samples.frombytes(burst)
+        if sys.byteorder != "little":
+            burst_samples.byteswap()
+        burst_sec = sum(1 for sample in burst_samples if abs(sample) >= 100) / play_notes.RATE
+        if burst_sec > 0.05:
+            raise SystemExit("note-on dumped a prefill burst")
+        live_engine.handle({"cmd": "note-off", "midi": 69})
+        bad = live_engine.handle({"cmd": "note-on", "midi": 200})
+        if bad.get("ok") is not False:
+            raise SystemExit("note-on must reject an invalid midi")
+    finally:
+        live_pipe.close()
+    print("play-notes live notes ok")
+
+    proto = subprocess.run(
+        [sys.executable, str(ROOT / "play-notes.py"), "--engine"],
+        input=json.dumps({"cmd": "warmup", "instrument": 0}) + "\n"
+        + json.dumps({"cmd": "note-on", "midi": 60, "instrument": 0}) + "\n"
+        + json.dumps({"cmd": "note-off", "midi": 60}) + "\n"
+        + json.dumps({"cmd": "shutdown"}) + "\n",
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    if proto.returncode != 0:
+        sys.stderr.write(proto.stdout + proto.stderr)
+        raise SystemExit("engine note-on protocol failed")
+    proto_lines = [json.loads(line) for line in proto.stdout.splitlines() if line.strip()]
+    if len(proto_lines) < 3 or not all(line.get("ok") for line in proto_lines[:3]):
+        raise SystemExit("engine stdin protocol did not ACK note-on/note-off")
+    print("play-notes live note protocol ok")
+
     class SlowStdin(RecordingStdin):
         def write(self, data: bytes) -> int:
             time.sleep(0.005)

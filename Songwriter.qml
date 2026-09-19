@@ -742,7 +742,16 @@ Item {
       nextHeld[held] = heldNotes[held]
     nextHeld[midi] = true
     heldNotes = nextHeld
-    playMidiNotes([midi], 0.45)
+    if (audioEngine.running) {
+      engineSend({
+        cmd: "note-on",
+        midi: midi,
+        instrument: currentInstrument()
+      })
+    } else {
+      playMidiNotes([midi], 0.45)
+    }
+    refreshPiano()
   }
 
   function releaseLiveNote(midi) {
@@ -752,7 +761,22 @@ Item {
         nextHeld[held] = heldNotes[held]
     }
     heldNotes = nextHeld
+    if (audioEngine.running)
+      engineSend({ cmd: "note-off", midi: midi })
     previewNotes = previewNotes.filter(function(n) { return n !== midi })
+    refreshPiano()
+  }
+
+  function releaseAllLiveNotes() {
+    var midis = []
+    for (var held in heldNotes)
+      midis.push(Number(held))
+    heldNotes = ({})
+    for (var i = 0; i < midis.length; i++) {
+      if (audioEngine.running)
+        engineSend({ cmd: "note-off", midi: midis[i] })
+    }
+    previewNotes = []
     refreshPiano()
   }
 
@@ -951,6 +975,10 @@ Item {
       event.accepted = true
       return
     }
+    if (event.isAutoRepeat) {
+      event.accepted = true
+      return
+    }
     var midi = KeyMap.midiForLaptopKey(key, root.laptopOctave)
     if (midi < 0)
       return
@@ -959,6 +987,8 @@ Item {
   }
 
   function handleComputerKeyUp(event) {
+    if (event.isAutoRepeat)
+      return
     if (event.key === Qt.Key_Space) {
       event.accepted = true
       return
@@ -1757,6 +1787,8 @@ Item {
               }
               onLaptopToggled: {
                 root.focusRegion(2)
+                if (root.laptopKeys)
+                  root.releaseAllLiveNotes()
                 root.applySongFields({ laptopKeys: !root.laptopKeys })
                 root.refocusKeys()
               }

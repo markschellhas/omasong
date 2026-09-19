@@ -15,7 +15,8 @@ user_flow:
   loop: "User → Loop toggle → wrap currentBeat"
   bpm: "User → BPM 40–240 → Song.setBpm"
   audition: "User → click filled slot → engine play-midi for slotDurationBeats; chip fill follows wall clock at BPM"
-  preview: "User → click circle wedge/chip or grid cell → play-midi mixes the triad onto the live engine clock; keyboard highlight does not depend on the sink"
+  preview: "User → click circle wedge/chip or grid cell → play-midi overlays the triad onto the live engine clock; keyboard highlight does not depend on the sink"
+  live: "User → laptop key or piano mouse down → note-on voice mixed per chunk until note-off; not a quantized play-midi one-shot"
   beats: "Every measure/pass (drums optional) → one spec on the engine sample clock"
 
 related_features:
@@ -24,6 +25,7 @@ related_features:
   - chord_slots (slot duration, audition)
   - row_repeats (timeline repeatPass)
   - piano_keyboard (soundingNotes highlight)
+  - laptop_keys (freeform note-on/note-off)
   - guitar_tab (playing triad)
   - instruments (timbre)
   - audio_device (PipeWire output)

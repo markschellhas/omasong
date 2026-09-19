@@ -41,6 +41,7 @@ DEFAULT_SECONDS = 0.9
 MAX_SECONDS = 30.0
 MIN_SECONDS = 0.05
 MAX_VOICES = 8
+LIVE_RELEASE_SECONDS = 0.08
 MIN_BPM = 40.0
 MAX_BPM = 240.0
 MAX_DRUM_STEPS = 128
@@ -669,6 +670,102 @@ def _s16_array(pcm) -> array:
     return array("h", (int(sample) for sample in pcm))
 
 
+def _sat_s16(value: int) -> int:
+    if value > 32767:
+        return 32767
+    if value < -32767:
+        return -32767
+    return value
+
+
+def overlay_s16(existing: array, incoming: array) -> array:
+    """Mix incoming onto existing at index 0 (now), extending if needed."""
+    if not incoming:
+        return existing if isinstance(existing, array) and existing.typecode == "h" else array("h")
+    src = incoming if isinstance(incoming, array) and incoming.typecode == "h" else _s16_array(incoming)
+    if not existing:
+        return array("h", src)
+    dst = existing if isinstance(existing, array) and existing.typecode == "h" else _s16_array(existing)
+    n = len(dst)
+    extra = len(src) - n
+    if extra > 0:
+        out = array("h", dst)
+        out.extend(src[n:])
+    else:
+        out = array("h", dst)
+    limit = n if extra > 0 else len(src)
+    for i in range(limit):
+        out[i] = _sat_s16(int(out[i]) + int(src[i]))
+    return out
+
+
+class LiveVoice:
+    """Freeform held note mixed a chunk at a time. Not a prerendered one-shot."""
+
+    def __init__(self, midi: float, instrument: int) -> None:
+        self.midi = int(midi)
+        self.instrument = clamp_instrument(instrument)
+        self.pos = 0
+        self.releasing = False
+        self.release_i = 0
+        self.release_n = max(1, int(RATE * LIVE_RELEASE_SECONDS))
+        self.done = False
+        spec = INSTRUMENTS[self.instrument]
+        self.attack = max(1, int(RATE * spec["attack"]))
+        self.harmonics = spec["harmonics"]
+        self.amp = float(spec["amplitude"])
+        bank = sample_bank(self.instrument)
+        self.loop = bool(bank and bank.get("loop"))
+        self.gain = float((bank or {}).get("gain", 0.62))
+        self.buf: list[float] | None = None
+        self.hz = midi_to_hz(self.midi)
+        if bank and sample_bank_ready(self.instrument):
+            try:
+                # Use the warmed prefix so note-on never blocks on disk.
+                self.buf = sample_for_midi(self.midi, int(RATE * DEFAULT_SECONDS), bank)
+            except (OSError, ValueError):
+                self.buf = None
+
+    def release(self) -> None:
+        if not self.releasing:
+            self.releasing = True
+            self.release_i = 0
+
+    def mix_into(self, chunk: array) -> bool:
+        if self.done or not chunk:
+            return not self.done
+        n = len(chunk)
+        harm_sum = sum(gain for _, gain in self.harmonics) or 1.0
+        for i in range(n):
+            env = 1.0
+            if self.buf is None and self.pos < self.attack:
+                env = cosine_ramp(self.pos / self.attack)
+            if self.releasing:
+                if self.release_i >= self.release_n:
+                    self.done = True
+                    return False
+                env *= cosine_ramp(1.0 - self.release_i / float(self.release_n))
+                self.release_i += 1
+            if self.buf is not None:
+                if self.loop:
+                    val = looped_sample(self.buf, self.pos)
+                elif self.pos < len(self.buf):
+                    val = self.buf[self.pos]
+                else:
+                    self.done = True
+                    return False
+                sample = val * self.gain * env
+            else:
+                t = self.pos / float(RATE)
+                acc = 0.0
+                for mult, gain in self.harmonics:
+                    acc += math.sin(2.0 * math.pi * self.hz * mult * t) * gain
+                sample = acc / harm_sum * self.amp * env
+            chunk[i] = _sat_s16(int(chunk[i]) + int(sample * 32767))
+            self.pos += 1
+        return True
+
+
 def _pcm_le_bytes(frames) -> bytes:
     samples = _s16_array(frames)
     if sys.byteorder == "little":
@@ -692,6 +789,12 @@ class BufferSink:
     def mix(self, pcm) -> None:
         self.write(pcm)
 
+    def note_on(self, midi: float, instrument: int = 0) -> None:
+        return
+
+    def note_off(self, midi: float) -> None:
+        return
+
     def stop(self) -> None:
         return
 
@@ -706,6 +809,7 @@ class PipeSink:
         self._lock = threading.Lock()
         self._queue: queue.Queue = queue.Queue()
         self._mix = array("h")
+        self._voices: list[LiveVoice] = []
         self._generation = 0
         self._closed = False
         self._clock = None
@@ -735,12 +839,40 @@ class PipeSink:
         with self._lock:
             if self._closed:
                 return
-            # Mix onto the live writer. Never write() the chord — that restarts
-            # the clock and dumps OUTPUT_LATENCY_MS of audio as a buffer gulp.
-            self._mix.extend(samples)
+            # Overlay at the write cursor so overlapping notes chord instead of
+            # queueing as a 0.45s monophonic series. Never write() the chord —
+            # that restarts the clock and dumps OUTPUT_LATENCY_MS as a gulp.
+            self._mix = overlay_s16(self._mix, samples)
             live = self._clock is not None
         if not live:
             self.start()
+
+    def note_on(self, midi: float, instrument: int = 0) -> None:
+        note = clamp_midi(midi)
+        if note is None:
+            return
+        voice = LiveVoice(note, instrument)
+        with self._lock:
+            if self._closed:
+                return
+            kept = [v for v in self._voices if v.midi != voice.midi]
+            kept.append(voice)
+            if len(kept) > MAX_VOICES:
+                kept = kept[-MAX_VOICES:]
+            self._voices = kept
+            live = self._clock is not None
+        if not live:
+            self.start()
+
+    def note_off(self, midi: float) -> None:
+        note = clamp_midi(midi)
+        if note is None:
+            return
+        want = int(note)
+        with self._lock:
+            for voice in self._voices:
+                if voice.midi == want:
+                    voice.release()
 
     def stop(self) -> None:
         with self._lock:
@@ -756,6 +888,7 @@ class PipeSink:
             self._closed = True
             self._generation += 1
             self._mix = array("h")
+            self._voices = []
             self._clock = None
         self._drain()
         self._queue.put(("close", 0, None, False))
@@ -820,18 +953,21 @@ class PipeSink:
     def _apply_mix(self, chunk: array) -> array:
         with self._lock:
             extra = self._mix
-            if not extra:
+            voices = self._voices
+            if not extra and not voices:
                 return chunk
-            n = min(len(chunk), len(extra))
             out = array("h", chunk)
-            for i in range(n):
-                val = int(out[i]) + int(extra[i])
-                if val > 32767:
-                    val = 32767
-                elif val < -32767:
-                    val = -32767
-                out[i] = val
-            self._mix = extra[n:]
+            if extra:
+                n = min(len(out), len(extra))
+                for i in range(n):
+                    out[i] = _sat_s16(int(out[i]) + int(extra[i]))
+                self._mix = extra[n:]
+            if voices:
+                alive = []
+                for voice in voices:
+                    if voice.mix_into(out):
+                        alive.append(voice)
+                self._voices = alive
         return out
 
     def _emit(self, samples, apply_mix: bool = True) -> None:
@@ -995,6 +1131,22 @@ class AudioEngine:
                     pcm = pcm[pad_frames:]
                 mix = getattr(self.sink, "mix", self.sink.write)
                 mix(pcm)
+            return {"ok": True}
+        if cmd == "note-on":
+            midi = clamp_midi(msg.get("midi"))
+            if midi is None:
+                return {"ok": False, "error": "invalid midi"}
+            note_on = getattr(self.sink, "note_on", None)
+            if callable(note_on):
+                note_on(midi, clamp_instrument(msg.get("instrument", 0)))
+            return {"ok": True}
+        if cmd == "note-off":
+            midi = clamp_midi(msg.get("midi"))
+            if midi is None:
+                return {"ok": False, "error": "invalid midi"}
+            note_off = getattr(self.sink, "note_off", None)
+            if callable(note_off):
+                note_off(midi)
             return {"ok": True}
         if cmd == "shutdown":
             self.sink.close()

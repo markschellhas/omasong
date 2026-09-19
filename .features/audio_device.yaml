@@ -23,4 +23,4 @@ core_components:
   - samples/epiano
   - samples/organ
 
-notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano, Electric Piano, and Organ mix sample banks. Persistent process; sample cache lives across bars; pw-play is not the transport path. Warmup starts the silence clock; keepalive holds OUTPUT_LATENCY_MS (not one 20ms chunk) so pw-cat does not underrun. play-midi mixes at the cursor; it must not write() a prefill burst. PipeWire and omarchy plugin validate are not in CI."
+notes: "Persist instrument prefs next to song state. play-notes caps duration, pitch, and voice count. Piano, Electric Piano, and Organ mix sample banks. Persistent process; sample cache lives across bars; pw-play is not the transport path. Warmup starts the silence clock; keepalive holds OUTPUT_LATENCY_MS (not one 20ms chunk) so pw-cat does not underrun. play-midi overlays at the write cursor (does not concatenate one-shots). note-on/note-off mix live voices per chunk; they must not prerender a duration or write() a prefill burst. PipeWire and omarchy plugin validate are not in CI."
