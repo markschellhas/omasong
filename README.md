@@ -21,7 +21,7 @@ Plugin id: `markschellhas.omasong`
 | `region_focus` | j/k or ↑/↓ cycle Circle / Song / Keyboard; h/l or ←/→ act on the highlighted region; Tab moves Song cells |
 | `background_playback` | Closing the panel mid-play keeps the song sounding; the bar chip turns red, right-click it to stop |
 | `agent_api` | `chords-agent progressions \| song \| health` on 127.0.0.1:17891 |
-| `audio_device` | PipeWire output |
+| `audio_device` | PipeWire via vendored drywet (no separate install) |
 
 Changing the circle does **not** transpose placed chords. Chords are triads, not typed symbols.
 
@@ -61,6 +61,8 @@ omarchy plugin remove markschellhas.omasong
 ```
 
 ## Develop locally
+
+Audio is the vendored `drywet/` package (`drywet/UPSTREAM` is the upstream commit). `play-notes.py` is the song-protocol adapter. Users who `omarchy plugin add` this repo do not install drywet.
 
 ```bash
 omarchy plugin validate ~/.config/omarchy/plugins/markschellhas.omasong

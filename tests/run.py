@@ -12,6 +12,7 @@ import sys
 import tempfile
 import threading
 import time
+import unittest.mock as mock
 import wave
 from array import array
 from pathlib import Path
@@ -100,6 +101,9 @@ def test_play_notes() -> None:
     play_notes = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(play_notes)
+    vendor = (ROOT / "drywet" / "__init__.py").resolve()
+    if Path(play_notes.drywet.__file__).resolve() != vendor:
+        raise SystemExit("play-notes must import the vendored drywet package, not a site install")
     if play_notes.clamp_seconds(100) != play_notes.MAX_SECONDS:
         raise SystemExit("play-notes must cap long durations")
     if play_notes.clamp_seconds(float("nan")) != play_notes.DEFAULT_SECONDS:
@@ -303,12 +307,16 @@ def test_play_notes() -> None:
         raise SystemExit("engine stdin protocol did not ACK warmup")
     print("play-notes engine protocol ok")
 
-    if shutil.which("pw-cat"):
-        if play_notes.output_command() != [
-            "pw-cat", "-p", "-a", "--format", "s16", "--rate", "44100",
-            "--channels", "1", "--latency", "%sms" % play_notes.OUTPUT_LATENCY_MS, "-",
-        ]:
-            raise SystemExit("output_command must prefer pw-cat reading stdin at engine latency")
+    def _which_pw_cat(name: str):
+        return "/usr/bin/pw-cat" if name == "pw-cat" else None
+
+    with mock.patch("drywet.sink.shutil.which", side_effect=_which_pw_cat):
+        pw_cmd = play_notes.output_command()
+    if pw_cmd != [
+        "pw-cat", "--playback", "--raw", "--format", "s16", "--rate", "44100",
+        "--channels", "1", "--latency", "%sms" % play_notes.OUTPUT_LATENCY_MS, "-",
+    ]:
+        raise SystemExit("output_command must use drywet pw-cat argv plus engine latency: %r" % (pw_cmd,))
 
     class RecordingStdin:
         def __init__(self) -> None:

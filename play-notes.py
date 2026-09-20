@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Play notes as a chord or single pitch.
+"""Songwriter audio adapter.
 
-Piano (instrument 0) uses Salamander Grand Piano samples when present.
-Electric Piano (instrument 1) uses Wurlitzer EP200 samples when present.
-Organ (instrument 2) uses VSCO 2 CE chapel organ samples when present.
-If a sample bank is missing, that timbre falls back to additive sines.
+Transport, sample banks, drum voices, and the PipeWire command come from the
+vendored drywet package (see drywet/UPSTREAM). This process keeps the overlay
+protocol — warmup / play / play-midi / note-on / note-off — and the paced
+stdin clock. drywet's PipeWireSink writes a block and closes on stop, which
+restarts pw-cat and underruns the preview path.
 
 Usage:
   play-notes.py hz1 [hz2 ...] [seconds]
@@ -33,59 +34,63 @@ import wave
 from array import array
 from pathlib import Path
 
-RATE = 44100
+_ROOT = Path(__file__).resolve().parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+import drywet
+from drywet.limits import PIPEWIRE_LATENCY_MS
+
+_LOAD_WAV = drywet.instrument.load_wav
+_WAV_CACHE: dict[tuple[str, int], list[float]] = {}
+_WAV_LOCK = threading.Lock()
+
+
+def _cached_load_wav(path, sample_rate):
+    key = (os.path.abspath(path), int(sample_rate))
+    with _WAV_LOCK:
+        cached = _WAV_CACHE.get(key)
+        if cached is None:
+            cached = _LOAD_WAV(path, sample_rate)
+            _WAV_CACHE[key] = cached
+        return cached
+
+
+drywet.instrument.load_wav = _cached_load_wav
+
+RATE = drywet.limits.DEFAULT_SAMPLE_RATE
 WRITE_CHUNK_MS = 20
-OUTPUT_LATENCY_MS = 80
+OUTPUT_LATENCY_MS = PIPEWIRE_LATENCY_MS
 PREFILL_CHUNKS = max(1, int(math.ceil(OUTPUT_LATENCY_MS / WRITE_CHUNK_MS)))
 DEFAULT_SECONDS = 0.9
 MAX_SECONDS = 30.0
 MIN_SECONDS = 0.05
 MAX_VOICES = 8
 LIVE_RELEASE_SECONDS = 0.08
-MIN_BPM = 40.0
-MAX_BPM = 240.0
+MIN_BPM = float(drywet.limits.BPM_MIN)
+MAX_BPM = float(drywet.limits.BPM_MAX)
 MAX_DRUM_STEPS = 128
 DRUM_TAIL_SECONDS = 0.32
 MAX_MEASURE_JSON = 16384
 MAX_MEASURE_CHORDS = 16
-MIDI_MIN = 0
-MIDI_MAX = 127
-HZ_MIN = 20.0
-HZ_MAX = 20000.0
-AMPLITUDE = 0.18
+MIDI_MIN = drywet.limits.MIDI_MIN
+MIDI_MAX = drywet.limits.MIDI_MAX
+HZ_MIN = drywet.limits.HZ_MIN
+HZ_MAX = drywet.limits.HZ_MAX
 PAD = 0.02
 PIANO_INSTRUMENT = 0
 ELECTRIC_PIANO_INSTRUMENT = 1
 ORGAN_INSTRUMENT = 2
+INSTRUMENT_COUNT = 3
 PIANO_MIDI_MIN = 48
 PIANO_MIDI_MAX = 72
-SAMPLE_ROOT = Path(__file__).resolve().parent / "samples"
-SAMPLE_DIR = SAMPLE_ROOT / "piano"
+SAMPLE_ROOT = _ROOT / "samples"
 NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+# drywet Synth harmonics (k=1..4). Live sine fallback uses the same series.
+_SYNTH_HARMONICS = ((1.0, 1.0), (2.0, 0.35), (3.0, 0.18), (4.0, 0.08))
+_SAMPLER_CACHE: dict[int, object] = {}
+_SAMPLER_LOCK = threading.Lock()
 
-# Additive sines used when a sampled bank is missing.
-INSTRUMENTS = (
-    {  # 0 Piano
-        "harmonics": ((1.0, 1.0), (2.0, 0.18), (3.0, 0.07)),
-        "attack": 0.012,
-        "release": 0.32,
-        "amplitude": 0.20,
-    },
-    {  # 1 Electric Piano
-        "harmonics": ((1.0, 1.0), (2.0, 0.35), (4.0, 0.12), (7.0, 0.06)),
-        "attack": 0.008,
-        "release": 0.22,
-        "amplitude": 0.18,
-    },
-    {  # 2 Organ
-        "harmonics": ((1.0, 0.85), (2.0, 0.45), (3.0, 0.35), (4.0, 0.2), (6.0, 0.12)),
-        "attack": 0.02,
-        "release": 0.08,
-        "amplitude": 0.14,
-    },
-)
-
-_SAMPLE_CACHE: dict[tuple[str, int], list[float]] = {}
 SAMPLE_BANKS = {
     PIANO_INSTRUMENT: {
         "dir": SAMPLE_ROOT / "piano",
@@ -115,9 +120,8 @@ def clamp_instrument(value: int) -> int:
         return 0
     if n < 0:
         return 0
-    last = len(INSTRUMENTS) - 1
-    if n > last:
-        return last
+    if n > INSTRUMENT_COUNT - 1:
+        return INSTRUMENT_COUNT - 1
     return n
 
 
@@ -197,46 +201,52 @@ def cosine_ramp(x: float) -> float:
     return 0.5 - 0.5 * math.cos(math.pi * x)
 
 
-def envelope(i: int, n: int, attack: int, release: int) -> float:
-    if i < attack:
-        return cosine_ramp(i / attack)
-    tail = n - 1 - i
-    if tail < release:
-        return cosine_ramp(tail / release)
-    return 1.0
+def looped_sample(buf: list[float], index: int) -> float:
+    if not buf:
+        return 0.0
+    if index < len(buf):
+        return buf[index]
+    start = min(int(RATE * 0.35), max(0, len(buf) // 5))
+    loop_len = len(buf) - start
+    if loop_len < 1:
+        return buf[-1]
+    return buf[start + (index - start) % loop_len]
 
 
 def synth(freqs: list[float], seconds: float, instrument: int = 0, amplitude: float | None = None) -> list[int]:
-    spec = INSTRUMENTS[clamp_instrument(instrument)]
-    if amplitude is None:
-        amplitude = spec["amplitude"]
-    n = max(1, int(RATE * seconds))
-    attack = max(1, int(RATE * spec["attack"]))
-    release = max(1, int(RATE * spec["release"]))
-    pad = max(0, int(RATE * PAD))
-    if attack + release >= n:
-        attack = max(1, n // 5)
-        release = max(1, n - attack - 1)
-    frames = [0] * pad
-    voices = [hz for hz in freqs if hz > 0]
+    """Additive fallback. Samples, when present, are drywet.Sampler — not this."""
+    del instrument
+    seconds = clamp_seconds(seconds)
+    voices = [hz for hz in freqs if hz and hz > 0]
+    n = max(1, int(round(RATE * seconds)))
+    mix = [0.0] * n
     if not voices:
         voices = [0.0]
-    harm_sum = sum(gain for _, gain in spec["harmonics"]) or 1.0
-    for i in range(n):
-        env = envelope(i, n, attack, release)
-        sample = 0.0
-        t = i / RATE
-        for hz in voices:
-            if hz <= 0:
-                continue
-            for mult, gain in spec["harmonics"]:
-                sample += math.sin(2.0 * math.pi * hz * mult * t) * gain
-        val = max(-1.0, min(1.0, sample / harm_sum * amplitude * env))
-        frames.append(int(val * 32767))
-    frames.extend([0] * pad)
-    frames[0] = 0
-    frames[-1] = 0
+    for hz in voices:
+        if hz <= 0:
+            continue
+        rendered = drywet.instrument.render_additive(hz, seconds, RATE)
+        for i, sample in enumerate(rendered[:n]):
+            mix[i] += sample
+    scale = 1.0
+    if amplitude is not None:
+        scale = float(amplitude) / 0.18 if amplitude else 1.0
+    frames = [int(max(-1.0, min(1.0, sample * scale)) * 32767) for sample in mix]
+    if frames:
+        frames[0] = 0
+        frames[-1] = 0
     return frames
+
+
+def sample_bank(instrument: int) -> dict | None:
+    return SAMPLE_BANKS.get(clamp_instrument(instrument))
+
+
+def sample_bank_ready(instrument: int) -> bool:
+    bank = sample_bank(instrument)
+    if not bank:
+        return False
+    return (bank["dir"] / bank["ready"]).is_file()
 
 
 def piano_samples_ready() -> bool:
@@ -251,215 +261,25 @@ def organ_samples_ready() -> bool:
     return sample_bank_ready(ORGAN_INSTRUMENT)
 
 
-def sample_bank(instrument: int) -> dict | None:
-    return SAMPLE_BANKS.get(clamp_instrument(instrument))
-
-
-def sample_bank_ready(instrument: int) -> bool:
-    bank = sample_bank(instrument)
-    if not bank:
-        return False
-    return (bank["dir"] / bank["ready"]).is_file()
+def _cached_sampler(instrument: int):
+    instrument = clamp_instrument(instrument)
+    with _SAMPLER_LOCK:
+        if instrument in _SAMPLER_CACHE:
+            return _SAMPLER_CACHE[instrument]
+        bank = SAMPLE_BANKS[instrument]
+        if not (bank["dir"] / bank["ready"]).is_file():
+            _SAMPLER_CACHE[instrument] = None
+            return None
+        ctx = drywet.Context(sample_rate=RATE, channels=1)
+        sampler = drywet.Sampler.from_directory(
+            ctx, str(bank["dir"]), loop=bool(bank["loop"])
+        )
+        _SAMPLER_CACHE[instrument] = sampler
+        return sampler
 
 
 def warmup_samples(instrument: int) -> None:
-    bank = sample_bank(instrument)
-    if not bank or not sample_bank_ready(instrument):
-        return
-    need = int(RATE * DEFAULT_SECONDS) + 2
-    for midi in range(PIANO_MIDI_MIN, PIANO_MIDI_MAX + 1):
-        try:
-            load_sample_mono(midi, need, bank)
-        except (OSError, ValueError):
-            continue
-
-
-def sample_path(midi: int, bank: dict | None = None) -> Path:
-    folder = SAMPLE_DIR if bank is None else bank["dir"]
-    return folder / f"{midi_note_name(midi)}.wav"
-
-
-def load_sample_mono(midi: int, max_source_frames: int | None, bank: dict | None = None) -> list[float]:
-    folder = str(SAMPLE_DIR if bank is None else bank["dir"])
-    cache_key = (folder, midi)
-    cached = _SAMPLE_CACHE.get(cache_key)
-    if cached is not None and (max_source_frames is None or len(cached) >= max_source_frames):
-        return cached
-    path = sample_path(midi, bank)
-    with wave.open(str(path), "rb") as wav:
-        channels = wav.getnchannels()
-        width = wav.getsampwidth()
-        rate = wav.getframerate()
-        nframes = wav.getnframes()
-        if max_source_frames is None:
-            need = nframes
-        else:
-            need = min(nframes, max(1, max_source_frames))
-        if rate != RATE and rate > 0 and max_source_frames is not None:
-            need = min(nframes, int(need * rate / float(RATE)) + 2)
-        raw = wav.readframes(need)
-    if width != 2 or channels < 1:
-        raise ValueError("samples must be 16-bit PCM")
-    count = len(raw) // 2
-    samples = struct.unpack("<" + "h" * count, raw)
-    if channels == 1:
-        mono = [s / 32768.0 for s in samples]
-    else:
-        frames = count // channels
-        mono = [0.0] * frames
-        for i in range(frames):
-            acc = 0.0
-            base = i * channels
-            for c in range(channels):
-                acc += samples[base + c]
-            mono[i] = acc / channels / 32768.0
-    if rate != RATE and rate > 0:
-        mono = resample(mono, rate / float(RATE))
-    _SAMPLE_CACHE[cache_key] = mono
-    return mono
-
-
-def resample(samples: list[float], ratio: float) -> list[float]:
-    if ratio <= 0 or not samples:
-        return []
-    if abs(ratio - 1.0) < 1e-9:
-        return list(samples)
-    n = max(1, int(round(len(samples) / ratio)))
-    last = len(samples) - 1
-    out = [0.0] * n
-    for i in range(n):
-        src = i * ratio
-        j = int(src)
-        frac = src - j
-        a = samples[j] if j <= last else 0.0
-        b = samples[j + 1] if j + 1 <= last else 0.0
-        out[i] = a + (b - a) * frac
-    return out
-
-
-def nearest_piano_midi(midi: float) -> int:
-    n = int(round(float(midi)))
-    if n < PIANO_MIDI_MIN:
-        return PIANO_MIDI_MIN
-    if n > PIANO_MIDI_MAX:
-        return PIANO_MIDI_MAX
-    return n
-
-
-def looped_sample(buf: list[float], index: int) -> float:
-    if not buf:
-        return 0.0
-    if index < len(buf):
-        return buf[index]
-    start = min(int(RATE * 0.35), max(0, len(buf) // 5))
-    loop_len = len(buf) - start
-    if loop_len < 1:
-        return buf[-1]
-    return buf[start + (index - start) % loop_len]
-
-
-def sample_for_midi(midi: float, max_output: int | None, bank: dict | None = None) -> list[float]:
-    source = nearest_piano_midi(midi)
-    semitones = float(midi) - source
-    ratio = 2.0 ** (semitones / 12.0) if abs(semitones) >= 1e-6 else 1.0
-    loop = bool(bank and bank.get("loop"))
-    if loop or max_output is None:
-        source_needed = None
-    else:
-        source_needed = int(max_output * ratio) + 2
-    buf = load_sample_mono(source, source_needed, bank)
-    if abs(ratio - 1.0) < 1e-9:
-        return buf
-    return resample(buf, ratio)
-
-
-def render_piano(midis: list[float], seconds: float) -> list[int]:
-    return render_samples(midis, seconds, PIANO_INSTRUMENT)
-
-
-def render_samples(midis: list[float], seconds: float, instrument: int) -> list[int]:
-    bank = sample_bank(instrument)
-    if not bank:
-        return synth([midi_to_hz(m) for m in midis], seconds, instrument=instrument)
-    n = max(1, int(RATE * seconds))
-    pad = max(0, int(RATE * PAD))
-    loop = bool(bank.get("loop"))
-    voices = [sample_for_midi(m, None if loop else n, bank) for m in midis if math.isfinite(m)]
-    if not voices:
-        return synth([midi_to_hz(60)], seconds, instrument=instrument)
-    mix = [0.0] * n
-    gain = float(bank.get("gain", 0.62)) / math.sqrt(len(voices))
-    release = max(1, min(int(RATE * 0.12), n // 4))
-    for buf in voices:
-        for i in range(n):
-            env = 1.0
-            tail = n - 1 - i
-            if tail < release:
-                env = cosine_ramp(tail / release)
-            if loop:
-                val = looped_sample(buf, i)
-            elif i < len(buf):
-                val = buf[i]
-            else:
-                val = 0.0
-            mix[i] += val * gain * env
-    peak = max((abs(x) for x in mix), default=0.0)
-    if peak > 0.95:
-        scale = 0.95 / peak
-        mix = [x * scale for x in mix]
-    frames = [0] * pad
-    for sample in mix:
-        val = max(-1.0, min(1.0, sample))
-        frames.append(int(val * 32767))
-    frames.extend([0] * pad)
-    frames[0] = 0
-    frames[-1] = 0
-    return frames
-
-
-def _noise(seed: int):
-    """Yield deterministic white noise in [-1, 1]."""
-    state = seed & 0xFFFFFFFF
-    while True:
-        state = (1664525 * state + 1013904223) & 0xFFFFFFFF
-        yield state / 2147483647.5 - 1.0
-
-
-def _mix_kick(mix: list[float], start: int) -> None:
-    length = min(int(RATE * 0.30), len(mix) - start)
-    phase = 0.0
-    for i in range(max(0, length)):
-        t = i / RATE
-        frequency = 45.0 + 115.0 * math.exp(-t * 26.0)
-        phase += 2.0 * math.pi * frequency / RATE
-        env = math.exp(-t * 15.0)
-        mix[start + i] += math.sin(phase) * env * 0.78
-
-
-def _mix_snare(mix: list[float], start: int, seed: int) -> None:
-    length = min(int(RATE * 0.20), len(mix) - start)
-    noise = _noise(seed)
-    previous = 0.0
-    for i in range(max(0, length)):
-        t = i / RATE
-        raw = next(noise)
-        high = raw - previous * 0.65
-        previous = raw
-        env = math.exp(-t * 24.0)
-        body = math.sin(2.0 * math.pi * 185.0 * t) * 0.22
-        mix[start + i] += (high * 0.52 + body) * env
-
-
-def _mix_hihat(mix: list[float], start: int, seed: int) -> None:
-    length = min(int(RATE * 0.075), len(mix) - start)
-    noise = _noise(seed)
-    previous = 0.0
-    for i in range(max(0, length)):
-        t = i / RATE
-        raw = next(noise)
-        high = raw - previous
-        previous = raw
-        mix[start + i] += high * math.exp(-t * 65.0) * 0.28
+    _cached_sampler(instrument)
 
 
 def measure_frame_counts(steps: int, bpm: float) -> tuple[int, int]:
@@ -473,48 +293,6 @@ def measure_frame_counts(steps: int, bpm: float) -> tuple[int, int]:
         max(1, int(round(RATE * nominal_seconds))),
         int(round(RATE * DRUM_TAIL_SECONDS)),
     )
-
-
-def _drum_mix(kick: str, snare: str, hihat: str, steps: int, bpm: float) -> tuple[array, int]:
-    count = clamp_drum_steps(steps)
-    tempo = clamp_bpm(bpm)
-    step_seconds = 60.0 / tempo / 4.0
-    nominal_frames, tail_frames = measure_frame_counts(count, tempo)
-    frame_count = nominal_frames + tail_frames
-    patterns = (
-        parse_drum_pattern(kick, count),
-        parse_drum_pattern(snare, count),
-        parse_drum_pattern(hihat, count),
-    )
-    mix = array("f", [0.0]) * frame_count
-    for step in range(count):
-        start = int(round(RATE * step * step_seconds))
-        if patterns[0][step]:
-            _mix_kick(mix, start)
-        if patterns[1][step]:
-            _mix_snare(mix, start, 0x534E0000 + step)
-        if patterns[2][step]:
-            _mix_hihat(mix, start, 0x48480000 + step)
-    return mix, nominal_frames
-
-
-def _finish_mix(mix: array, loop: bool = False) -> array:
-    if not loop:
-        fade_frames = min(len(mix), max(1, int(RATE * 0.01)))
-        fade_start = len(mix) - fade_frames
-        for i in range(fade_start, len(mix)):
-            mix[i] *= (len(mix) - 1 - i) / fade_frames
-        if mix:
-            mix[-1] = 0.0
-    peak = max((abs(sample) for sample in mix), default=0.0)
-    scale = 0.94 / peak if peak > 0.94 else 1.0
-    return array("h", (int(max(-1.0, min(1.0, sample * scale)) * 32767) for sample in mix))
-
-
-def render_drums(kick: str, snare: str, hihat: str, steps: int, bpm: float) -> array:
-    """Render one measure plus a bounded natural-decay tail."""
-    mix, _ = _drum_mix(kick, snare, hihat, steps, bpm)
-    return _finish_mix(mix)
 
 
 def _canonical_pattern(value: object, steps: int) -> str:
@@ -544,7 +322,13 @@ def normalize_measure_spec(value: object) -> dict:
             duration = float(raw.get("durationBeats", 0))
         except (TypeError, ValueError):
             continue
-        if not math.isfinite(offset) or not math.isfinite(duration) or offset < 0 or duration <= 0 or offset >= measure_beats:
+        if (
+            not math.isfinite(offset)
+            or not math.isfinite(duration)
+            or offset < 0
+            or duration <= 0
+            or offset >= measure_beats
+        ):
             continue
         duration = min(duration, measure_beats - offset)
         raw_midis = raw.get("midis") if isinstance(raw.get("midis"), list) else []
@@ -570,98 +354,169 @@ def parse_measure_spec(raw: str) -> dict:
     return normalize_measure_spec(value)
 
 
-def render_midi_notes(midis: list[float], seconds: float, instrument: int) -> list[int]:
-    instrument = clamp_instrument(instrument)
-    use_samples = sample_bank_ready(instrument)
-    freqs = [midi_to_hz(note) for note in midis]
-    if use_samples:
-        try:
-            return render_samples(midis, seconds, instrument)
-        except OSError:
-            pass
-    return synth(freqs, seconds, instrument=instrument)
+def _finish_mix(mix: array, loop: bool = False) -> array:
+    if not loop:
+        fade_frames = min(len(mix), max(1, int(RATE * 0.01)))
+        fade_start = len(mix) - fade_frames
+        for i in range(fade_start, len(mix)):
+            mix[i] *= (len(mix) - 1 - i) / fade_frames
+        if mix:
+            mix[-1] = 0.0
+    peak = max((abs(sample) for sample in mix), default=0.0)
+    scale = 0.94 / peak if peak > 0.94 else 1.0
+    return array("h", (int(max(-1.0, min(1.0, sample * scale)) * 32767) for sample in mix))
 
 
-def render_measure(value: object) -> array:
-    spec = normalize_measure_spec(value)
-    drums = spec["drums"]
-    mix, _ = _drum_mix(drums["kick"], drums["snare"], drums["hihat"], spec["steps"], spec["bpm"])
-    pad_frames = int(RATE * PAD)
-    for chord in spec["chords"]:
-        start = int(round(RATE * chord["offsetBeats"] * 60.0 / spec["bpm"]))
-        seconds = chord["durationBeats"] * 60.0 / spec["bpm"]
-        rendered = render_midi_notes(chord["midis"], seconds, spec["instrument"])
-        audio = rendered[pad_frames : max(pad_frames, len(rendered) - pad_frames)]
-        available = min(len(audio), len(mix) - start)
-        for i in range(max(0, available)):
-            mix[start + i] += audio[i] / 32767.0
-    return _finish_mix(mix)
+def _floats_to_pcm(frames: list[float], nominal: int, tail: int, loop: bool) -> array:
+    mix = array("f", (float(sample) for sample in frames))
+    if loop:
+        if nominal < 1:
+            return array("h")
+        if len(mix) < nominal:
+            mix.extend([0.0] * (nominal - len(mix)))
+        extra = mix[nominal:]
+        base = array("f", mix[:nominal])
+        for i, sample in enumerate(extra):
+            base[i % nominal] += sample
+        return _finish_mix(base, loop=True)
+    target = max(1, nominal + tail)
+    if len(mix) < target:
+        mix.extend([0.0] * (target - len(mix)))
+    if len(mix) > target:
+        mix = mix[:target]
+    return _finish_mix(mix, loop=False)
+
+
+def _mix_note(ctx, sampler, midi: int, dur: float, time: float, gain: float) -> None:
+    n = max(1, int(round(float(dur) * RATE)))
+    at = int(round(float(time) * RATE))
+    if sampler is None:
+        drywet.Synth(ctx).trigger_attack_release(int(midi), float(dur), float(time))
+        return
+    try:
+        _src, frames = sampler._nearest(int(midi))
+    except (OSError, ValueError):
+        drywet.Synth(ctx).trigger_attack_release(int(midi), float(dur), float(time))
+        return
+    if sampler.loop and n > len(frames):
+        out = [looped_sample(frames, i) * gain for i in range(n)]
+    else:
+        out = [0.0] * n
+        limit = min(n, len(frames))
+        for i in range(limit):
+            out[i] = frames[i] * gain
+    release = min(n, max(1, int(RATE * 0.012)))
+    if release < n:
+        for i in range(n - release, n):
+            out[i] *= (n - 1 - i) / float(release)
+    ctx.sink.mix(out, at_sample=at)
+
+
+def _schedule_chords(ctx, spec: dict, cursor: float) -> None:
+    chords = spec["chords"]
+    if not chords:
+        return
+    sampler = _cached_sampler(spec["instrument"])
+    bank = SAMPLE_BANKS[spec["instrument"]]
+    beat = 60.0 / spec["bpm"]
+    for chord in chords:
+        when = cursor + chord["offsetBeats"] * beat
+        dur = chord["durationBeats"] * beat
+        midis = [int(round(note)) for note in chord["midis"]]
+        voice_gain = float(bank["gain"]) / math.sqrt(len(midis))
+        for midi in midis:
+            ctx.transport.schedule(
+                lambda time, sampler=sampler, midi=midi, dur=dur, voice_gain=voice_gain: _mix_note(
+                    ctx, sampler, midi, dur, time, voice_gain
+                ),
+                when,
+            )
 
 
 def schedule_measures(specs: list[object], loop: bool = False) -> array:
+    """Place each measure on drywet's Transport. Tails mix forward; loop wraps them."""
     normalized = [normalize_measure_spec(spec) for spec in specs]
     if not normalized:
         return array("h")
-    placements: list[tuple[dict, int, int]] = []
-    cursor = 0
-    max_end = 0
+    ctx = drywet.Context(sample_rate=RATE, channels=1)
+    ctx.transport.bpm = normalized[0]["bpm"]
+    drum = drywet.Drum(ctx)
+    cursor = 0.0
+    nominal_frames = 0
     for spec in normalized:
-        nominal, tail = measure_frame_counts(spec["steps"], spec["bpm"])
-        placements.append((spec, cursor, nominal))
-        max_end = max(max_end, cursor + nominal + tail)
-        cursor += nominal
-    mix = array("f", [0.0]) * max(1, max_end)
-    for spec, start, _nominal in placements:
-        rendered, _ = _drum_mix(
-            spec["drums"]["kick"],
-            spec["drums"]["snare"],
-            spec["drums"]["hihat"],
-            spec["steps"],
-            spec["bpm"],
+        nominal, _tail = measure_frame_counts(spec["steps"], spec["bpm"])
+        nominal_frames += nominal
+        step_sec = 60.0 / spec["bpm"] / 4.0
+        for lane in ("kick", "snare", "hihat"):
+            for step, hit in enumerate(spec["drums"][lane]):
+                if hit != "1":
+                    continue
+                when = cursor + step * step_sec
+                ctx.transport.schedule(
+                    lambda time, lane=lane: drum.trigger(lane, time),
+                    when,
+                )
+        _schedule_chords(ctx, spec, cursor)
+        cursor += spec["steps"] * step_sec
+    if cursor <= 0:
+        return array("h")
+    duration = cursor if loop else cursor + DRUM_TAIL_SECONDS
+    floats = ctx.transport.render(duration)
+    tail_frames = 0 if loop else int(round(RATE * DRUM_TAIL_SECONDS))
+    return _floats_to_pcm(floats, nominal_frames, tail_frames, loop)
+
+
+def render_drums(kick: str, snare: str, hihat: str, steps: int, bpm: float) -> array:
+    spec = {
+        "steps": steps,
+        "bpm": bpm,
+        "instrument": 0,
+        "drums": {"kick": kick, "snare": snare, "hihat": hihat},
+        "chords": [],
+    }
+    return schedule_measures([spec])
+
+
+def render_measure(value: object) -> array:
+    return schedule_measures([normalize_measure_spec(value)])
+
+
+def render_midi_notes(midis: list[float], seconds: float, instrument: int) -> array:
+    seconds = clamp_seconds(seconds)
+    instrument = clamp_instrument(instrument)
+    notes = [int(round(note)) for note in midis if clamp_midi(note) is not None][:MAX_VOICES]
+    n = max(1, int(round(RATE * seconds)))
+    if not notes:
+        return _floats_to_pcm([0.0] * n, n, 0, loop=False)
+    ctx = drywet.Context(sample_rate=RATE, channels=1)
+    sampler = _cached_sampler(instrument)
+    gain = float(SAMPLE_BANKS[instrument]["gain"]) / math.sqrt(len(notes))
+    for midi in notes:
+        ctx.transport.schedule(
+            lambda time, midi=midi: _mix_note(ctx, sampler, midi, seconds, time, gain),
+            0.0,
         )
-        pad_frames = int(RATE * PAD)
-        for chord in spec["chords"]:
-            chord_start = int(round(RATE * chord["offsetBeats"] * 60.0 / spec["bpm"]))
-            seconds = chord["durationBeats"] * 60.0 / spec["bpm"]
-            pcm = render_midi_notes(chord["midis"], seconds, spec["instrument"])
-            audio = pcm[pad_frames : max(pad_frames, len(pcm) - pad_frames)]
-            for i, sample in enumerate(audio):
-                idx = start + chord_start + i
-                if 0 <= idx < len(mix):
-                    mix[idx] += sample / 32767.0
-        for i, sample in enumerate(rendered):
-            idx = start + i
-            if 0 <= idx < len(mix):
-                mix[idx] += sample
-    if loop and cursor > 0:
-        extra = mix[cursor:]
-        for i, sample in enumerate(extra):
-            mix[i % cursor] += sample
-        mix = mix[:cursor]
-    return _finish_mix(mix, loop=loop)
+    floats = ctx.transport.render(seconds)
+    return _floats_to_pcm(floats, n, 0, loop=False)
 
 
 def output_command() -> list[str]:
-    if shutil.which("pw-cat"):
-        return [
-            "pw-cat",
-            "-p",
-            "-a",
-            "--format",
-            "s16",
-            "--rate",
-            str(RATE),
-            "--channels",
-            "1",
-            "--latency",
-            "%sms" % OUTPUT_LATENCY_MS,
-            "-",
-        ]
-    if shutil.which("paplay"):
-        return ["paplay", "--raw", "--rate=%s" % RATE, "--channels=1", "--format=s16le"]
-    if shutil.which("aplay"):
-        return ["aplay", "-q", "-t", "raw", "-f", "S16_LE", "-r", str(RATE), "-c", "1"]
-    return []
+    """drywet PipeWire argv, plus the 80ms node latency the playhead offsets by.
+
+    pw-cat's default latency is 100ms. The paced writer leads by OUTPUT_LATENCY_MS;
+    a longer node underruns and the preview stutters.
+    """
+    try:
+        cmd = list(drywet.PipeWireSink(sample_rate=RATE, channels=1)._cmd())
+    except RuntimeError:
+        return []
+    if cmd and cmd[0] == "pw-cat":
+        if cmd[-1] == "-":
+            cmd = cmd[:-1] + ["--latency", "%sms" % OUTPUT_LATENCY_MS, "-"]
+        else:
+            cmd.append("--latency")
+            cmd.append("%sms" % OUTPUT_LATENCY_MS)
+    return cmd
 
 
 def _s16_array(pcm) -> array:
@@ -700,7 +555,11 @@ def overlay_s16(existing: array, incoming: array) -> array:
 
 
 class LiveVoice:
-    """Freeform held note mixed a chunk at a time. Not a prerendered one-shot."""
+    """Freeform held note mixed a chunk at a time. Not a prerendered one-shot.
+
+    Sample bytes come from drywet.Sampler. The voice still advances one chunk
+    per clock tick so note-off, not a fixed duration, ends the note.
+    """
 
     def __init__(self, midi: float, instrument: int) -> None:
         self.midi = int(midi)
@@ -710,19 +569,19 @@ class LiveVoice:
         self.release_i = 0
         self.release_n = max(1, int(RATE * LIVE_RELEASE_SECONDS))
         self.done = False
-        spec = INSTRUMENTS[self.instrument]
-        self.attack = max(1, int(RATE * spec["attack"]))
-        self.harmonics = spec["harmonics"]
-        self.amp = float(spec["amplitude"])
+        self.attack = max(1, int(RATE * 0.01))
+        self.harmonics = _SYNTH_HARMONICS
+        self.amp = 0.18
         bank = sample_bank(self.instrument)
         self.loop = bool(bank and bank.get("loop"))
         self.gain = float((bank or {}).get("gain", 0.62))
         self.buf: list[float] | None = None
         self.hz = midi_to_hz(self.midi)
-        if bank and sample_bank_ready(self.instrument):
+        sampler = _cached_sampler(self.instrument)
+        if sampler is not None:
             try:
-                # Use the warmed prefix so note-on never blocks on disk.
-                self.buf = sample_for_midi(self.midi, int(RATE * DEFAULT_SECONDS), bank)
+                _src, frames = sampler._nearest(self.midi)
+                self.buf = frames
             except (OSError, ValueError):
                 self.buf = None
 
@@ -1085,6 +944,7 @@ class PipeSink:
         self._close_proc()
 
 
+
 class AudioEngine:
     def __init__(self, sink=None) -> None:
         self.sink = sink if sink is not None else PipeSink()
@@ -1126,9 +986,6 @@ class AudioEngine:
             if midis:
                 seconds = clamp_seconds(msg.get("seconds", DEFAULT_SECONDS))
                 pcm = render_midi_notes(midis, seconds, clamp_instrument(msg.get("instrument", 0)))
-                pad_frames = int(RATE * PAD)
-                if pad_frames > 0 and len(pcm) > pad_frames * 2:
-                    pcm = pcm[pad_frames:]
                 mix = getattr(self.sink, "mix", self.sink.write)
                 mix(pcm)
             return {"ok": True}
@@ -1186,7 +1043,7 @@ def write_wav(path: str, frames: list[int]) -> None:
         if isinstance(frames, array) and frames.typecode == "h" and sys.byteorder == "little":
             wav.writeframes(frames.tobytes())
         else:
-            wav.writeframes(b"".join(struct.pack("<h", sample) for sample in frames))
+            wav.writeframes(b"".join(struct.pack("<h", int(sample)) for sample in frames))
 
 
 def play(path: str) -> None:
@@ -1207,7 +1064,6 @@ def parse_values(values: list[str]) -> tuple[list[float], float]:
         raise ValueError("expected at least one frequency or MIDI note")
     nums = [float(v) for v in values]
     seconds = DEFAULT_SECONDS
-    # A trailing value in a typical duration range is seconds, not a pitch.
     if len(nums) >= 2 and 0 < nums[-1] <= 8 and nums[-1] < 20:
         seconds = nums[-1]
         nums = nums[:-1]
@@ -1232,26 +1088,25 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def render(args: argparse.Namespace, nums: list[float], seconds: float) -> list[int]:
+def render(args: argparse.Namespace, nums: list[float], seconds: float):
     instrument = clamp_instrument(args.instrument)
     use_samples = sample_bank_ready(instrument)
     if args.midi:
         midis = [n for n in nums if clamp_midi(n) is not None][:MAX_VOICES]
         if not midis:
             return []
-        freqs = [midi_to_hz(n) for n in midis]
         if use_samples:
             try:
-                return render_samples(midis, seconds, instrument)
+                return render_midi_notes(midis, seconds, instrument)
             except OSError:
                 pass
-        return synth(freqs, seconds, instrument=instrument)
+        return synth([midi_to_hz(n) for n in midis], seconds, instrument=instrument)
     freqs = [hz for hz in (clamp_hz(n) for n in nums) if hz is not None][:MAX_VOICES]
     if not freqs:
         return []
     if use_samples:
         try:
-            return render_samples([hz_to_midi(hz) for hz in freqs], seconds, instrument)
+            return render_midi_notes([hz_to_midi(hz) for hz in freqs], seconds, instrument)
         except OSError:
             pass
     return synth(freqs, seconds, instrument=instrument)
