@@ -1,5 +1,7 @@
 # OMASONG 900
 
+![OMASONG 900 overlay](preview.png)
+
 Omarchy shell plugin: a bar chip and overlay for circle of fifths, song structure, piano, and guitar tab.
 
 Plugin id: `markschellhas.omasong`
