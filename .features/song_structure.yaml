@@ -11,10 +11,10 @@ apps:
 
 user_flow:
   primary: "User → + Append Section → Verse/Chorus/…/Custom → addSection with four bars"
-  play: "User → section Play → sectionPlayToggled → play that section only"
+  play: "User → section Play (icon + section name) → sectionPlayToggled → play that section only"
   extend: "User → Add 4 bars → addBars appends four empty measures"
   trim: "User → select chord-and-beat-empty bar → Delete/Backspace → removeMeasure (minimum four bars)"
-  rename: "User → double-click title or More (…) → Rename → setSectionName"
+  rename: "User → More (…) → Rename → setSectionName"
   tab: "User → Tab or Shift+Tab while Song structure is highlighted → move selected cell across sections"
   error: "User → Delete last section → ignored"
 
@@ -31,4 +31,4 @@ related_features:
 core_components:
   - tests/js_tests.js
 
-notes: "Default song is Verse C|G|F|Dm Chorus D|G|C|Em. Overlay has no meter picker; sections stay 4/4 unless a document already has timeSig. Hidden beats preserve the original row height; visible beat lanes expand each 4-bar row. Session persist ~/.local/state/omarchy/songwriter/song.json unchanged; named projects are per-file JSON (song_library). Cannot delete the last section. More menu is rename/delete only. Add/more menus parent to card menuOverlay (z 1000) above piano."
+notes: "Default song is Verse C|G|F|Dm Chorus D|G|C|Em. Overlay has no meter picker; sections stay 4/4 unless a document already has timeSig. Hidden beats preserve the original row height; visible beat lanes expand each 4-bar row. Session persist ~/.local/state/omarchy/songwriter/song.json unchanged; named projects are per-file JSON (song_library). Cannot delete the last section. Section header: Play (icon + name) left, More (…) right. More menu is rename/delete only. Add/more menus parent to card menuOverlay (z 1000) above piano."

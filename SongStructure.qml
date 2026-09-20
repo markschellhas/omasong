@@ -272,72 +272,63 @@ Item {
           width: list.width
           spacing: Style.space(6)
 
-          Row {
+          Item {
             width: parent.width
-            spacing: Style.spacing.sm
-
-            Button {
-              id: moreButton
-              text: "···"
-              foreground: root.foreground
-              tooltipText: "Section options"
-              onClicked: root.openMenu("more", sectionCol.sectionIndex, moreButton)
-            }
+            height: Math.max(moreButton.implicitHeight, Style.space(28))
 
             Button {
               id: playButton
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              visible: root.renamingSection !== sectionCol.sectionIndex
+              width: Math.min(implicitWidth, Math.max(0, parent.width - moreButton.width - Style.spacing.sm))
+              clip: true
+              leftAlign: true
               iconText: root.playing && root.playScopeSection === sectionCol.sectionIndex ? "\uf04d" : "\uf04b"
+              text: sectionCol.section && sectionCol.section.name ? sectionCol.section.name : "Section"
               bordered: true
               selected: root.playing && root.playScopeSection === sectionCol.sectionIndex
               foreground: root.foreground
               accent: Color.accent
               tooltipText: root.playing && root.playScopeSection === sectionCol.sectionIndex
-                ? "Stop section"
-                : "Play section"
+                ? "Stop " + playButton.text
+                : "Play " + playButton.text
               onClicked: root.sectionPlayToggled(sectionCol.sectionIndex)
             }
 
-            Item {
-              width: Math.min(Style.space(180), parent.width * 0.4)
-              height: Style.space(28)
-
-              Text {
-                visible: root.renamingSection !== sectionCol.sectionIndex
-                anchors.fill: parent
-                text: sectionCol.section && sectionCol.section.name ? sectionCol.section.name : "Section"
-                color: root.foreground
-                font.family: Style.font.menuFamily
-                font.pixelSize: Style.font.subtitle
-                font.bold: true
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
-
-                MouseArea {
-                  anchors.fill: parent
-                  onDoubleClicked: root.beginRename(sectionCol.sectionIndex)
+            TextInput {
+              id: nameInput
+              visible: root.renamingSection === sectionCol.sectionIndex
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              width: Math.min(Style.space(180), Math.max(0, parent.width - moreButton.width - Style.spacing.sm))
+              height: moreButton.height
+              text: sectionCol.section && sectionCol.section.name ? sectionCol.section.name : ""
+              color: root.foreground
+              font.family: Style.font.menuFamily
+              font.pixelSize: Style.font.subtitle
+              font.bold: true
+              verticalAlignment: Text.AlignVCenter
+              selectByMouse: true
+              onVisibleChanged: {
+                if (visible) {
+                  text = sectionCol.section && sectionCol.section.name ? sectionCol.section.name : ""
+                  forceActiveFocus()
+                  selectAll()
                 }
               }
+              onEditingFinished: root.commitRename(sectionCol.sectionIndex, text)
+              Keys.onEscapePressed: root.cancelRename()
+            }
 
-              TextInput {
-                id: nameInput
-                visible: root.renamingSection === sectionCol.sectionIndex
-                anchors.fill: parent
-                text: sectionCol.section && sectionCol.section.name ? sectionCol.section.name : ""
-                color: root.foreground
-                font.family: Style.font.menuFamily
-                font.pixelSize: Style.font.subtitle
-                font.bold: true
-                selectByMouse: true
-                onVisibleChanged: {
-                  if (visible) {
-                    text = sectionCol.section && sectionCol.section.name ? sectionCol.section.name : ""
-                    forceActiveFocus()
-                    selectAll()
-                  }
-                }
-                onEditingFinished: root.commitRename(sectionCol.sectionIndex, text)
-                Keys.onEscapePressed: root.cancelRename()
-              }
+            Button {
+              id: moreButton
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              text: "···"
+              foreground: root.foreground
+              tooltipText: "Section options"
+              onClicked: root.openMenu("more", sectionCol.sectionIndex, moreButton)
             }
           }
 
