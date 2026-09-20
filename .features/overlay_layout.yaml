@@ -1,18 +1,20 @@
 feature_name: overlay_layout
-purpose: "Place the overlay card in the work area with equal outer gaps and equal inner padding on all four sides."
+purpose: "Place the overlay card in the work area with equal outer gaps and equal inner padding on all four sides. Title bar is a theme-tinted steel plate flush to the card border."
 
 entry_points:
   - Songwriter.qml
+  - TitleBar.qml
 
 apps:
   - songwriter
 
 user_flow:
   primary: "User → open overlay → card clears the bar and uses overlayGap on top, right, bottom, and left; content sits panelPadding inside the card border"
+  title_bar: "User → open overlay → OMASONG 900 sits on a steel plate that meets the panel border; transport and regions keep the same padding"
 
 related_features:
   - region_focus (regions stack inside the padded card)
   - playback (transport is header chrome)
   - song_library (Open menu anchors to transport)
 
-notes: "Card height is the work area minus overlayGap×2, no cap. Card width is the same, capped at maxCardWidth (Style.space(1000)); when capped, the card centers in the work area instead of hugging the left edge, via cardLeftMargin. Inner inset is BorderSurface padding (Style.spacing.panelPadding) plus the border. regionGap/regionInset stay internal grouping, not window chrome. Overlay PanelWindow ignores exclusive zones, so bar clearance is applied by hand from shell.bar."
+notes: "Card height is the work area minus overlayGap×2, no cap. Card width is the same, capped at maxCardWidth (Style.space(1000)); when capped, the card centers in the work area instead of hugging the left edge, via cardLeftMargin. Inner inset is BorderSurface padding (Style.spacing.panelPadding) plus the border. TitleBar is a sibling of the padded content so the plate can meet the BorderSurface inner edge; height is topPadding+headerHeight, vents sit left of close. regionGap/regionInset stay internal grouping, not window chrome. Overlay PanelWindow ignores exclusive zones, so bar clearance is applied by hand from shell.bar."

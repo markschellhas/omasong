@@ -1489,6 +1489,24 @@ Item {
       borderSpec: Border.surfaceSpec("menu", "border", root.border, Math.max(1, Style.normalBorderWidth))
       radius: Style.cornerRadius
 
+      TitleBar {
+        id: titlePlate
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.leftMargin: card.borderLeft
+        anchors.rightMargin: card.borderRight
+        anchors.topMargin: card.borderTop
+        height: card.topPadding + root.headerHeight
+        cornerRadius: Math.max(0, card.radius - card.borderTop)
+        background: root.background
+        foreground: root.foreground
+        accent: Color.accent
+        headerBandHeight: root.headerHeight
+        contentTopPadding: card.topPadding
+        ventsRightMargin: card.rightPadding + closeButton.width + Style.spacing.sm
+      }
+
       HoverHandler {
         id: cardHover
         onHoveredChanged: if (hovered) root.refocusKeys()
@@ -1620,7 +1638,7 @@ Item {
             anchors.left: title.right
             anchors.leftMargin: Style.spacing.sm
             anchors.right: closeButton.left
-            anchors.rightMargin: Style.spacing.sm
+            anchors.rightMargin: titlePlate.ventClusterWidth + Style.spacing.sm * 2
             anchors.verticalCenter: parent.verticalCenter
             text: "Songwriting Arrangement Station"
             textFormat: Text.PlainText
