@@ -2,7 +2,13 @@
 
 ![OMASONG 900 overlay](preview.png)
 
-Omarchy shell plugin: a bar chip and overlay for circle of fifths, song structure, piano, and guitar tab.
+
+OMASONG 900 is an Omarchy shell plugin for working out songs. You open it from the bar, and you get a circle of fifths, a verse-and-chorus timeline of 4/4 bars, a piano, and guitar tab in one overlay.
+
+Drag a chord into a bar, add a beat pattern if you want one, hit play, and hear the arrangement. There's no mixing, no recording, no plugin chain — it's closer to a songbook than a DAW, so what you save is the song structure rather than a session file.
+
+Built by Mark Schellhas, a songwriter and musician who also writes code.
+
 
 Plugin id: `markschellhas.omasong`
 
