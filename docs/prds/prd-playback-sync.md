@@ -91,5 +91,4 @@ If the engine exits while the overlay is open, restart it (mirror `agent-server`
 - `.features/chord_slots.yaml`
 - `docs/prds/prd-beat-sequencer.md` (original non-goal of keeping detached helpers; this PRD replaces that for transport)
 - `docs/plans/2026-09-08-beat-sequencer.md`
-- `AGENTS.md`
 - `README.md`

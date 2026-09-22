@@ -7,7 +7,6 @@ entry_points:
   - js/Agent.js
   - Songwriter.qml
   - write-json.py
-  - AGENTS.md
 
 apps:
   - chords-agent

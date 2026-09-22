@@ -68,5 +68,4 @@ At the first event in each measure/pass, `Songwriter.qml` launches the audio hel
 - `.features/playback.yaml`
 - `.features/song_library.yaml`
 - `.features/agent_api.yaml`
-- `AGENTS.md`
 - `README.md`
