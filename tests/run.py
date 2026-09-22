@@ -67,7 +67,6 @@ def test_js() -> None:
         load_pragma_js(ROOT / "js" / "Model.js"),
         load_pragma_js(ROOT / "js" / "ParallelMode.js"),
         load_pragma_js(ROOT / "js" / "Song.js"),
-        load_pragma_js(ROOT / "js" / "Agent.js"),
         load_pragma_js(ROOT / "js" / "Keyboard.js"),
         load_pragma_js(ROOT / "js" / "Focus.js"),
         load_pragma_js(ROOT / "js" / "Status.js"),
@@ -882,21 +881,6 @@ def test_manifest() -> None:
     print("manifest ok")
 
 
-def test_agent() -> None:
-    proc = subprocess.run(
-        [sys.executable, str(ROOT / "tests" / "agent_tests.py")],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        sys.stderr.write(proc.stdout)
-        sys.stderr.write(proc.stderr)
-        raise SystemExit(proc.returncode or 1)
-    if proc.stdout.strip():
-        print(proc.stdout, end="")
-
-
 def test_song_library() -> None:
     if not SONG_LIBRARY.is_file():
         raise SystemExit("song-library missing")
@@ -1114,7 +1098,6 @@ def main() -> int:
     test_write_json()
     test_play_notes()
     test_js()
-    test_agent()
     test_song_library()
     print("all tests passed")
     return 0

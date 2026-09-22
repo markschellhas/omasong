@@ -3,3 +3,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .worktrees/
+
+# Agent instruction files must not ship with the plugin tree.
+# Marketplace installs this repository as the plugin; AGENTS.md, CLAUDE.md,
+# and .agents/ are operator-control surfaces, not runtime assets.
+AGENTS.md
+CLAUDE.md
+.agents/

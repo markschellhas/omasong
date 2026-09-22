@@ -25,7 +25,6 @@ related_features:
   - playback (measure-start scheduling, BPM, loops, and section playback)
   - row_repeats (pattern launches once for each repeat pass)
   - song_library (patterns and beatsVisible persist in named songs)
-  - agent_api (full song JSON includes patterns)
   - chord_slots (chords and beats share a measure)
   - region_focus (editor interaction stays in Song region)
   - audio_device (rendered measure uses system audio output)

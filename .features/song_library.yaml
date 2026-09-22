@@ -22,7 +22,6 @@ user_flow:
 related_features:
   - song_structure (document body is sections/measures)
   - playback (BPM/loop ride with loaded song; stop on load)
-  - agent_api (session snapshots still from current song)
   - instruments (prefs fields travel with saved document)
   - beats (patterns and beatsVisible travel with saved document)
 
