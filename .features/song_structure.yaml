@@ -23,7 +23,6 @@ related_features:
   - row_repeats (one flag per 4-bar row)
   - playback (timeline walks sections)
   - song_library (named per-file saves; session path unchanged)
-  - agent_api (sections in JSON)
   - music_theory (slot capacity from timeSig.numerator)
   - region_focus (Song region)
   - beats (patterns and beat lanes share measure identity)

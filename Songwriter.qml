@@ -6,7 +6,6 @@ import qs.Commons
 import qs.Ui
 import "js/Model.js" as Model
 import "js/Song.js" as Song
-import "js/Agent.js" as Agent
 import "js/Keyboard.js" as KeyMap
 import "js/Focus.js" as Focus
 import "js/Status.js" as Status
@@ -129,23 +128,6 @@ Item {
   readonly property string songPath: Quickshell.env("HOME") + "/.local/state/omarchy/songwriter/song.json"
   readonly property string writeScript: decodeURIComponent(
     Qt.resolvedUrl("write-json.py").toString().replace(/^file:\/\//, ""))
-  readonly property string agentServerScript: decodeURIComponent(
-    Qt.resolvedUrl("agent-server.py").toString().replace(/^file:\/\//, ""))
-  readonly property string agentHome: {
-    var override = Quickshell.env("CHORDS_AGENT_HOME")
-    if (override && String(override).length)
-      return override
-    return Quickshell.env("HOME") + "/.config/songwriter"
-  }
-  readonly property int agentPort: {
-    var env = Quickshell.env("CHORDS_AGENT_PORT")
-    var n = Number(env)
-    if (env && env.length && isFinite(n) && n >= 0 && n <= 65535)
-      return Math.round(n)
-    return 17891
-  }
-  readonly property string agentSongPath: agentHome + "/song.json"
-  readonly property string agentProgressionsPath: agentHome + "/progressions.json"
   readonly property string libraryScript: decodeURIComponent(
     Qt.resolvedUrl("song-library").toString().replace(/^file:\/\//, ""))
   readonly property string libraryRuntimeDir: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-songwriter"
@@ -188,7 +170,6 @@ Item {
 
   function open(payloadJson) {
     opened = true
-    startAgentServer()
     startAudioEngine()
     refreshLibrary()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
@@ -200,7 +181,6 @@ Item {
     // Held laptop/piano notes have no key-up once the panel is gone.
     releaseAllLiveNotes()
     opened = false
-    stopAgentServer()
     // A sounding transport keeps the engine: the song plays on with the panel
     // closed, and the bar widget goes urgent until it stops. stopPlayback()
     // releases the engine itself once opened is false.
@@ -220,16 +200,6 @@ Item {
     close()
     if (shell && typeof shell.hide === "function")
       shell.hide((manifest && manifest.id) || "markschellhas.omasong")
-  }
-
-  function startAgentServer() {
-    if (!agentServer.running)
-      agentServer.running = true
-  }
-
-  function stopAgentServer() {
-    agentRestart.stop()
-    agentServer.running = false
   }
 
   function startAudioEngine() {
@@ -383,13 +353,10 @@ Item {
   function persistNow() {
     if (!persistReady)
       return
-    // One process, atomic renames per file — avoids parallel torn writes and
-    // cross-file generations racing each other. agent-api.json is owned by agent-server.
+    // One process, atomic rename — avoids parallel torn writes.
     Quickshell.execDetached([
       "python3", writeScript,
-      songPath, JSON.stringify(song),
-      agentSongPath, JSON.stringify(Agent.songJson(song)),
-      agentProgressionsPath, JSON.stringify(Agent.progressionsJson(song))
+      songPath, JSON.stringify(song)
     ])
   }
 
@@ -1356,33 +1323,6 @@ Item {
   }
 
   Process {
-    id: agentServer
-    running: false
-    command: ["/usr/bin/python3", "-u", root.agentServerScript, "--home", root.agentHome, "--port", String(root.agentPort)]
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var text = String(this.text || "").trim()
-        if (text.length)
-          console.warn("songwriter agent-server:", text)
-      }
-    }
-    onExited: {
-      if (root.opened)
-        agentRestart.restart()
-    }
-  }
-
-  Timer {
-    id: agentRestart
-    interval: 400
-    onTriggered: {
-      if (root.opened && !agentServer.running)
-        agentServer.running = true
-    }
-  }
-
-  Process {
     id: audioEngine
     running: false
     stdinEnabled: true
@@ -1460,7 +1400,6 @@ Item {
 
   Component.onDestruction: {
     stopPlayback()
-    stopAgentServer()
     stopAudioEngine()
   }
 

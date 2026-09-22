@@ -28,7 +28,6 @@ Plugin id: `markschellhas.omasong`
 | `laptop_keys` | Off by default; A=C, W=C♯, …; Z/X octave; steals H/J/K/L when on |
 | `region_focus` | j/k or ↑/↓ cycle Circle / Song / Keyboard; h/l or ←/→ act on the highlighted region; Tab moves Song cells |
 | `background_playback` | Closing the panel mid-play keeps the song sounding; the bar chip turns red, right-click it to stop |
-| `agent_api` | `chords-agent progressions \| song \| health` on 127.0.0.1:17891 |
 | `audio_device` | PipeWire output |
 
 Changing the circle does **not** transpose placed chords. Chords are triads, not typed symbols.
@@ -58,7 +57,7 @@ o.bind("SUPER + CTRL + ALT + S", "OMASONG", "omarchy-shell shell toggle marksche
 
 ## Status
 
-The overlay’s capabilities are mapped in `.features/` (circle, slots, beats, timeline, piano, guitar tab, laptop keys, region focus, `chords-agent`).
+The overlay’s capabilities are mapped in `.features/` (circle, slots, beats, timeline, piano, guitar tab, laptop keys, region focus).
 
 Automated check: `python3 tests/run.py`. Full overlay and `omarchy plugin validate` need an Omarchy host.
 

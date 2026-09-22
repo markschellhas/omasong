@@ -14,7 +14,6 @@ user_flow:
 related_features:
   - song_structure (rowRepeats, kBarsPerRow=4)
   - playback (timeline duplicates the row)
-  - agent_api (rowRepeats in JSON)
   - beats (pattern launches again for repeatPass=1)
 
 core_components:

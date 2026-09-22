@@ -2,7 +2,6 @@
 features_dir: .features
 apps:
   - songwriter
-  - chords-agent
 required_sections:
   - purpose
   - entry_points

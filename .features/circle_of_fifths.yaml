@@ -22,7 +22,6 @@ related_features:
   - region_focus (h/l rotate when Circle focused)
   - piano_keyboard (preview highlight)
   - guitar_tab (preview chord)
-  - agent_api (key index in JSON)
 
 core_components:
   - js/Model.js

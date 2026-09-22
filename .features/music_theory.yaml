@@ -6,7 +6,6 @@ entry_points:
 
 apps:
   - songwriter
-  - chords-agent
 
 user_flow:
   primary: "Caller → diatonicTriads(index) → seven I–vii° triads sharing the relative-minor set"
@@ -16,11 +15,10 @@ related_features:
   - circle_of_fifths (12 stations, chips)
   - chord_slots (payload decode onto Song)
   - song_structure (timeSig.numerator = slots per bar)
-  - agent_api (numeral when diatonic)
   - playback (triad MIDI for synth)
 
 core_components:
   - tests/js_tests.js
   - tests/run.py
 
-notes: "Song chords are triads only: { rootPc, quality }. No typed chord-symbol parser. timeSig still serializes in agent JSON; overlay does not pick meters."
+notes: "Song chords are triads only: { rootPc, quality }. No typed chord-symbol parser. Overlay does not pick meters."
